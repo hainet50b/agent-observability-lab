@@ -1,0 +1,15 @@
+# Local editor / OS noise
+.DS_Store
+*.swp
+*.swo
+
+# Real telemetry config — keep the committed templates, ignore local copies.
+.env
+.env.*
+!.env.example
+
+# Captured telemetry must never be committed (events can contain prompt/tool content).
+*.ndjson.local
+
+# Note: reports/ is intentionally NOT ignored. Ralph's HTML reports
+# (including rotated archives) are kept as Git history.
