@@ -167,6 +167,23 @@ smoke-test probe alike); the saved searches scope to real `claude-code`. The
 saved searches **reference the Events data view**, so import the data views
 first (or import both files together). Import either way:
 
+- **Import helper (recommended)** — one command, imports both files in the right
+  order (data views before saved searches) and prints each file's result. It
+  locates its own stack directory, so run it from anywhere:
+
+  ```sh
+  scripts/import-kibana-objects.sh                 # bash/zsh/sh
+  ```
+
+  ```pwsh
+  ./scripts/import-kibana-objects.ps1              # PowerShell 7+
+  ```
+
+  Override the Kibana base URL with `KIBANA_URL` (env var) or, for the
+  PowerShell script, the `-KibanaUrl` parameter; both default to
+  `http://localhost:5601`. The helper just wraps the Saved Objects
+  `_import?overwrite=true` API — the manual UI/API paths below still work.
+
 - **Kibana UI** — Stack Management → Saved Objects → **Import** → choose the
   `.ndjson` file(s). Import `claude-code-data-views.ndjson` before (or alongside)
   `claude-code-saved-searches.ndjson`.
@@ -177,15 +194,6 @@ first (or import both files together). Import either way:
     curl -s -X POST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
       -H "kbn-xsrf: true" --form file=@"$f" | jq .
   done
-  ```
-
-  On **fish** (the loop uses `for … end`, not `do … done`):
-
-  ```fish
-  for f in kibana/claude-code-data-views.ndjson kibana/claude-code-saved-searches.ndjson
-      curl -s -X POST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
-        -H "kbn-xsrf: true" --form file=@"$f" | jq .
-  end
   ```
 
 ### 4. See the telemetry in Kibana
@@ -245,6 +253,8 @@ claude-code-elastic/
 ├─ config/apm-server.yml               # APM Server as the OTLP receiver
 ├─ kibana/claude-code-data-views.ndjson   # importable Discover data views (Quick Tour step 3)
 ├─ kibana/claude-code-saved-searches.ndjson# importable per-message saved searches (Quick Tour step 3)
+├─ scripts/import-kibana-objects.sh    # import the kibana/ saved objects (.sh / .ps1 pair, Quick Tour step 3)
+├─ scripts/import-kibana-objects.ps1   # PowerShell mirror of the import helper
 └─ scripts/smoke-test.sh               # end-to-end pipeline verification (see "Verify the pipeline")
 ```
 

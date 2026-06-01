@@ -336,6 +336,67 @@
         a runtime-field cast (called out in the README).</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Add Kibana saved-objects import helper (.sh + .ps1)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modeled <code>import-kibana-objects.sh</code> on <code>smoke-test.sh</code>: same
+        <code>set -euo pipefail</code>, the same SCRIPT_DIR/STACK_DIR resolution so it runs from
+        anywhere, and the same <code>skip()</code>/<code>fail()</code> idiom (SKIP exit 0 when
+        <code>curl</code>/<code>jq</code> are absent, FAIL exit 1 on a bad import). The file list
+        is fixed and ordered data-views-then-saved-searches so the
+        <code>cce-claude-code-events</code> reference resolves before the searches that point at it.</li>
+      <li>Treated a non-200 / <code>success:false</code> import as a hard failure (exit 1) rather
+        than just printing it — the script is meant to be a reliable one-liner, so a partial import
+        should be loud. It still prints the full JSON result per file (via <code>jq .</code>) plus a
+        one-line object count.</li>
+      <li>For the PowerShell mirror I used <code>Invoke-RestMethod</code> with <code>-Form</code>
+        (PowerShell 7+) rather than shelling out to <code>curl</code>, so it has no external
+        dependency — matching how <code>ralph.ps1</code> stays native. Kibana URL is overridable via
+        a <code>-KibanaUrl</code> param defaulting to the <code>KIBANA_URL</code> env var then
+        <code>http://localhost:5601</code>, parallel to the <code>.sh</code>'s <code>KIBANA_URL</code>.</li>
+      <li>README step 3: replaced the two shell-specific curl loops (the whole reason for the helper
+        was to absorb bash <code>do…done</code> vs fish <code>for…end</code>) with the single helper
+        invocation as the recommended path, and kept one bash API one-liner as the "manual still
+        works" note per the task. Added both scripts to the Layout tree.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Could not run the import against a live Kibana from this sandbox: no Docker daemon, and
+        outbound curl to <code>localhost:5601</code> was permission-denied. Validation here was
+        limited to <code>docker compose config -q</code> (pass), <code>bash -n</code> (pass), and the
+        smoke-test gate (SKIP, no daemon); shellcheck and pwsh are not installed on this box. The
+        scripts post to the exact endpoint/header/form the already-verified README one-liner uses, so
+        the logic is well-founded — but a live import is the one assertion left for a human.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>With all current PRD tasks closed, the dashboards work flagged earlier (a Lens/dashboard
+        layer over the Events + Metrics streams, including the runtime-field casts for the
+        string-typed <code>num_*</code>/<code>duration_ms</code> labels) is the natural next task.</li>
+      <li>Consider a second stack (e.g. an OpenTelemetry Collector variant, or a different backend) to
+        exercise the "stacks stay self-contained" design now that the first stack is complete.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a one-command Kibana import helper in both shells —
+      <code>scripts/import-kibana-objects.sh</code> and <code>.ps1</code> — that imports the data
+      views then the saved searches (correct dependency order) and prints each file's result. The
+      README Quick Tour now points at the helper instead of two shell-specific curl loops.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Run <code>scripts/import-kibana-objects.sh</code> (or the <code>.ps1</code>) against a
+        running stack to confirm all data-view + saved-search objects import cleanly — the live
+        assertion this sandbox couldn't make.</li>
+      <li>The PowerShell script needs PowerShell 7+ for <code>Invoke-RestMethod -Form</code>; noted in
+        its header.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
