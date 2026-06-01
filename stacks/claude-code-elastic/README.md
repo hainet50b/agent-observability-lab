@@ -50,25 +50,75 @@ scripts/smoke-test.sh
 
 ### 2. Point a Claude Code session at the stack
 
-Copy the telemetry env template and load it into the shell that will run
-`claude` (it sets `CLAUDE_CODE_ENABLE_TELEMETRY=1` and the `OTEL_*` exporters
-for **both** metrics and events at the APM Server OTLP endpoint on `:8200`,
-with short export intervals so data appears quickly):
+The telemetry vars configure **`claude`** itself, not the stack — Claude Code
+does **not** read `.env` files, so supply them one of three ways. They set
+`CLAUDE_CODE_ENABLE_TELEMETRY=1` and the `OTEL_*` exporters for **both** metrics
+and events at the APM Server OTLP endpoint on `:8200`, with short export
+intervals so data appears quickly.
+
+> ⚠️ The events channel can carry your prompt text and tool I/O. Don't enable
+> telemetry on a session that handles secrets or confidential material against
+> this local demo.
+
+**Option A — shell env (one-off, recommended).** Paste this into the shell that
+will run `claude`, then launch it from *any* directory against your own work.
+It's **ephemeral and side-effect-free** — it creates no files, so you can fire a
+single session's telemetry into the local demo from wherever you like.
 
 ```sh
-cp .env.example .env
-set -a && . ./.env && set +a   # bash/zsh: export every OTEL_* var into the shell
+# bash / zsh
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_METRICS_EXPORTER=otlp
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:8200
+export OTEL_METRIC_EXPORT_INTERVAL=10000
+export OTEL_LOGS_EXPORT_INTERVAL=5000
 ```
-
-On **fish**, load it with (splits each non-comment line on the first `=` and exports it):
 
 ```fish
-for line in (string match -rv '^\s*(#|$)' < .env); set -gx (string split -m1 '=' $line); end
+# fish
+set -gx CLAUDE_CODE_ENABLE_TELEMETRY 1
+set -gx OTEL_METRICS_EXPORTER otlp
+set -gx OTEL_LOGS_EXPORTER otlp
+set -gx OTEL_EXPORTER_OTLP_PROTOCOL http/protobuf
+set -gx OTEL_EXPORTER_OTLP_ENDPOINT http://localhost:8200
+set -gx OTEL_METRIC_EXPORT_INTERVAL 10000
+set -gx OTEL_LOGS_EXPORT_INTERVAL 5000
 ```
 
-Then run Claude Code from that same shell and do a little work — ask a question,
-let it read or edit a file — so it emits a few sessions, prompts, and API
-requests:
+**Option B — `settings.json` `env` block (persistent).** Put the same vars in a
+Claude Code settings file's `env` so every session inherits them:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:8200",
+    "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+    "OTEL_LOGS_EXPORT_INTERVAL": "5000"
+  }
+}
+```
+
+Project settings load **only from the directory `claude` is launched in** (they
+are not inherited from parent directories), so a stack-local
+`stacks/claude-code-elastic/.claude/settings.local.json` is self-contained —
+telemetry on only when you launch `claude` from inside the stack. Put the same
+block in `~/.claude/settings.json` to apply it everywhere. (A settings `env`
+value overrides the shell env from Option A.)
+
+**Option C — `managed-settings.json` (org enforcement).** Enterprise/MDM-distributed
+[managed settings](https://code.claude.com/docs/en/monitoring-usage.md) have the
+**highest precedence and cannot be overridden by users** — the way to force
+telemetry on for all users across an organization.
+
+Then run Claude Code from a configured shell/directory and do a little work — ask
+a question, let it read or edit a file — so it emits a few sessions, prompts, and
+API requests:
 
 ```sh
 claude
@@ -189,7 +239,6 @@ own service name.
 claude-code-elastic/
 ├─ docker-compose.yml                  # Elasticsearch + Kibana + APM Server (Stack 9.4.2)
 ├─ config/apm-server.yml               # APM Server as the OTLP receiver
-├─ .env.example                        # Claude Code telemetry env (CLAUDE_CODE_ENABLE_TELEMETRY, OTEL_*)
 ├─ kibana/claude-code-data-views.ndjson   # importable Discover data views (Quick Tour step 3)
 ├─ kibana/claude-code-saved-searches.ndjson# importable per-message saved searches (Quick Tour step 3)
 └─ scripts/smoke-test.sh               # end-to-end pipeline verification (see "Verify the pipeline")

@@ -216,6 +216,67 @@
       <li>The pill JSON is hand-authored to the known export shape but not yet round-tripped through a live Kibana — worth the one-time import check noted above before relying on it in a demo.</li>
     </ul>
   </section>
+  <section>
+    <h2>Replace the <code>.env</code>-and-source workflow with agent-side telemetry config</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Did not ship a stack-local <code>settings.local.json</code> example.</strong>
+        The task made that conditional ("if a stack-local example is shipped, gitignore it").
+        Shipping one buys little — the JSON block is short and is already shown inline in
+        Option B — while it would add a file plus a <code>.gitignore</code> to maintain.
+        Documenting the block inline keeps the "side-effect-free, nothing to clean up"
+        spirit of the new workflow, so no extra files were added.</li>
+      <li><strong>Option ordering and emphasis.</strong> Followed the spec exactly:
+        shell env first and labelled "recommended" (ephemeral, creates no files), then the
+        persistent <code>settings.json</code> <code>env</code> block, then a short
+        <code>managed-settings.json</code> note that links the monitoring docs rather than
+        duplicating precedence rules.</li>
+      <li><strong>Carried the env values verbatim from the deleted template.</strong> The
+        export / JSON blocks reproduce the exact seven vars the old <code>.env.example</code>
+        held (same endpoint, protocol, and lowered intervals), so the pipeline behaviour is
+        unchanged — only the delivery mechanism moved from a sourced file to shell/settings.</li>
+      <li><strong>Fixed stale references beyond the README.</strong> Two comments in
+        <code>smoke-test.sh</code> pointed at <code>../.env.example</code>; repointed them to
+        "README.md, Quick Tour step 2" so no dangling reference survives the file's removal.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The Docker daemon is not reachable in this execution environment, so the full
+        end-to-end "shell-env session lands telemetry" check could not be run live — the
+        smoke test SKIPs (exit 0) by design without a daemon. The change is documentation-only
+        and the emitted env vars are byte-for-byte the same set the previous sourced
+        <code>.env</code> produced, so the ingestion path itself is untouched. Worth a manual
+        end-to-end run on a host with Docker to confirm the copy-paste blocks behave as written.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><code>CONVENTIONS.md</code> still lists "env template as <code>.env.example</code>"
+        as a per-stack file-naming convention. Now that the primary telemetry stack ships no
+        such file, that line is misleading and the human may want to soften or drop it (it is
+        spec-layer, so left untouched here).</li>
+      <li>Consider shipping an optional, gitignored stack-local
+        <code>.claude/settings.local.json</code> example as a follow-up if users want a
+        zero-typing "launch from the stack dir" path — deliberately skipped here to avoid
+        adding files.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Removed the stack's <code>.env.example</code> and rewrote the README's "point a
+      session at the stack" step to show three ways to enable Claude Code telemetry —
+      copy-paste shell exports (bash/zsh + fish, recommended), a persistent
+      <code>settings.json</code> <code>env</code> block, and an org-wide
+      <code>managed-settings.json</code> note — since Claude Code doesn't read
+      <code>.env</code> files.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Confirm the copy-paste export blocks (Option A) actually land telemetry on a
+        machine with Docker running — that is the one assertion this sandbox could not verify.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

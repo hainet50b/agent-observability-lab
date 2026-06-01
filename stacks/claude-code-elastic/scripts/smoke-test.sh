@@ -16,7 +16,8 @@
 #
 # It then prints a DISCOVER summary: the service.name values currently present
 # in the APM metrics/logs data streams, so real Claude Code telemetry (from an
-# actual `claude` session — see ../.env.example) shows up alongside the probe.
+# actual `claude` session — see ../README.md, Quick Tour step 2) shows up
+# alongside the probe.
 #
 # Why synthetic telemetry: the Act step must be self-contained and deterministic
 # (no API key, no interactive session) so it can run as a gate. Real Claude Code
@@ -150,5 +151,5 @@ discover "logs-apm*"
 
 echo
 echo "PASS: OTLP -> APM Server -> Elasticsearch pipeline verified."
-echo "Run a real Claude Code session (see ../.env.example) to populate the"
+echo "Run a real Claude Code session (see ../README.md, Quick Tour step 2) to populate the"
 echo "claude-code service streams, then inspect them in Kibana (http://localhost:5601)."
