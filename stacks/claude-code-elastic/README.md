@@ -115,6 +115,15 @@ first (or import both files together). Import either way:
   done
   ```
 
+  On **fish** (the loop uses `for … end`, not `do … done`):
+
+  ```fish
+  for f in kibana/claude-code-data-views.ndjson kibana/claude-code-saved-searches.ndjson
+      curl -s -X POST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
+        -H "kbn-xsrf: true" --form file=@"$f" | jq .
+  end
+  ```
+
 ### 4. See the telemetry in Kibana
 
 - **Discover** (<http://localhost:5601/app/discover>) — pick the **Claude Code —
