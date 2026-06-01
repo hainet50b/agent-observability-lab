@@ -274,9 +274,13 @@ claude-code-elastic/
   Discover is fine; `sum`/`avg` in Lens needs a runtime-field cast or sticking
   to `api_request`'s `numeric_labels`.
 - ⚠️ **PII present:** `labels.user_email`, `labels.user_id`, and (if
-  `OTEL_LOG_USER_PROMPTS=1`) `labels.prompt`. In this single-user demo the
-  `user_*` / `organization_id` labels are constant — noise as columns, sensitive
-  to bake into shared saved objects.
+  `OTEL_LOG_USER_PROMPTS=1`) `labels.prompt`. These live in the **ingested
+  documents** regardless of any saved search — the exposure is ES/Kibana access
+  (and the "don't send confidential sessions / don't commit telemetry"
+  invariants), **not** the column list (a saved object stores column *names*,
+  not data). In this single-user demo the `user_*` / `organization_id` labels
+  are also constant, so leaving them out of columns is a usefulness/noise call,
+  not a privacy one.
 
 ### Common envelope fields (all docs)
 
