@@ -85,6 +85,31 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Provide Claude Code telemetry configuration (<code>.env.example</code>)</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Made <code>.env.example</code> the single self-documenting artifact rather than adding a separate docs file. SPEC's "Configuration surface" lists <code>.env.example</code> but no <code>docs/</code> dir, and the stack's <code>README.md</code> is explicitly reserved for the later Kibana-view task — so embedding the "how to run a session" prose as comments in the env file honors the "documented .env.example (and matching docs)" ask without creating an unspecified file or colliding with that future task.</li>
+      <li>Framed these as <strong>shell</strong> env vars, not docker-compose vars. Claude Code runs on the host and reads them from its own process environment; compose never sees them. The header makes this explicit and gives a copy-and-source recipe (incl. a fish variant, since the project shell is fish).</li>
+      <li>Chose <code>http/protobuf</code> as the default OTLP protocol over gRPC: it POSTs to <code>/v1/metrics</code> and <code>/v1/logs</code> on the existing 8200 endpoint with no extra port, and documented <code>grpc</code> as a one-line alternative on the same endpoint.</li>
+      <li>Lowered <code>OTEL_METRIC_EXPORT_INTERVAL</code> to 10000ms and <code>OTEL_LOGS_EXPORT_INTERVAL</code> to 5000ms (from 60000/5000 defaults) per SPEC's "demo lowers them so data appears quickly," and omitted <code>OTEL_EXPORTER_OTLP_HEADERS</code> entirely because the stack runs with security disabled and no APM secret_token.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The end-to-end emit path is documented but not yet asserted — confirming that telemetry actually lands in Elasticsearch is the next task's smoke script. The exact metric/event names and attribute keys are deliberately left for that verification step to discover rather than hard-coding a possibly-wrong list here.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Consider adding <code>.env</code> (and any captured-telemetry dumps) to a stack-level or repo <code>.gitignore</code> so a user who copies <code>.env.example</code> to <code>.env</code> can't accidentally commit a real config — reinforces the SPEC invariant about not committing telemetry.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <p>Added a fully commented <code>stacks/claude-code-elastic/.env.example</code> with the <code>CLAUDE_CODE_ENABLE_TELEMETRY</code> + <code>OTEL_*</code> variables that point Claude Code's metrics and events at the stack's APM Server, plus step-by-step instructions for running a telemetry-emitting session.</p>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Double-check the default <code>http/protobuf</code> + base endpoint <code>http://localhost:8200</code> choice against how you expect to demo it — if you prefer gRPC by default, that's a one-line flip plus a comment tweak.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
