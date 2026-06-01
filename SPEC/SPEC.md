@@ -55,8 +55,18 @@ How the signals land — structural facts that hold across versions even as the 
 
 - `stacks/claude-code-elastic/docker-compose.yml` — the three services with healthchecks and a shared network.
 - `stacks/claude-code-elastic/config/` — service config files (e.g. APM Server config).
-- `stacks/claude-code-elastic/.env.example` — Claude Code telemetry env vars (`CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_*`) pointed at the APM Server OTLP endpoint; copied to a real `.env` / shell export set by the user.
+- Telemetry env vars (`CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_*`) pointed at the APM Server OTLP endpoint — these are **agent-side** config (see *Enabling telemetry* below), not stack config.
 - `stacks/claude-code-elastic/scripts/` — smoke/verification scripts.
+
+### Enabling telemetry (agent-side)
+
+The telemetry vars configure **Claude Code**, not the stack — they belong wherever you run `claude`, never in the containers. Claude Code does **not** read `.env` files; supply them one of three ways (per the [Claude Code monitoring docs](https://code.claude.com/docs/en/monitoring-usage.md)):
+
+- **Shell env — one-off, the lab's primary path.** Export the vars in the shell, then run `claude` from *any* directory against your own work. Ephemeral and **side-effect-free** (creates no files); this is how a lab user fires their own session's telemetry into the local demo without committing to persistent config.
+- **`settings.json` `env` block — persistent.** Put the vars in a Claude Code settings file's `env`. Project settings load **only from the directory `claude` is launched in** (not inherited from parents), so a stack-local `stacks/claude-code-elastic/.claude/settings.local.json` stays self-contained; `~/.claude/settings.json` applies everywhere.
+- **`managed-settings.json` — org enforcement.** Enterprise/MDM-distributed managed settings have the **highest precedence and cannot be overridden by users** — the mechanism to force telemetry on for all users across an organization.
+
+Precedence: managed > local > project > user, and a settings `env` value overrides the shell env.
 
 ## Invariants
 
