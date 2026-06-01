@@ -6,12 +6,8 @@ How code is written in this project. Read before implementing.
 
 This is an infrastructure / demo repository, not an application codebase. The "code" is container orchestration and glue scripting.
 
-- **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up`. The unit of delivery is a running stack, not a binary.
-- **Elastic Stack** (Elasticsearch, Kibana, APM Server) — the observability backend for the `claude-code-elastic` stack. All three services share one pinned Stack version.
-- **OpenTelemetry (OTLP)** — the wire protocol carrying Claude Code's metrics and events into the stack; configured purely through `OTEL_*` environment variables, no SDK code.
+- **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up` (the unit of delivery is a running stack, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
 - **POSIX shell (`sh`/`bash`)** — smoke tests, health waits, and verification queries under each stack's `scripts/`. Keep scripts portable and dependency-light (`curl`, `jq`).
-
-Pin image versions explicitly (`image: ...:<version>`); never rely on `latest`.
 
 ## Test Pattern
 
@@ -43,6 +39,6 @@ Subject line: present-imperative, ≤ 72 characters. Body optional and free-form
 ## File and Identifier Naming
 
 - Stack directories under `stacks/` are **kebab-case** and name the agent + backend they exercise (e.g. `claude-code-elastic`).
-- Within a stack: `docker-compose.yml` at the stack root, service config under `config/`, scripts under `scripts/`, importable Kibana saved objects under `kibana/`. (Agent-side telemetry env is documented in the stack README, not shipped as a `.env` template — Claude Code reads its env from the shell or a settings file, not from `.env`.)
-- Compose service names are lowercase, matching the component (`elasticsearch`, `kibana`, `apm-server`).
+- Within a stack: `docker-compose.yml` at the stack root, service config under `config/`, scripts under `scripts/`, and any importable backend assets in their own dir (e.g. `kibana/` for Kibana saved objects).
+- Compose service names are lowercase, matching the component (e.g. `kibana`, `apm-server`).
 - Shell scripts are kebab-case with a `.sh` extension (e.g. `smoke-test.sh`).
