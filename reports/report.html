@@ -277,6 +277,65 @@
         machine with Docker running — that is the one assertion this sandbox could not verify.</li>
     </ul>
   </section>
+
+  <section class="entry">
+    <h2>Add three more Claude Code saved searches (User Prompts, Hook Executions, Subagent Completions)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Authored the three new <code>search</code> objects as exact structural clones of the
+        three already-shipped, pill-verified ones — same <code>searchSourceJSON</code> filter
+        shape (empty query bar, two <code>phrase</code> pills for <code>message</code> +
+        <code>service.name: claude-code</code>), same three <code>references[]</code> entries
+        wiring each filter's <code>meta.index</code> to <code>cce-claude-code-events</code>,
+        same <code>@timestamp</code> desc sort and <code>coreMigrationVersion</code>. Only
+        id/title/description/message-phrase/columns differ. Reusing the proven shape is the
+        surest way to preserve the pill rendering the prior task established on this Stack
+        version.</li>
+      <li>Each column list matches the PRD verbatim and ends in <code>labels.prompt_id</code>.
+        Folded the PRD's exclusion rationales into the descriptions and the README working
+        notes rather than inventing new ones.</li>
+      <li>Bumped the trailing export-summary line's <code>exportedCount</code> 3 → 6 (kept the
+        <code>missingReferences</code> entry for <code>cce-claude-code-events</code>, since the
+        data view ships in the separate file and is imported first — matching the existing
+        file's self-describing export footer).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>No Docker daemon and no reachable Kibana in this environment, so the live
+        "imports cleanly + all six open as filter pills against real telemetry" check could not
+        run here. Validation done instead: every NDJSON line parses as JSON <em>and</em> the
+        embedded <code>searchSourceJSON</code> string parses; ids/titles/message-filters/columns
+        confirmed via <code>jq</code>. The new lines are byte-for-byte structural twins of the
+        verified ones, so risk is low — but a human with the stack up should still do the
+        one-click import + open pass.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The remaining open task (Kibana import helper <code>.sh</code> + <code>.ps1</code>) is
+        the natural next step and will give the import a single command to verify all six
+        objects at once.</li>
+      <li>When dashboards land, the <code>hook_*</code> / <code>tool_result</code> string-typed
+        numeric labels will need runtime-field casts — worth a task noting which fields need it.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added three more importable Kibana saved searches for the Events stream — User Prompts,
+      Hook Executions (complete), and Subagent Completions — bringing the shipped set to six.
+      Each opens pre-filtered with removable filter pills and curated columns. Updated the stack
+      README's Quick Tour table, the Discover "Open" list, and the working-notes rationale.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verify the six saved searches import and open as filter pills on a machine with the
+        stack running — the one assertion this sandbox could not make.</li>
+      <li>The Hook Executions <code>num_*</code> / <code>total_duration_ms</code> columns are
+        <em>string</em> labels; they display fine in Discover but won't aggregate in Lens without
+        a runtime-field cast (called out in the README).</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

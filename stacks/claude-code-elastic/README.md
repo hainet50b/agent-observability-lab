@@ -136,7 +136,7 @@ Two **data views** ship as importable saved objects in
 | **Claude Code — Metrics** | `metrics-apm.app*` | the numeric metric documents |
 | **Claude Code — Events** | `logs-apm.app*` | the prompt / tool-result / API-request events |
 
-Three **saved searches** ship in
+Six **saved searches** ship in
 [`kibana/claude-code-saved-searches.ndjson`](kibana/claude-code-saved-searches.ndjson).
 A data view is only an index-pattern + time field — it cannot store a query or
 column selection — so these per-`message` curated views are modeled as saved
@@ -151,6 +151,9 @@ groups all events emitted within one prompt:
 | **Claude Code — API Requests** | `message: claude_code.api_request`, `service.name: claude-code` | model, query_source, speed, effort, the `numeric_labels.*` cost / token / `duration_ms` fields, `prompt_id` |
 | **Claude Code — Tool Results** | `message: claude_code.tool_result`, `service.name: claude-code` | tool_name, decision_type, decision_source, success, duration_ms, tool input / result size, `prompt_id` |
 | **Claude Code — Tool Decisions** | `message: claude_code.tool_decision`, `service.name: claude-code` | tool_name, decision (accept/reject), source (config/user_temporary), `prompt_id` |
+| **Claude Code — User Prompts** | `message: claude_code.user_prompt`, `service.name: claude-code` | prompt_length, prompt (`<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`), `prompt_id` |
+| **Claude Code — Hook Executions** | `message: claude_code.hook_execution_complete`, `service.name: claude-code` | hook_event, hook_name, num_hooks, num_success, num_blocking, total_duration_ms (all **string** labels), `prompt_id` |
+| **Claude Code — Subagent Completions** | `message: claude_code.subagent_completed`, `service.name: claude-code` | agent_type, agent_source, model, is_async, the `numeric_labels.*` duration / tokens / tool-uses fields, `prompt_id` |
 
 > **Note:** the `decision_type` / `decision_source` columns on **Tool Results**
 > are populated only in **interactive** sessions; a headless/automated run (e.g.
@@ -196,10 +199,11 @@ first (or import both files together). Import either way:
   this lab has observed are catalogued in the telemetry notes at the end of this
   README — but Discover is the source of truth for the version you ran.
 - **Saved searches** — in Discover, open the **Open** menu (top bar) and pick
-  **Claude Code — API Requests**, **Claude Code — Tool Results**, or **Claude
-  Code — Tool Decisions** for the curated, pre-filtered column layouts imported
-  in step 3. Each opens with its `message` / `service.name` constraints shown as
-  removable **filter pills** above the table (the query bar stays empty).
+  any of **Claude Code — API Requests**, **Tool Results**, **Tool Decisions**,
+  **User Prompts**, **Hook Executions**, or **Subagent Completions** for the
+  curated, pre-filtered column layouts imported in step 3. Each opens with its
+  `message` / `service.name` constraints shown as removable **filter pills**
+  above the table (the query bar stays empty).
 - **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM
   **service** (`claude-code`); open it to see it as a first-class APM entity.
 
@@ -376,7 +380,7 @@ Catalogued but **NOT seen this session**: `claude_code.api_error`; also `claude_
 
 ### Saved Searches (shipped — `kibana/claude-code-saved-searches.ndjson`)
 
-Three are now shipped as importable NDJSON (Quick Tour step 3). All reference
+Six are now shipped as importable NDJSON (Quick Tour step 3). All reference
 data view `cce-claude-code-events`, sort `@timestamp` desc, and constrain on
 `message` AND defensively `service.name: claude-code`. Those constraints are
 expressed as **filter pills** — `phrase` entries in `searchSourceJSON.filter[]`,
@@ -428,13 +432,52 @@ The canonical, always-present permit decision (`decision` = accept/reject,
 `decision_*`. Excluded on purpose: `tool_use_id` (the `tool_decision` ⇄
 `tool_result` join key — opaque, available on row-expand).
 
+**Claude Code — User Prompts** — pill `message: claude_code.user_prompt`
+```
+labels.prompt_length
+labels.prompt
+labels.prompt_id
+```
+`labels.prompt` is `<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`. The column is
+kept regardless: a saved object stores column *names*, not data, and the field
+is ingested either way — column choice is a usefulness call, not a PII control
+(see SPEC "Identity & PII").
+
+**Claude Code — Hook Executions** — pill `message: claude_code.hook_execution_complete`
+```
+labels.hook_event
+labels.hook_name
+labels.num_hooks
+labels.num_success
+labels.num_blocking
+labels.total_duration_ms
+labels.prompt_id
+```
+The outcome-bearing hook event (`hook_execution_start` is just an announcement).
+⚠️ `num_*` / `total_duration_ms` are **string** labels — not aggregatable in
+Lens without a runtime-field cast. Excluded on purpose: `hook_source` /
+`managed_only` — on execution events these collapse to a redundant 2-value pair
+(`merged` vs `policySettings` ⇄ `managed_only`); the granular origins live only
+on the (uncaptured) `hook_registered` event.
+
+**Claude Code — Subagent Completions** — pill `message: claude_code.subagent_completed`
+```
+labels.agent_type
+labels.agent_source
+labels.model
+labels.is_async
+numeric_labels.duration_ms
+numeric_labels.total_tokens
+numeric_labels.total_tool_uses
+labels.prompt_id
+```
+The `numeric_labels.*` here are true numbers (aggregatable). Excluded on purpose:
+`is_built_in` (redundant boolean form of `agent_source`).
+
 ### Still open / later
 
-- Saved searches spec'd next (PRD): **User Prompts**, **Hook Executions**
-  (complete only), **Subagent Completions** (api_request, tool_result,
-  tool_decision already shipped). Deferred: `hook_plugin_metrics`
-  (plugin-specific, 20+ numeric fields — better as a dedicated view later) and
-  `feedback_survey` (noise).
+- Deferred saved searches: `hook_plugin_metrics` (plugin-specific, 20+ numeric
+  fields — better as a dedicated view later) and `feedback_survey` (noise).
 - Dashboards (Lens): cost/token trends, model breakdown, tool frequency & success,
   API latency distribution, session list. Mind the string-vs-numeric caveat above.
 - The smoke-test's expected-indices/fields catalogue was removed from
