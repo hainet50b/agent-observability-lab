@@ -1,7 +1,7 @@
 # claude-code-elastic — Elastic Stack base
 #
 # Single-node, security-disabled local demo. Do NOT expose publicly.
-# All services share one pinned Elastic Stack version (see SPEC: "One version, pinned").
+# All services share one pinned Elastic Stack version (9.4.2).
 #
 # Brings up Elasticsearch, Kibana, and APM Server (the Elastic-native OTLP
 # receiver Claude Code's telemetry is pointed at).
