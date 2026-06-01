@@ -1,0 +1,22 @@
+# APM Server — Elastic-native OTLP receiver for the claude-code-elastic stack.
+#
+# Runs standalone (no Fleet, no upstream OpenTelemetry Collector). It accepts
+# OpenTelemetry over BOTH OTLP/HTTP and OTLP/gRPC on the host:port below and
+# writes directly to Elasticsearch. See SPEC: "APM Server is the Elastic-native
+# OTLP receiver".
+#
+# Demo posture (see SPEC invariants): cluster security is disabled, so this
+# talks plain HTTP to Elasticsearch with no credentials, and — since no
+# secret_token or api_key is configured — clients (Claude Code's OTLP exporter)
+# connect without authentication. Do NOT expose this publicly.
+
+apm-server:
+  # Bind on all interfaces inside the container; the published port is
+  # restricted to 127.0.0.1 by docker-compose. OTLP/HTTP endpoints
+  # (/v1/metrics, /v1/logs, /v1/traces) and OTLP/gRPC are both served here.
+  host: "0.0.0.0:8200"
+
+# Write directly to the single-node Elasticsearch in this stack. Plain HTTP and
+# no auth because cluster security is disabled.
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]

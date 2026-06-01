@@ -51,6 +51,40 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add APM Server as the Elastic-native OTLP receiver</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Ran APM Server <strong>standalone</strong> (no Fleet, no upstream OpenTelemetry Collector) with just <code>output.elasticsearch</code> pointed at the in-stack node over plain HTTP — matching the SPEC architecture and the security-disabled demo posture. No <code>secret_token</code>/<code>api_key</code> is set, so the OTLP exporter connects without auth.</li>
+      <li>Bound OTLP to <code>0.0.0.0:8200</code> inside the container but published it to <code>127.0.0.1:8200</code> only. APM Server multiplexes <strong>both</strong> OTLP/HTTP (<code>/v1/metrics</code>, <code>/v1/logs</code>, <code>/v1/traces</code>) and OTLP/gRPC on that single port, so one published port covers both transports the task requires.</li>
+      <li>Relaxed <code>--strict.perms=false</code> because the config is bind-mounted from the host and is not owned by the in-container <code>apm-server</code> user — without it the server refuses to start. Added <code>-e</code> so logs go to stderr and <code>docker compose logs apm-server</code> is useful.</li>
+      <li>Healthcheck does <strong>not</strong> use <code>curl</code>: the <code>apm/apm-server</code> image ships no curl/wget/nc (only <code>bash</code>). I probe the OTLP port with a <code>bash /dev/tcp</code> request to <code>/</code> and match <code>200</code> in the status line. The <code>$line</code> variable is escaped as <code>$$line</code> so docker compose passes it through literally instead of interpolating it.</li>
+      <li><code>depends_on: elasticsearch (service_healthy)</code> so APM Server only starts once ES can accept writes.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Docker daemon is outside the command sandbox, so <code>docker pull</code>/<code>up</code>/<code>down</code> ran with the sandbox disabled — same recurring constraint noted for the base task.</li>
+      <li>Standalone APM Server writes to APM data streams; the matching index templates normally come from the APM integration package (installed via Fleet/Kibana). This task only verifies the OTLP endpoint <em>responds</em>; whether Claude Code documents land in the right indices with the right mappings is the job of the upcoming smoke-test task, which should check this and, if needed, document installing the APM integration.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The smoke-test task will need a <code>bash</code>-only (or host-side) way to assert documents landed, since the apm-server container has no curl/jq — host-side <code>curl</code>+<code>jq</code> against ES <code>:9200</code> is the natural fit per CONVENTIONS.</li>
+      <li>Consider whether the telemetry-config task should set <code>OTEL_EXPORTER_OTLP_PROTOCOL</code> explicitly (http/protobuf vs grpc) given both are served on 8200.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <code>claude-code-elastic</code> stack now includes an APM Server that receives OpenTelemetry over OTLP/HTTP and OTLP/gRPC on <code>127.0.0.1:8200</code> and writes to Elasticsearch. Verified live: the stack came up healthy and the OTLP endpoint answered <code>HTTP 200</code> on both <code>GET /</code> and a <code>POST /v1/metrics</code> request.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Confirm the bash <code>/dev/tcp</code> healthcheck reads naturally to you — it exists only because the image lacks curl; an alternative would be a thin sidecar, which felt heavier than warranted for a demo.</li>
+      <li>The "install the APM integration package" question (see Unresolved) is worth a glance before the smoke-test task, in case you want richer field mappings than the default data-stream templates.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

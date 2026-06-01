@@ -3,8 +3,8 @@
 # Single-node, security-disabled local demo. Do NOT expose publicly.
 # All services share one pinned Elastic Stack version (see SPEC: "One version, pinned").
 #
-# Brings up Elasticsearch + Kibana. APM Server (the OTLP receiver) is added in a
-# later task; this file is the base both build on.
+# Brings up Elasticsearch, Kibana, and APM Server (the Elastic-native OTLP
+# receiver Claude Code's telemetry is pointed at).
 
 name: claude-code-elastic
 
@@ -63,6 +63,38 @@ services:
       timeout: 10s
       retries: 30
       start_period: 90s
+
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:9.4.2
+    container_name: cce-apm-server
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    # strict.perms is relaxed because apm-server.yml is bind-mounted from the
+    # host and will not be owned by the in-container apm-server user; -e logs to
+    # stderr so `docker compose logs apm-server` is useful during verification.
+    command: ["--strict.perms=false", "-e"]
+    volumes:
+      - ./config/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
+    ports:
+      # OTLP/HTTP and OTLP/gRPC are both served on 8200. Localhost-only — demo
+      # posture, never exposed publicly.
+      - "127.0.0.1:8200:8200"
+    healthcheck:
+      # The apm-server image ships no curl/wget, so probe the OTLP port with a
+      # bash /dev/tcp request: the root endpoint returns "200" once the server
+      # is accepting traffic (no auth is configured).
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          'exec 3<>/dev/tcp/localhost/8200; printf "GET / HTTP/1.0\r\n\r\n" >&3; read -t 5 line <&3; case "$$line" in *200*) exit 0;; *) exit 1;; esac',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
 volumes:
   elasticsearch-data:
