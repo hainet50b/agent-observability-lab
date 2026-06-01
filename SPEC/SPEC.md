@@ -30,7 +30,7 @@ Claude Code  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsea
 
 - **APM Server** is the Elastic-native OTLP receiver. It accepts OTLP over HTTP and gRPC and writes directly to Elasticsearch — no upstream/contrib OpenTelemetry Collector is used in this stack (that comparison, if wanted, becomes a separate stack).
 - **Elasticsearch** runs as a single node with security **disabled** — this is a local demo, not production (see Invariants).
-- **Kibana** is the inspection surface: Discover for raw documents, the APM UI for the agent as an APM service, and an importable data view / dashboard.
+- **Kibana** is the inspection surface: Discover for raw documents (two importable data views — one for the metrics stream, one for the events stream), per-`message` **saved searches** layered on the events data view for curated columns, the APM UI for the agent as an APM service, and dashboards. A Kibana *data view* is only an index-pattern + time field — it cannot store a query or column selection, so message-filtered views are modeled as *saved searches* (saved-object type `search`), not as additional data views.
 
 ### Signals Claude Code emits
 
@@ -40,6 +40,15 @@ Claude Code emits OpenTelemetry when `CLAUDE_CODE_ENABLE_TELEMETRY=1` is set, on
 - **Events / logs** (`OTEL_LOGS_EXPORTER=otlp`) — structured event records such as user prompts, tool-result events, and API-request events, each carrying attributes (model, token counts, decision/outcome, durations). Exported on the OTLP logs pipeline.
 
 The exact metric names, event names, and attribute keys are part of what this lab exists to discover and document — the verification step records what actually lands in Elasticsearch rather than trusting this list verbatim. Both channels point at the same OTLP endpoint (the APM Server). Export cadence is controlled by the standard `OTEL_METRIC_EXPORT_INTERVAL` / `OTEL_LOGS_EXPORT_INTERVAL` knobs; the demo lowers them so data appears quickly.
+
+### Shape in Elasticsearch
+
+How the signals land — structural facts that hold across versions even as the exact names evolve:
+
+- **Two data streams:** `metrics-apm.app.claude_code-default` (metrics) and `logs-apm.app.claude_code-default` (events). APM Server additionally emits an essentially empty `metrics-apm.service_summary.1m` marker, which is not a useful visualization target.
+- **Where the value/type lives:** a metric's value is stored in a field **named after the metric** (e.g. `claude_code.token.usage`); an event's **type is in the `message` field** (e.g. `claude_code.api_request`).
+- **Attribute split:** OTLP string attributes surface under `labels.*` and numeric ones under `numeric_labels.*` (key `.` → `_`). ⚠️ This split is **not consistent across events** — some (e.g. `tool_result`, `hook_*`) carry numbers like `duration_ms` as **string** `labels`, which blocks numeric aggregation in Lens without a runtime-field cast.
+- **Identity:** `service.name` is `claude-code` (the smoke probe uses `cce-smoke-test`); `session.id` is promoted to a top-level field; `labels.user_email` / `labels.user_id` and (when `OTEL_LOG_USER_PROMPTS=1`) `labels.prompt` are PII and must not be baked into shared saved objects.
 
 ### Configuration surface
 

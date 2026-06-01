@@ -22,7 +22,7 @@
 # (no API key, no interactive session) so it can run as a gate. Real Claude Code
 # telemetry lands under its own service name(s) through the identical pipeline.
 #
-# Expected indices / fields are documented in ./README.md.
+# Expected indices / fields are documented in ../README.md (telemetry notes).
 #
 # Prerequisites: docker (+ a running daemon), curl, jq. If the daemon is not
 # reachable the script SKIPs (exit 0) rather than failing — there is nothing to

@@ -12,11 +12,11 @@
 
 ## Quick Tour
 
-> _Filled in once the `claude-code-elastic` stack is demonstrable end to end. It will be the shortest path from clone to "I see Claude Code telemetry in Kibana."_
+The fastest path is the **`claude-code-elastic`** stack: bring up Elasticsearch + Kibana + APM Server, point a telemetry-enabled Claude Code session at it, and inspect the real metrics and events in Kibana. Full step-by-step (start → import data views → see telemetry → tear down) lives in [`stacks/claude-code-elastic/README.md`](stacks/claude-code-elastic/README.md).
 
 ## Install
 
-> _Each stack documents its own `docker compose` workflow in `stacks/<name>/README.md`. See `stacks/claude-code-elastic/` (in progress)._
+Each stack documents its own `docker compose` workflow in `stacks/<name>/README.md`. See [`stacks/claude-code-elastic/`](stacks/claude-code-elastic/) for a working end-to-end stack.
 
 ## Reference
 
