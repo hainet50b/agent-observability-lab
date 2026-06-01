@@ -191,6 +191,31 @@
       <li>Confirm against a live daemon that both saved searches import cleanly in Kibana 9.4.2 (data views imported first) and that selecting them in Discover shows the expected columns over real <code>claude_code.api_request</code> / <code>claude_code.tool_result</code> events.</li>
     </ul>
   </section>
+  <section>
+    <h2>Saved searches → filter pills + Tool Decisions + prompt_id</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Used the canonical Kibana 9.x saved-object export shape for filter pills: each constraint is a <code>phrase</code> entry in <code>searchSourceJSON.filter[]</code> with <code>meta.type:"phrase"</code>, a <code>match_phrase</code> query, and <code>meta.index</code> set to a <em>reference name</em> (<code>kibanaSavedObjectMeta.searchSourceJSON.filter[N].meta.index</code>) resolved through <code>references[]</code> to <code>cce-claude-code-events</code>. The query bar is emptied (<code>query.query:""</code>). This is exactly what Discover serializes when you build a pill in the UI and re-export, so it should round-trip as removable, labelled pills.</li>
+      <li>Generated the NDJSON with a small Python script rather than hand-escaping JSON-in-JSON, eliminating quoting errors in the embedded <code>searchSourceJSON</code> string. Validated every line with <code>jq</code>: empty query bar, two pills each, three references each (index + two filter refs) with matching names, and <code>labels.prompt_id</code> as the last column.</li>
+      <li>Ordered the file API Requests → Tool Results → Tool Decisions (existing two first, new one appended); NDJSON order is cosmetic. Kept the same <code>id</code>s for the two existing objects so <code>overwrite=true</code> import updates them in place rather than creating duplicates.</li>
+      <li>For Tool Decisions I excluded <code>tool_use_id</code> for the same reason <code>request_id</code> is excluded elsewhere — opaque high-cardinality join key, available on row-expand — keeping the column set to the four meaningful fields plus the new <code>prompt_id</code>.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Could not do the live import/pill-render verification: this sandbox has no Docker daemon, so Kibana 9.4.2 was unreachable. The file is structurally correct and matches the documented export shape, but the task's fallback ("if it does not render as pills, seed via the Discover UI and re-export") needs a human to confirm against a running stack. <strong>Please import both NDJSON files (data views first) and confirm all three saved searches open with their <code>message</code> / <code>service.name</code> constraints as filter pills over an empty query bar.</strong></li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>A <code>user_prompt</code> saved search (with <code>prompt_id</code>, <code>prompt_length</code>) would complete the per-prompt story — you could pivot from a prompt across api_request / tool_decision / tool_result by the shared <code>prompt_id</code>.</li>
+      <li>Consider a Lens dashboard keyed on <code>prompt_id</code> now that it is a first-class column across all three event saved searches.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <p>The Claude Code saved searches now show their <code>message</code> / <code>service.name</code> filters as readable, removable filter pills (empty query bar) instead of raw query text, a new <strong>Tool Decisions</strong> saved search was added (the always-present accept/reject record), and every saved search now ends with the <code>prompt_id</code> column that ties events from one prompt together.</p>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The pill JSON is hand-authored to the known export shape but not yet round-tripped through a live Kibana — worth the one-time import check noted above before relying on it in a demo.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

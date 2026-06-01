@@ -86,23 +86,28 @@ Two **data views** ship as importable saved objects in
 | **Claude Code — Metrics** | `metrics-apm.app*` | the numeric metric documents |
 | **Claude Code — Events** | `logs-apm.app*` | the prompt / tool-result / API-request events |
 
-Two **saved searches** ship in
+Three **saved searches** ship in
 [`kibana/claude-code-saved-searches.ndjson`](kibana/claude-code-saved-searches.ndjson).
 A data view is only an index-pattern + time field — it cannot store a query or
 column selection — so these per-`message` curated views are modeled as saved
 searches (saved-object type `search`) layered on the **Claude Code — Events**
-data view:
+data view. Each one's `message` and `service.name: claude-code` constraints are
+expressed as **filter pills** (labelled, removable blocks in Discover) with an
+empty query bar, and ends in `labels.prompt_id` — the correlation key that
+groups all events emitted within one prompt:
 
-| Saved search | Filters on | Curated columns |
+| Saved search | Filter pills | Curated columns |
 | --- | --- | --- |
-| **Claude Code — API Requests** | `message: claude_code.api_request` (+ `service.name: claude-code`) | model, query_source, speed, effort, and the `numeric_labels.*` cost / token / `duration_ms` fields |
-| **Claude Code — Tool Results** | `message: claude_code.tool_result` (+ `service.name: claude-code`) | tool_name, decision_type, decision_source, success, duration_ms, tool input / result size |
+| **Claude Code — API Requests** | `message: claude_code.api_request`, `service.name: claude-code` | model, query_source, speed, effort, the `numeric_labels.*` cost / token / `duration_ms` fields, `prompt_id` |
+| **Claude Code — Tool Results** | `message: claude_code.tool_result`, `service.name: claude-code` | tool_name, decision_type, decision_source, success, duration_ms, tool input / result size, `prompt_id` |
+| **Claude Code — Tool Decisions** | `message: claude_code.tool_decision`, `service.name: claude-code` | tool_name, decision (accept/reject), source (config/user_temporary), `prompt_id` |
 
-> **Note:** the `decision_type` / `decision_source` columns are populated only in
-> **interactive** sessions; a headless/automated run (e.g. Ralph) leaves them
-> blank. The permit decision is always recorded in the separate
-> `claude_code.tool_decision` event (join on `tool_use_id`) — see the telemetry
-> notes at the end of this README.
+> **Note:** the `decision_type` / `decision_source` columns on **Tool Results**
+> are populated only in **interactive** sessions; a headless/automated run (e.g.
+> Ralph) leaves them blank. The permit decision is always recorded in the
+> separate `claude_code.tool_decision` event — that is what the **Tool Decisions**
+> saved search surfaces, and it is present in headless runs too. See the
+> telemetry notes at the end of this README.
 
 Both data views cover any agent telemetry that lands (real `claude-code` and the
 smoke-test probe alike); the saved searches scope to real `claude-code`. The
@@ -141,8 +146,10 @@ first (or import both files together). Import either way:
   this lab has observed are catalogued in the telemetry notes at the end of this
   README — but Discover is the source of truth for the version you ran.
 - **Saved searches** — in Discover, open the **Open** menu (top bar) and pick
-  **Claude Code — API Requests** or **Claude Code — Tool Results** for the
-  curated, pre-filtered column layouts imported in step 3.
+  **Claude Code — API Requests**, **Claude Code — Tool Results**, or **Claude
+  Code — Tool Decisions** for the curated, pre-filtered column layouts imported
+  in step 3. Each opens with its `message` / `service.name` constraints shown as
+  removable **filter pills** above the table (the query bar stays empty).
 - **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM
   **service** (`claude-code`); open it to see it as a first-class APM entity.
 
@@ -292,12 +299,17 @@ Catalogued but **NOT seen this session**: `claude_code.api_error`.
 
 ### Saved Searches (shipped — `kibana/claude-code-saved-searches.ndjson`)
 
-These two are now shipped as importable NDJSON (Quick Tour step 3). Both
-reference data view `cce-claude-code-events`, sort `@timestamp` desc, and filter
-on `message` AND defensively `service.name: claude-code`. The column choices
+Three are now shipped as importable NDJSON (Quick Tour step 3). All reference
+data view `cce-claude-code-events`, sort `@timestamp` desc, and constrain on
+`message` AND defensively `service.name: claude-code`. Those constraints are
+expressed as **filter pills** — `phrase` entries in `searchSourceJSON.filter[]`,
+each pointing at the data view through a `references[]` entry
+(`kibanaSavedObjectMeta.searchSourceJSON.filter[N].meta.index`) — with an empty
+query bar, so Discover shows labelled, removable blocks rather than raw KQL. Each
+ends in `labels.prompt_id`, the per-prompt correlation key. The column choices
 below were made against live data — recorded here as the rationale.
 
-**Claude Code — API Requests** — filter `message: claude_code.api_request`
+**Claude Code — API Requests** — pill `message: claude_code.api_request`
 ```
 labels.model
 labels.query_source
@@ -309,11 +321,12 @@ numeric_labels.input_tokens
 numeric_labels.output_tokens
 numeric_labels.cache_read_tokens
 numeric_labels.cache_creation_tokens
+labels.prompt_id
 ```
 Excluded on purpose: `request_id` (opaque, available on row-expand), `user_*` /
 `message` / `service.name` (constant in this view = noise).
 
-**Claude Code — Tool Results** — filter `message: claude_code.tool_result`
+**Claude Code — Tool Results** — pill `message: claude_code.tool_result`
 ```
 labels.tool_name
 labels.decision_type
@@ -322,13 +335,26 @@ labels.success
 labels.duration_ms
 labels.tool_input_size_bytes
 labels.tool_result_size_bytes
+labels.prompt_id
 ```
 Excluded on purpose: `tool_use_id` (same reasoning as `request_id`).
 
+**Claude Code — Tool Decisions** — pill `message: claude_code.tool_decision`
+```
+labels.tool_name
+labels.decision
+labels.source
+labels.prompt_id
+```
+The canonical, always-present permit decision (`decision` = accept/reject,
+`source` = config/user_temporary), unlike `tool_result`'s interactive-only
+`decision_*`. Excluded on purpose: `tool_use_id` (the `tool_decision` ⇄
+`tool_result` join key — opaque, available on row-expand).
+
 ### Still open / later
 
-- Remaining event types (tool_decision, user_prompt, hook_*) — more saved
-  searches later if useful (the two above — api_request, tool_result — shipped).
+- Remaining event types (user_prompt, hook_*) — more saved searches later if
+  useful (api_request, tool_result, tool_decision shipped).
 - Dashboards (Lens): cost/token trends, model breakdown, tool frequency & success,
   API latency distribution, session list. Mind the string-vs-numeric caveat above.
 - The smoke-test's expected-indices/fields catalogue was removed from
