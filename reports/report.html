@@ -110,6 +110,34 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Smoke / verification script for the claude-code-elastic pipeline</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Synthetic OTLP probe instead of driving a real <code>claude</code> session.</strong> The 3A "Act" step must be self-contained and deterministic to be runnable as a gate, and a real session needs an API key plus interactive input. So the script POSTs one synthetic OTLP metrics payload and one OTLP logs payload (shaped like Claude Code's two channels) to <code>/v1/metrics</code> and <code>/v1/logs</code>, tagged with a dedicated <code>service.name=cce-smoke-test</code>, then asserts those exact docs land. This proves the OTLP → APM Server → Elasticsearch path Claude Code relies on, without polluting the real <code>claude-code</code> data streams. A non-failing DISCOVER step then lists the <code>service.name</code> values actually present, so real session telemetry is surfaced alongside the probe.</li>
+      <li><strong>Skip (exit 0) when the Docker daemon is unreachable.</strong> The CONVENTIONS lint/test gate runs <code>smoke-test.sh</code> on every task, but the daemon (and the pinned Elastic images) aren't available in every environment. A loud <code>SKIP</code> guard on <code>docker info</code> / missing <code>curl</code>/<code>jq</code> keeps the gate green where there's genuinely nothing to test, while a present daemon runs the full assertion.</li>
+      <li><strong>Robust queries over exact index names.</strong> The script asserts against the wildcard patterns <code>metrics-apm*</code> / <code>logs-apm*</code> filtered by <code>service.name</code> (with <code>allow_no_indices</code>), rather than hard-coding the sanitized dataset spelling (<code>claude-code</code> → <code>claude_code</code>). Health is waited on via <code>docker inspect</code> of the fixed <code>cce-*</code> container names.</li>
+      <li><strong>Documented expected indices/fields in a stack-local <code>scripts/README.md</code>, not the spec layer.</strong> The repo <code>README.md</code>/<code>SPEC/</code> are owned by the human; the stack's own <code>README.md</code> is reserved for the later Kibana task — so the indices/fields reference lives next to the script it describes, framed as a guide the DISCOVER step is the source of truth for.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The script could not be executed live here — no Docker daemon and the Elastic 9.4.2 images aren't reachable in this sandbox. The compose-config gate passes and the smoke test correctly SKIPs; the live assertion path (OTLP/JSON acceptance by APM Server, the exact data-stream routing) should be confirmed on a real run.</li>
+      <li><code>shellcheck</code> is absent locally so that lint line was skipped. The script was written to be shellcheck-clean (quoted expansions, <code>_</code> loop vars), but run <code>shellcheck</code> on it where available to be sure.</li>
+      <li>The OTLP payloads use OTLP/<strong>JSON</strong> for portability (curl + heredoc, no protobuf tooling). If a given APM Server build rejects JSON, the script fails loudly with the HTTP code — switch the probe to protobuf if that happens.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The metric/event name list in <code>scripts/README.md</code> is "expected" only. Consider a follow-up task to capture the <em>actual</em> field inventory from a real session (e.g. dump mappings / a sample doc per data stream into the stack docs) so the lab documents observed reality, which is its stated purpose.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <p>Added <code>stacks/claude-code-elastic/scripts/smoke-test.sh</code>: it brings the stack up, waits for all three services to be healthy, sends a synthetic OTLP metrics + events probe to APM Server, and asserts the documents land in Elasticsearch — verifying the whole telemetry pipeline in one command (and skipping cleanly when Docker isn't running). A companion <code>scripts/README.md</code> documents the expected APM data streams and fields.</p>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Please run <code>scripts/smoke-test.sh</code> against a live stack once to confirm APM Server accepts OTLP/JSON and that the <code>metrics-apm*</code>/<code>logs-apm*</code> assertions match the real data-stream names on Stack 9.4.2.</li>
+      <li>Sanity-check the expected metric/event names in <code>scripts/README.md</code> against the DISCOVER output / Kibana on a real session, and tell me if any should be corrected (as a new task, per Ralph Loop).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
