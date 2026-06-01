@@ -24,6 +24,6 @@ Each stack documents its own `docker compose` workflow in `stacks/<name>/README.
 
 | Stack | Agent | Backend | Status |
 | --- | --- | --- | --- |
-| [`claude-code-elastic`](stacks/claude-code-elastic/) | Claude Code | Elastic Stack (Elasticsearch + Kibana + APM Server) | In progress |
+| [`claude-code-elastic`](stacks/claude-code-elastic/) | Claude Code | Elastic Stack (Elasticsearch + Kibana + APM Server) | Working — stack + data views + saved searches; dashboards next |
 
 > ⚠️ These stacks run with security disabled for local demonstration only. Do not expose them publicly, and do not send confidential prompts/material through a telemetry-enabled session — the events channel can capture prompt and tool content.
