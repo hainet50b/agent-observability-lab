@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Agent Observability Lab — Ralph Execution Report</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #1a1a1a; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+    .entry { border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; background: #fafafa; }
+    .entry h2 { margin-top: 0; color: #2b5797; }
+    .entry h3 { margin-bottom: .25rem; color: #555; font-size: .95rem; text-transform: uppercase; letter-spacing: .03em; }
+    code { background: #eee; padding: .1rem .3rem; border-radius: 4px; }
+    .meta { color: #888; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <h1>Agent Observability Lab — Ralph Execution Report</h1>
+  <p class="meta">One section per completed PRD task, oldest first. Newest is at the bottom.</p>
+
+  <section class="entry">
+    <h2>Establish the <code>claude-code-elastic</code> Elastic Stack base</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Pinned both images explicitly to <code>9.4.2</code> rather than using a YAML anchor — I started with an <code>x-stack-version</code> anchor but it was never consumed (image tags must be literal in the <code>image:</code> field), so I removed it to avoid dead config. The single-version invariant is instead enforced by convention + review.</li>
+      <li>Disabled security the explicit way: <code>xpack.security.enabled=false</code> plus the HTTP/transport SSL toggles, so the cluster speaks plain HTTP and healthchecks/curl need no auth or TLS — matching the documented demo posture.</li>
+      <li>Bound published ports to <code>127.0.0.1</code> (9200 and 5601) to honour the SPEC invariant that the stack is never exposed publicly, while still letting a Claude Code session on the host reach it.</li>
+      <li>Healthchecks assert real readiness, not just process liveness: Elasticsearch must report cluster status <code>green</code>/<code>yellow</code>; Kibana must report <code>"level":"available"</code> from <code>/api/status</code>. Kibana <code>depends_on</code> Elasticsearch with <code>condition: service_healthy</code> so ordering is deterministic.</li>
+      <li>Set a modest <code>ES_JAVA_OPTS=-Xms1g -Xmx1g</code> and enabled <code>memlock</code> — enough for a local demo without over-allocating.</li>
+      <li><code>CONVENTIONS.md</code> already carried the tech stack and lint/test commands from project scaffolding, so that sub-requirement was already satisfied; I did not duplicate it.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The Docker daemon socket is outside the command sandbox, so <code>docker compose up/down</code> had to run with the sandbox disabled. This is expected for any Docker-driven task in this repo and will recur for later stack tasks.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>When APM Server lands, consider whether Kibana needs extra env (e.g. APM integration / fleet settings) — the current base only wires Kibana to Elasticsearch.</li>
+      <li>A named volume (<code>elasticsearch-data</code>) persists data across restarts; a future smoke-test task may want a documented "reset" path (<code>docker compose down -v</code>) so verification runs start clean.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>You can now <code>cd stacks/claude-code-elastic &amp;&amp; docker compose up -d</code> to get a single-node Elasticsearch + Kibana on Elastic Stack 9.4.2, both with real healthchecks. Kibana comes up at <code>http://127.0.0.1:5601</code> and Elasticsearch at <code>http://127.0.0.1:9200</code>. Verified locally: both reached a healthy state and responded over HTTP (ES cluster green, Kibana reporting version 9.4.2).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Confirm the localhost-only port binding and <code>1g</code> heap suit your machine; bump the heap if you intend to push real telemetry volume.</li>
+      <li>The data volume persists between runs — remember <code>docker compose down -v</code> if you want a clean slate.</li>
+    </ul>
+  </section>
+
+  <script>window.scrollTo(0, document.body.scrollHeight);</script>
+</body>
+</html>
