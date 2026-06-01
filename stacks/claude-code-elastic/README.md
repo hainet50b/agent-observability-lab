@@ -10,6 +10,8 @@ Claude Code  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsea
 (metrics + events)                   :8200            :9200                :5601
 ```
 
+The one non-default choice: **APM Server** is the Elastic-native OTLP receiver — telemetry lands straight in Elasticsearch with **no upstream OpenTelemetry Collector** (that comparison, if wanted, would be a separate stack).
+
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
 > `127.0.0.1`. Never expose this publicly. The events channel can capture your
 > prompt text and tool I/O — do **not** run a telemetry-enabled session
