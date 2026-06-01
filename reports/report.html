@@ -165,6 +165,32 @@
       <li>Please run the Quick Tour against a live Docker daemon to confirm: (1) the NDJSON imports without migration errors in Kibana 9.4.2, and (2) a real <code>claude</code> session's metrics/events show up under the two data views and as an APM service.</li>
     </ul>
   </section>
+  <section class="entry">
+    <h2>Add two Kibana Saved Searches (API Requests, Tool Results)</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Expressed the per-view filter as a single KQL query string — <code>message: claude_code.api_request and service.name: claude-code</code> — inside <code>searchSourceJSON.query</code>, rather than as structured <code>filter[]</code> pills. Both render in Discover, but a query string is self-contained (no dependency on a field's <code>filter</code> metadata or a phrase-match DSL block), so it imports and round-trips more robustly across 9.x point releases. <code>filter</code> stays <code>[]</code>.</li>
+      <li>Put <code>sort</code> as <code>[["@timestamp","desc"]]</code> at the attribute level and <code>columns</code> as the explicit PRD-specified arrays (10 for API Requests, 7 for Tool Results) — exactly the curated sets finalized in the README working notes, no additions.</li>
+      <li>Shipped as a <strong>separate</strong> file <code>kibana/claude-code-saved-searches.ndjson</code> (per the PRD "alongside" wording) rather than appending to the data-views NDJSON, keeping the data-view import (no external refs) independent of the saved-search import (which references the Events data view). The README import step now loops both files data-views-first so the <code>cce-claude-code-events</code> reference always resolves.</li>
+      <li>The trailing summary line declares <code>missingRefCount: 1</code> / <code>missingReferences: [cce-claude-code-events]</code> — truthful, since the referenced data view is intentionally not bundled in this file (the <code>_import</code> API ignores this line anyway). Pinned <code>coreMigrationVersion</code> to <code>9.4.2</code>, matching the data-views file.</li>
+      <li>Folded the README "Finalized Saved Searches" working note from a plan ("scope: option B — start with these 2") into shipped-state docs, preserving the column-choice rationale the PRD points at; left the repo-root <code>README.md</code> (spec layer) untouched per Ralph spec/impl separation.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The Docker daemon was unreachable in this environment, so I could not drive a live Kibana <code>_import</code> to confirm the saved searches import without migration errors or open against real <code>claude-code</code> telemetry. Mitigations: both object lines and their nested <code>searchSourceJSON</code> were parsed as valid JSON, and references/columns/sort were verified programmatically; the compose-config gate passed. A human should run Quick Tour step 3 once against a live daemon to confirm both saved searches import and open from Discover's <em>Open</em> menu.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The remaining event types (<code>tool_decision</code>, <code>user_prompt</code>, <code>hook_*</code>) are candidates for more saved searches if useful — though <code>user_prompt</code> would need care to avoid baking in the PII <code>labels.prompt</code> column.</li>
+      <li>A curated Lens dashboard (cost/token trends, model breakdown, tool success rate, API latency) remains the natural next visualization task — mind the documented string-vs-numeric <code>labels</code> caveat for <code>tool_result</code> aggregations.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <p>Two importable Kibana saved searches now ship with the stack — "Claude Code — API Requests" and "Claude Code — Tool Results" — each pre-filtered by event type with curated cost/token/latency and tool/decision columns, so you can open them straight from Discover instead of hand-building column layouts.</p>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Confirm against a live daemon that both saved searches import cleanly in Kibana 9.4.2 (data views imported first) and that selecting them in Discover shows the expected columns over real <code>claude_code.api_request</code> / <code>claude_code.tool_result</code> events.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

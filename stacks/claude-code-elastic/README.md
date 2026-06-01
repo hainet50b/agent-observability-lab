@@ -76,9 +76,9 @@ claude
 
 Telemetry flushes on the export interval; give it ~10–30s after activity.
 
-### 3. Import the Kibana data views
+### 3. Import the Kibana saved objects
 
-Two data views ship as importable saved objects in
+Two **data views** ship as importable saved objects in
 [`kibana/claude-code-data-views.ndjson`](kibana/claude-code-data-views.ndjson):
 
 | Data view | Index pattern | Shows |
@@ -86,17 +86,33 @@ Two data views ship as importable saved objects in
 | **Claude Code — Metrics** | `metrics-apm.app*` | the numeric metric documents |
 | **Claude Code — Events** | `logs-apm.app*` | the prompt / tool-result / API-request events |
 
-Both cover any agent telemetry that lands (real `claude-code` and the smoke-test
-probe alike). Import them either way:
+Two **saved searches** ship in
+[`kibana/claude-code-saved-searches.ndjson`](kibana/claude-code-saved-searches.ndjson).
+A data view is only an index-pattern + time field — it cannot store a query or
+column selection — so these per-`message` curated views are modeled as saved
+searches (saved-object type `search`) layered on the **Claude Code — Events**
+data view:
+
+| Saved search | Filters on | Curated columns |
+| --- | --- | --- |
+| **Claude Code — API Requests** | `message: claude_code.api_request` (+ `service.name: claude-code`) | model, query_source, speed, effort, and the `numeric_labels.*` cost / token / `duration_ms` fields |
+| **Claude Code — Tool Results** | `message: claude_code.tool_result` (+ `service.name: claude-code`) | tool_name, decision_type, decision_source, success, duration_ms, tool input / result size |
+
+Both data views cover any agent telemetry that lands (real `claude-code` and the
+smoke-test probe alike); the saved searches scope to real `claude-code`. The
+saved searches **reference the Events data view**, so import the data views
+first (or import both files together). Import either way:
 
 - **Kibana UI** — Stack Management → Saved Objects → **Import** → choose the
-  `.ndjson` file.
-- **API one-liner** (from this directory):
+  `.ndjson` file(s). Import `claude-code-data-views.ndjson` before (or alongside)
+  `claude-code-saved-searches.ndjson`.
+- **API one-liner** (from this directory) — data views first, then saved searches:
 
   ```sh
-  curl -s -X POST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
-    -H "kbn-xsrf: true" \
-    --form file=@kibana/claude-code-data-views.ndjson | jq .
+  for f in kibana/claude-code-data-views.ndjson kibana/claude-code-saved-searches.ndjson; do
+    curl -s -X POST "http://localhost:5601/api/saved_objects/_import?overwrite=true" \
+      -H "kbn-xsrf: true" --form file=@"$f" | jq .
+  done
   ```
 
 ### 4. See the telemetry in Kibana
@@ -109,6 +125,9 @@ probe alike). Import them either way:
   metric (e.g. `claude_code.token.usage`). The metric / event names and fields
   this lab has observed are catalogued in the telemetry notes at the end of this
   README — but Discover is the source of truth for the version you ran.
+- **Saved searches** — in Discover, open the **Open** menu (top bar) and pick
+  **Claude Code — API Requests** or **Claude Code — Tool Results** for the
+  curated, pre-filtered column layouts imported in step 3.
 - **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM
   **service** (`claude-code`); open it to see it as a first-class APM entity.
 
@@ -149,7 +168,8 @@ claude-code-elastic/
 ├─ docker-compose.yml                  # Elasticsearch + Kibana + APM Server (Stack 9.4.2)
 ├─ config/apm-server.yml               # APM Server as the OTLP receiver
 ├─ .env.example                        # Claude Code telemetry env (CLAUDE_CODE_ENABLE_TELEMETRY, OTEL_*)
-├─ kibana/claude-code-data-views.ndjson# importable Discover data views (this Quick Tour, step 3)
+├─ kibana/claude-code-data-views.ndjson   # importable Discover data views (Quick Tour step 3)
+├─ kibana/claude-code-saved-searches.ndjson# importable per-message saved searches (Quick Tour step 3)
 └─ scripts/smoke-test.sh               # end-to-end pipeline verification (see "Verify the pipeline")
 ```
 
@@ -248,10 +268,12 @@ Catalogued but **NOT seen this session**: `claude_code.api_error`.
   on top of the existing **Events** data view (`cce-claude-code-events`); do NOT
   spawn a data view per message type (that would be the overkill).
 
-### Finalized Saved Searches (scope: option B — start with these 2)
+### Saved Searches (shipped — `kibana/claude-code-saved-searches.ndjson`)
 
-Both reference data view `cce-claude-code-events`, sort `@timestamp` desc, and
-filter on `message` AND defensively `service.name: claude-code`.
+These two are now shipped as importable NDJSON (Quick Tour step 3). Both
+reference data view `cce-claude-code-events`, sort `@timestamp` desc, and filter
+on `message` AND defensively `service.name: claude-code`. The column choices
+below were made against live data — recorded here as the rationale.
 
 **Claude Code — API Requests** — filter `message: claude_code.api_request`
 ```
@@ -284,7 +306,7 @@ Excluded on purpose: `tool_use_id` (same reasoning as `request_id`).
 ### Still open / later
 
 - Remaining event types (tool_decision, user_prompt, hook_*) — more saved
-  searches later if useful.
+  searches later if useful (the two above — api_request, tool_result — shipped).
 - Dashboards (Lens): cost/token trends, model breakdown, tool frequency & success,
   API latency distribution, session list. Mind the string-vs-numeric caveat above.
 - The smoke-test's expected-indices/fields catalogue was removed from
