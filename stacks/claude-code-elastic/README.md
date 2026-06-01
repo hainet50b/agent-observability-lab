@@ -309,9 +309,11 @@ occurred): `lines_of_code.count`, `commit.count`, `pull_request.count`,
 | `claude_code.tool_result` | `labels.tool_name`, `success` (string), `duration_ms` (string), `decision_type`, `decision_source`, `tool_use_id`, `tool_input_size_bytes`, `tool_result_size_bytes` |
 | `claude_code.hook_execution_start` | `labels.hook_name`, `hook_event`, `hook_source`, `managed_only`, `num_hooks` |
 | `claude_code.hook_execution_complete` | + `num_blocking`, `num_success`, `num_cancelled`, `num_non_blocking_error`, `total_duration_ms` |
-| `claude_code.hook_plugin_metrics` | `labels.plugin_id`; `numeric_labels.pv`, `sdk_bootstrap`, `sdk_bootstrap_ms` |
+| `claude_code.hook_plugin_metrics` | `labels.plugin_id`, `hook_event`, `skipped`; many `numeric_labels.*` review metrics (`cost_usd`, `vulns_found`, `files_reviewed`, `tok_*`, …) — plugin-specific (security-guidance) |
+| `claude_code.subagent_completed` | `labels.agent_type`, `agent_source`, `model`, `is_async`, `is_built_in`; `numeric_labels.duration_ms`, `total_tokens`, `total_tool_uses` |
+| `claude_code.feedback_survey` | `labels.survey_type`, `event_type`, `response`, `appearance_id` — UI survey, low signal |
 
-Catalogued but **NOT seen this session**: `claude_code.api_error`.
+Catalogued but **NOT seen this session**: `claude_code.api_error`; also `claude_code.hook_registered` (per the docs it carries the *granular* `hook_source` values — see below) has not landed here.
 
 #### Field meanings worth recording
 
@@ -334,6 +336,28 @@ Catalogued but **NOT seen this session**: `claude_code.api_error`.
 - **`request_id` / `tool_use_id`** — opaque high-cardinality correlation IDs
   (request → API-side logs; `tool_use_id` joins `tool_decision` ⇄ `tool_result`).
   Useful as join keys, low value as scan columns.
+- **Hooks** (`hook_execution_*`) — a *hook* is a shell command Claude Code runs
+  automatically at a lifecycle event (`hook_event`: `UserPromptSubmit`,
+  `PostToolUse`, `Stop`, …; `hook_name` adds the tool matcher, e.g.
+  `PostToolUse:Edit`). Hooks come from settings or plugins; here the enabled
+  `security-guidance` plugin supplies them. `hook_execution_complete` carries the
+  outcome (`num_success` / `num_blocking` / `num_cancelled` /
+  `num_non_blocking_error`, `total_duration_ms`).
+- **`hook_source` / `managed_only`** — on the *execution* events `hook_source`
+  collapses to just two values: `merged` (normal) or `policySettings`
+  (managed-only mode), and that is 1:1 with `managed_only` (`true` ⇄
+  `policySettings`). The granular origins
+  (`userSettings`/`projectSettings`/`localSettings`/`flagSettings`/`pluginHook`/`policySettings`)
+  appear only on the `hook_registered` event, which we don't capture. ⇒ Neither
+  is worth a column on a Hook Executions saved search (low cardinality +
+  mutually redundant); to see the source breakdown you'd ingest `hook_registered`.
+  ([monitoring-usage docs](https://code.claude.com/docs/en/monitoring-usage.md))
+- **Subagent** (`subagent_completed`) — `agent_type` (which subagent, e.g.
+  `claude-code-guide`), `agent_source` (`built-in` / project / user / plugin) and
+  `is_built_in` (the boolean form of the same fact — redundant; prefer
+  `agent_source`), `is_async` (ran in background vs blocking), `model`; the
+  `numeric_labels` `duration_ms` / `total_tokens` / `total_tool_uses` are true
+  numbers (aggregatable). Directly on-mission for an agent-observability lab.
 
 ### Data View vs Saved Search — decision
 
@@ -402,8 +426,11 @@ The canonical, always-present permit decision (`decision` = accept/reject,
 
 ### Still open / later
 
-- Remaining event types (user_prompt, hook_*) — more saved searches later if
-  useful (api_request, tool_result, tool_decision shipped).
+- Saved searches spec'd next (PRD): **User Prompts**, **Hook Executions**
+  (complete only), **Subagent Completions** (api_request, tool_result,
+  tool_decision already shipped). Deferred: `hook_plugin_metrics`
+  (plugin-specific, 20+ numeric fields — better as a dedicated view later) and
+  `feedback_survey` (noise).
 - Dashboards (Lens): cost/token trends, model breakdown, tool frequency & success,
   API latency distribution, session list. Mind the string-vs-numeric caveat above.
 - The smoke-test's expected-indices/fields catalogue was removed from
