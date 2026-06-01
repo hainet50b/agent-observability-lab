@@ -98,6 +98,12 @@ data view:
 | **Claude Code — API Requests** | `message: claude_code.api_request` (+ `service.name: claude-code`) | model, query_source, speed, effort, and the `numeric_labels.*` cost / token / `duration_ms` fields |
 | **Claude Code — Tool Results** | `message: claude_code.tool_result` (+ `service.name: claude-code`) | tool_name, decision_type, decision_source, success, duration_ms, tool input / result size |
 
+> **Note:** the `decision_type` / `decision_source` columns are populated only in
+> **interactive** sessions; a headless/automated run (e.g. Ralph) leaves them
+> blank. The permit decision is always recorded in the separate
+> `claude_code.tool_decision` event (join on `tool_use_id`) — see the telemetry
+> notes at the end of this README.
+
 Both data views cover any agent telemetry that lands (real `claude-code` and the
 smoke-test probe alike); the saved searches scope to real `claude-code`. The
 saved searches **reference the Events data view**, so import the data views
@@ -258,10 +264,17 @@ Catalogued but **NOT seen this session**: `claude_code.api_error`.
   summarization while away), `prompt_suggestion`. Lets you separate "real" cost
   from background/auxiliary calls.
 - **`decision_type` vs `decision_source`** (tool_result) — `decision_type` =
-  *what* was decided (accept/reject; all `accept` this session), `decision_source`
-  = *where* it came from (observed `config` = allowlisted, `user_temporary` = a
-  one-off in-session approval). Keep both: type is the first thing you want when a
-  rejection happens; source shows how automated the permissioning is.
+  *what* was decided (accept/reject), `decision_source` = *where* it came from
+  (`config` = allowlisted, `user_temporary` = a one-off in-session approval).
+  ⚠️ **Only present on `tool_result` in interactive sessions.** A headless /
+  automated run (e.g. Ralph — identifiable by zero `user_prompt` events,
+  `start_type: fresh`, and all decisions `source: config`) omits both — verified
+  as an all-or-nothing split *by session*, same Claude Code version (2.1.159),
+  not a per-tool or per-outcome effect. The decision is **not** lost: every
+  `tool_result` has a matching `claude_code.tool_decision` event (1:1 by
+  `tool_use_id`) carrying `decision` + `source`. So **`tool_decision` is the
+  canonical, always-present source** for the permit decision; the `tool_result`
+  copies are an interactive-only convenience and will be blank for automated runs.
 - **`request_id` / `tool_use_id`** — opaque high-cardinality correlation IDs
   (request → API-side logs; `tool_use_id` joins `tool_decision` ⇄ `tool_result`).
   Useful as join keys, low value as scan columns.

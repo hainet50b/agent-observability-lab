@@ -31,6 +31,7 @@ Claude Code  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsea
 - **APM Server** is the Elastic-native OTLP receiver. It accepts OTLP over HTTP and gRPC and writes directly to Elasticsearch — no upstream/contrib OpenTelemetry Collector is used in this stack (that comparison, if wanted, becomes a separate stack).
 - **Elasticsearch** runs as a single node with security **disabled** — this is a local demo, not production (see Invariants).
 - **Kibana** is the inspection surface: Discover for raw documents (two importable data views — one for the metrics stream, one for the events stream), per-`message` **saved searches** layered on the events data view for curated columns, the APM UI for the agent as an APM service, and dashboards. A Kibana *data view* is only an index-pattern + time field — it cannot store a query or column selection, so message-filtered views are modeled as *saved searches* (saved-object type `search`), not as additional data views.
+- **Saved-search convention:** express each saved search's constraints (`message`, `service.name`) as **filter pills** — `phrase` entries in `searchSourceJSON.filter[]`, each referencing the data view through a `references[]` entry — rather than as query-bar KQL text. Pills render as labelled, removable blocks in Discover, which read clearly for non-expert viewers; the query bar is left empty.
 
 ### Signals Claude Code emits
 
