@@ -3,11 +3,6 @@
 *.swp
 *.swo
 
-# Real telemetry config — keep the committed templates, ignore local copies.
-.env
-.env.*
-!.env.example
-
 # Captured telemetry must never be committed (events can contain prompt/tool content).
 *.ndjson.local
 

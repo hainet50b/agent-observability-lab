@@ -43,6 +43,6 @@ Subject line: present-imperative, ≤ 72 characters. Body optional and free-form
 ## File and Identifier Naming
 
 - Stack directories under `stacks/` are **kebab-case** and name the agent + backend they exercise (e.g. `claude-code-elastic`).
-- Within a stack: `docker-compose.yml` at the stack root, service config under `config/`, scripts under `scripts/`, env template as `.env.example`.
+- Within a stack: `docker-compose.yml` at the stack root, service config under `config/`, scripts under `scripts/`, importable Kibana saved objects under `kibana/`. (Agent-side telemetry env is documented in the stack README, not shipped as a `.env` template — Claude Code reads its env from the shell or a settings file, not from `.env`.)
 - Compose service names are lowercase, matching the component (`elasticsearch`, `kibana`, `apm-server`).
 - Shell scripts are kebab-case with a `.sh` extension (e.g. `smoke-test.sh`).
