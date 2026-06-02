@@ -487,6 +487,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add the Claude Code — Auth Events saved search (ninth search)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modelled the new object byte-for-byte on the existing <code>prompt_id</code>-less search (MCP Server Connections): same two filter pills (<code>message: claude_code.auth</code> + <code>service.name: claude-code</code>), empty query bar, both filters' <code>meta.index</code> wired through <code>references[]</code>, <code>@timestamp</code> desc sort, and <code>coreMigrationVersion: 9.4.2</code>. Only the <code>id</code>, <code>title</code>, <code>description</code>, <code>message</code> filter value, and <code>columns</code> differ.</li>
+      <li>Columns follow the spec exactly: <code>labels.user_email</code>, <code>labels.action</code>, <code>labels.success</code>, <code>labels.auth_method</code> — the <em>who | what | outcome | method</em> audit line, keeping <code>action</code>/<code>success</code>/<code>auth_method</code> adjacent.</li>
+      <li>Deliberately omitted <code>labels.prompt_id</code> even though the event carries one (login/logout are account/session-level, not prompt-level) plus the other identity/PII and failure-only fields (<code>user_id</code>, <code>user_account_id</code>, <code>user_account_uuid</code>, <code>organization_id</code>, <code>error_category</code>, <code>status_code</code>). Captured the logout-bias behaviour in the object <code>description</code>.</li>
+      <li>Inserted before the export-summary line and bumped <code>exportedCount</code> 8 → 9 (the trailing <code>missingReferences</code> entry for the data view is expected — the data view ships in its own NDJSON, imported first).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Could not run the live Kibana import/open check this iteration — the Bash probe to <code>localhost:5601</code> (and <code>docker compose ps</code>) was denied in this session, so the stack wasn't reachable. Validated instead that all 10 NDJSON lines parse as JSON, the embedded <code>searchSourceJSON</code> parses with the correct empty query + two filter keys + three references, and the column order/sort match the spec.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new — the remaining open tasks (Event Overview, the six-search <code>user_email</code> rework, Hook Registered) already cover the foreseeable saved-search work.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a ninth Kibana saved search, <strong>Claude Code — Auth Events</strong>, surfacing login/logout audit lines (who, action, outcome, auth method) filtered to <code>claude_code.auth</code>, with the constraints shown as removable filter pills. No <code>prompt_id</code> column — login/logout are account/session-level.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Please run the import helper against a live Kibana once to confirm this search opens with its two constraints as filter pills (empty query bar) over real telemetry — the one check this session couldn't perform.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
