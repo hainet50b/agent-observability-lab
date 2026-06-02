@@ -133,7 +133,7 @@ Importable NDJSON ships under `kibana/`: the **data views**
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
-| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | per-`message` curated column views on the Events data view |
+| **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -275,9 +275,10 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | `claude_code.auth` | `labels.action` (`login`/`logout`), `success`, `auth_method` (`oauth`); failure-only `error_category`, `status_code`; has `prompt_id`. ⚠️ Also carries many PII labels (`user_email`, `user_id`, `organization_id`, …) |
 | `claude_code.feedback_survey` | `labels.survey_type`, `event_type`, `response`, `appearance_id` — UI survey, low signal |
 
-`claude_code.api_error` and `claude_code.hook_registered` are documented but
-haven't landed here (`hook_registered` carries the granular `hook_source`
-origins — see below).
+`claude_code.api_error` fires only when an API request fails, so it shows up
+only once an error has occurred. `claude_code.hook_registered` fires once per
+configured hook at session start and carries the granular `hook_source` origins
+(see below).
 
 **`claude_code.auth` is logout-biased.** `/logout` runs while telemetry is still
 alive, so the `action: logout` event reliably lands — but `/logout` then *exits*
@@ -313,9 +314,9 @@ sign-*out* audit, not a usage-start signal; for session starts use the
 - **`hook_source` / `managed_only`** — on *execution* events `hook_source` is only
   `merged` (normal) or `policySettings` (managed-only mode), 1:1 with
   `managed_only`. The granular origins (`userSettings` / `projectSettings` /
-  `localSettings` / `flagSettings` / `pluginHook` / `policySettings`) appear only
-  on the uncaptured `hook_registered` event — so to see the source breakdown you'd
-  ingest that. ([monitoring-usage docs](https://code.claude.com/docs/en/monitoring-usage.md))
+  `localSettings` / `flagSettings` / `pluginHook` / `policySettings`) live on the
+  `hook_registered` event (one per hook at session start) — query that event for
+  the source breakdown. ([monitoring-usage docs](https://code.claude.com/docs/en/monitoring-usage.md))
 - **Subagent** (`subagent_completed`) — `agent_type` (which subagent, e.g.
   `claude-code-guide`), `agent_source` (`built-in` / project / user / plugin),
   `is_async` (background vs blocking), `model`; `is_built_in` is the redundant
@@ -326,15 +327,19 @@ sign-*out* audit, not a usage-start signal; for session starts use the
 
 The shipped saved searches all live on the **Claude Code — Events** data view,
 sort `@timestamp` desc, and constrain on `message` + `service.name: claude-code`
-as filter pills. Most end with `labels.prompt_id` (the key that ties together
-every event from one prompt) — except **MCP Server Connections** (fires at
-startup, has no `prompt_id`) and **Auth Events** (account/session-level, so the
-`prompt_id` it carries is omitted as meaningless). **Auth Events** is also the
-one search that keeps a `user_*` column (`user_email`) — identity is the point of
-a sign-out audit. Columns were chosen against live data:
+as filter pills — except **Event Overview**, which constrains only on
+`service.name` and leaves `message` as a visible column so every event type
+shows (the cross-event-type timeline). Most end with `labels.prompt_id` (the key
+that ties together every event from one prompt) — except **MCP Server
+Connections** (fires at startup, has no `prompt_id`) and **Auth Events**
+(account/session-level, so the `prompt_id` it carries is omitted as meaningless).
+**Auth Events** and **Event Overview** keep a `user_*` column (`user_email`) —
+identity is the point of an audit/overview view; it is not dropped for being
+constant in this single-user lab. Columns were chosen against live data:
 
 | Saved search (`message:`) | Curated columns (besides `prompt_id`) | Left out |
 | --- | --- | --- |
+| **Event Overview** (no `message` filter — all event types) | `user_email`, `message`, `session.id` (+ trailing `prompt_id`) | per-event-type detail fields (drill into a per-`message` search for those); expand a row in Discover for the full document. `message` is the "what" column here, not a filter |
 | **API Requests** (`api_request`) | `model`, `query_source`, `speed`, `effort`; `numeric_labels` `duration_ms`, `cost_usd`, `{input,output,cache_read,cache_creation}_tokens` | `request_id` (opaque) |
 | **Tool Results** (`tool_result`) | `tool_name`, `decision_type`, `decision_source`, `success`, `duration_ms`, `tool_{input,result}_size_bytes` | `tool_use_id`; note `decision_*` is interactive-only |
 | **Tool Decisions** (`tool_decision`) | `tool_name`, `decision`, `source` | `tool_use_id` (the canonical permit decision, present in headless runs too) |
