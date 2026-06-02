@@ -240,8 +240,9 @@ source of truth for the version you run — names and fields can change.
 **Common envelope** (every doc): `@timestamp`, `service.name`, `service.version`,
 `agent.name` (`otlp`), `service.framework.name` (`com.anthropic.claude_code` on
 the metrics stream, `com.anthropic.claude_code.events` on the events stream),
-`host.os.*`, `data_stream.*`; common `labels.*` are `session_id`, `user_*`,
-`organization_id`, `terminal_type`.
+`host.os.*`, `data_stream.*`, and `session.id` (top-level, not a label — see
+[Field meanings](#field-meanings-worth-recording)); common `labels.*` are
+`user_*`, `organization_id`, `terminal_type`.
 
 ### Metrics (`metrics-apm.app.claude_code-default`)
 
@@ -344,13 +345,15 @@ shows (the cross-event-type timeline). Most end with `labels.prompt_id` (the key
 that ties together every event from one prompt) — except **MCP Server
 Connections** (fires at startup, has no `prompt_id`) and **Auth Events**
 (account/session-level, so the `prompt_id` it carries is omitted as meaningless).
-**Auth Events** and **Event Overview** keep a `user_*` column (`user_email`) —
-identity is the point of an audit/overview view; it is not dropped for being
-constant in this single-user lab. Columns were chosen against live data:
+**Every search leads with `labels.user_email`** — the "who", present on every
+event type. It is part of the audit/observability shape of these views and is
+*not* dropped for being a constant value in this single-user lab (a column is
+judged by its real multi-user/multi-org meaning). Columns were chosen against
+live data:
 
-| Saved search (`message:`) | Curated columns (besides `prompt_id`) | Left out |
+| Saved search (`message:`) | Distinguishing columns (besides the universal `user_email` lead and the `prompt_id` trailer) | Left out |
 | --- | --- | --- |
-| **Event Overview** (no `message` filter — all event types) | `user_email`, `message`, `session.id` (+ trailing `prompt_id`) | per-event-type detail fields (drill into a per-`message` search for those); expand a row in Discover for the full document. `message` is the "what" column here, not a filter |
+| **Event Overview** (no `message` filter — all event types) | `message`, `session.id` | per-event-type detail fields (drill into a per-`message` search for those); expand a row in Discover for the full document. `message` is the "what" column here, not a filter |
 | **API Requests** (`api_request`) | `model`, `query_source`, `speed`, `effort`; `numeric_labels` `duration_ms`, `cost_usd`, `{input,output,cache_read,cache_creation}_tokens` | `request_id` (opaque) |
 | **Tool Results** (`tool_result`) | `tool_name`, `decision_type`, `decision_source`, `success`, `duration_ms`, `tool_{input,result}_size_bytes` | `tool_use_id`; note `decision_*` is interactive-only |
 | **Tool Decisions** (`tool_decision`) | `tool_name`, `decision`, `source` | `tool_use_id` (the canonical permit decision, present in headless runs too) |
@@ -359,7 +362,7 @@ constant in this single-user lab. Columns were chosen against live data:
 | **Subagent Completions** (`subagent_completed`) | `agent_type`, `agent_source`, `model`, `is_async`; `numeric_labels` `duration_ms`, `total_tokens`, `total_tool_uses` | `is_built_in` (≡ `agent_source`) |
 | **Permission Mode Changes** (`permission_mode_changed`) | `from_mode`, `to_mode`, `trigger` | — (permission-posture audit: mode cycling via `shift_tab` etc.) |
 | **MCP Server Connections** (`mcp_server_connection`) | `status`, `transport_type`, `server_scope`, `is_plugin`, `duration_ms` | `prompt_id` (n/a — fires at startup) and any server-name field (none in this version) |
-| **Auth Events** (`auth`) | `user_email`, `action`, `success`, `auth_method` | `prompt_id` (present but omitted — account/session-level, not prompt-level); the other identity/PII labels (`user_id`, `user_account_*`, `organization_id`); failure-only `error_category` / `status_code`. **`user_email` is kept on purpose** — identity is the subject of a sign-out audit (and varies on in-session account switch), the lone `user_*` column any search includes. Logout-biased — cold-start login isn't captured (see Events notes above) |
+| **Auth Events** (`auth`) | `action`, `success`, `auth_method` | `prompt_id` (present but omitted — account/session-level, not prompt-level); the other identity/PII labels (`user_id`, `user_account_*`, `organization_id`); failure-only `error_category` / `status_code`. Logout-biased — cold-start login isn't captured (see Events notes above) |
 
 Why saved searches and not more data views: a Kibana data view is only an
 index-pattern + time field — it can't store a query or columns — so per-`message`
