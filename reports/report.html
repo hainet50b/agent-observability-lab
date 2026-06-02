@@ -427,6 +427,36 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add a Claude Code — Permission Mode Changes saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modelled the seventh search byte-for-byte on the existing six (same two filter-pill shape, same <code>references[]</code> wiring for <code>filter[0]/filter[1].meta.index</code> and the index ref, <code>@timestamp</code> desc, <code>coreMigrationVersion</code> 9.4.2). Only the id (<code>cce-claude-code-permission-mode-changes</code>), title, description, <code>message</code> value, and column list differ — so it inherits the already-verified pill-rendering behaviour rather than introducing a new JSON shape.</li>
+      <li>Columns exactly as the PRD/README specify: led with <code>labels.user_email</code> (the universal "who") and trailed with <code>labels.prompt_id</code>, with <code>from_mode</code> / <code>to_mode</code> / <code>trigger</code> between — the who | from → to | how audit line.</li>
+      <li>Bumped the export footer's <code>exportedCount</code> 6 → 7. The <code>missingReferences</code> entry (the externally-imported <code>cce-claude-code-events</code> data view) is left as-is, matching the shipped file's convention.</li>
+      <li>Left the README untouched — the task states it is already updated for this search (Events table, Quick Tour list, Layout count, columns table), and inspection confirmed the <code>permission_mode_changed</code> row already exists at README line 366.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>No live Kibana import was exercised: this environment has no running stack (no Elasticsearch/Kibana/APM containers, docker daemon unavailable at runtime) and the sandbox blocks <code>localhost:5601</code>. Verification was structural — <code>jq</code> confirmed every line is valid JSON, the embedded <code>searchSourceJSON</code> parses with its two filters, and the new search is shape-identical to the six previously imported-and-verified searches.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Three open saved-search tasks remain (MCP Server Connections, Auth Events, Event Overview) plus the all-searches <code>user_email</code> rework and Hook Registered. Once they all land it'd be worth a single end-to-end import run to confirm all ten/eleven objects import cleanly in one pass.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a seventh Kibana saved search, <strong>Claude Code — Permission Mode Changes</strong>, surfacing permission-posture changes (<code>from_mode → to_mode</code>, e.g. default/acceptEdits/plan/auto, via <code>shift_tab</code>) with the constraints shown as removable filter pills.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Please run the import helper against a live Kibana once to confirm this search opens with its two constraints as filter pills (empty query bar) over real telemetry — the one check the sandbox couldn't perform.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
