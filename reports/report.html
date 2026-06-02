@@ -875,6 +875,32 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Append trace.id as the final column of every event saved search</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Scoped "event" saved searches to the eleven built on the <code>cce-claude-code-events</code> data view (API Requests, Tool Results, Tool Decisions, User Prompts, Hook Executions, Subagent Completions, Permission Mode Changes, MCP Server Connections, Auth Events, Event Overview, Hook Registered) and appended <code>trace.id</code> to each. Deliberately left the two <em>trace</em> saved searches (Interactions, Traces) untouched — they live on <code>cce-claude-code-traces</code> and already carry <code>trace.id</code>.</li>
+      <li>Placed <code>trace.id</code> after the trailing <code>labels.prompt_id</code> on the eight searches that have it; on the three <code>prompt_id</code>-less searches (MCP Server Connections, Auth Events, Hook Registered) it becomes the new last column. Only column order changed — filter pills, <code>references[]</code>, <code>@timestamp</code> desc sort, and the <code>user_email</code> lead are all unchanged.</li>
+      <li>Caught a column-path mismatch at edit time: API Requests' cache-token columns are <code>numeric_labels.cache_creation_tokens</code>, not <code>labels.*</code>. The first edit failed loudly rather than matching the wrong token, and I corrected it to the real path.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The stack was healthy this run, so the file was imported live via <code>scripts/import-kibana-objects.sh</code> — 13 objects, <code>success: true</code>. A read-back query of the imported objects was declined at the permission prompt, but the per-object column lists were already confirmed directly from the NDJSON with <code>jq</code> (all eleven event searches end in <code>trace.id</code>), so coverage is verified.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new — the next open task already pairs with this one (make <code>trace.id</code> a click-through URL field formatter on the events/traces data views).</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>Every Claude Code event saved search now shows <code>trace.id</code> as its last column — the cross-signal bridge from an event to its trace spans.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Nothing needs a close look. <code>trace.id</code> renders blank on events emitted outside a trace (session-startup events) and when tracing is off — expected; the column choice does not affect ingestion.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
