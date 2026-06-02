@@ -4,8 +4,9 @@
 # PowerShell mirror of import-kibana-objects.sh (same pairing as ralph.sh /
 # ralph.ps1). Imports the NDJSON files in ../kibana/ through the Kibana Saved
 # Objects `_import?overwrite=true` API, in dependency order: the **data views**
-# first, so the `cce-claude-code-events` reference that every saved search points
-# at resolves, then the **saved searches**. Prints the per-file import result.
+# first, so the `cce-claude-code-events` / `cce-claude-code-metrics` references
+# resolve, then the **saved searches**, then the **dashboard** (which references
+# the data views by id). Prints the per-file import result.
 #
 # Prerequisites: PowerShell 7+ (curl is not required — uses Invoke-RestMethod).
 # Override the Kibana base URL with -KibanaUrl or the KIBANA_URL env var
@@ -29,11 +30,13 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir = Split-Path -Parent $ScriptDir
 Set-Location -LiteralPath $StackDir
 
-# Data views BEFORE saved searches — the saved searches reference the events
-# data view (cce-claude-code-events) and the reference must already exist.
+# Data views BEFORE saved searches BEFORE the dashboard — the saved searches and
+# the dashboard reference the data views (cce-claude-code-events /
+# cce-claude-code-metrics), and those references must already exist.
 $Files = @(
     'kibana/claude-code-data-views.ndjson'
     'kibana/claude-code-saved-searches.ndjson'
+    'kibana/claude-code-dashboard.ndjson'
 )
 
 function Import-File {

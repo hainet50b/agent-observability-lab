@@ -397,6 +397,36 @@
         its header.</li>
     </ul>
   </section>
+  <section class="entry">
+    <h2>Wire the shipped dashboard into the import helpers</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Added <code>kibana/claude-code-dashboard.ndjson</code> as the <em>last</em> entry of the <code>FILES</code> list in both <code>import-kibana-objects.sh</code> and <code>import-kibana-objects.ps1</code>, preserving the order data views → saved searches → dashboard. The dashboard is by-value and references the two data views (<code>cce-claude-code-metrics</code>, <code>cce-claude-code-events</code>) by id, so importing it after the data views lets those references resolve.</li>
+      <li>Also refreshed the one-line dependency-order comment / header docstring in each script to name the dashboard step and both data views, rather than the old "data views then saved searches" phrasing — keeps the in-file documentation honest about what now imports.</li>
+      <li>Left the stack <code>README.md</code> untouched: it already documents the dashboard (Quick Tour table, Layout, Telemetry reference) and the recommended path is the import helper, which now picks the dashboard up automatically. No re-edit was warranted by the task scope.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Could not run the live end-to-end import against a running Kibana: the sandbox can't reach <code>localhost:5601</code> and the network probe was denied. I validated statically instead — all three NDJSON files parse as one JSON object per line, the two data-view ids exist in the first file, and the dashboard's <code>references[]</code> point only at those two ids (no other unresolved refs). The dashboard itself was already shipped and opened in the prior commit. A maintainer with the stack up should run <code>scripts/import-kibana-objects.sh</code> once to confirm all three files import and the <strong>Claude Code — Overview</strong> dashboard opens with populated panels.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The smoke test (<code>scripts/smoke-test.sh</code>) asserts telemetry landed but does not exercise the Kibana import path. A future task could have it (optionally) run the import helper and assert <code>successCount</code>/object ids, so saved-object regressions are caught automatically rather than by eye.</li>
+      <li>Richer dashboards are still flagged as "later" in the README (cost/token trends, model breakdown, tool success, latency) — a natural follow-up now that the import pipeline carries dashboards.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Kibana import helpers now also import the starter <strong>Overview</strong> dashboard — one run of <code>import-kibana-objects.sh</code> (or <code>.ps1</code>) loads data views, saved searches, and the dashboard in dependency order.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Please run the import helper against a live Kibana once to confirm the dashboard imports cleanly and its panels populate — that final live check is the one thing the sandbox couldn't do here.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
