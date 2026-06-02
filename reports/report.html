@@ -788,6 +788,37 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Claude Code — Interactions saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Built on the <code>cce-claude-code-traces</code> data view (the per-agent <code>traces-apm-agents_claude_code*</code> stream), not the events view — this search reads trace spans, not log events.</li>
+      <li>Single filter pill on <code>labels.span_type: interaction</code> (phrase) as the spec dictates — not <code>message</code> (traces carry no <code>message</code>) and not <code>transaction.name</code>; <code>span_type</code> catches the interaction root whether it lands as a transaction or a span. No <code>service.name</code> pill, since the data view is already physically scoped to the agent.</li>
+      <li>Verified all seven column paths against live trace data before authoring: <code>labels.span_type</code>, <code>labels.user_email</code>, <code>labels.user_prompt</code> (<code>&lt;REDACTED&gt;</code>), <code>numeric_labels.user_prompt_length</code>, <code>numeric_labels.interaction_sequence</code>, <code>numeric_labels.interaction_duration_ms</code>, <code>event.outcome</code>, and <code>trace.id</code> are all present on the <code>claude_code.interaction</code> root (31 such docs live, <code>processor.event: transaction</code>).</li>
+      <li>Bumped the export-summary to <code>exportedCount: 12</code> and added <code>cce-claude-code-traces</code> to <code>missingReferences</code> (this is the first saved search referencing the traces view; the import helper imports data views first, so the reference resolves).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Could not re-fetch the imported object via the Kibana saved-objects GET API (Bash <code>curl</code> to localhost:5601 was permission-denied for that path), but the <code>_import</code> response already proves reference resolution — it returns per-object errors on unresolved references and reported <code>12 object(s) imported</code> clean.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None beyond the already-queued traces work (the sibling <strong>Claude Code — Traces</strong> overview search and the <code>trace.id</code> click-through formatter are the next tasks).</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Adds a "Claude Code — Interactions" saved search giving one row per interactive turn (the <code>claude_code.interaction</code> root span) — prompt, length, sequence, duration, outcome, and a <code>trace.id</code> drill-down — browsable from Discover on the per-agent traces data view. Headless/<code>-p</code> sessions have no interaction span and won't appear here.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: <code>import-kibana-objects.sh</code> reached <strong>PASS</strong> with the saved-searches file importing <code>12 object(s)</code> (incl. the new <code>cce-claude-code-interactions</code>), data views 4 and dashboard 1 all clean. Every NDJSON line validated as JSON; compose gate passes; shellcheck absent (skipped per CONVENTIONS).</li>
+      <li>README intentionally untouched (already updated upstream, per the task).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
