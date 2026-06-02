@@ -124,15 +124,16 @@ so data lands within ~10–30s.
 
 ### 3. Import the Kibana saved objects
 
-Two **data views** (`kibana/claude-code-data-views.ndjson`), seven **saved searches**
-(`kibana/claude-code-saved-searches.ndjson`), and one **dashboard**
-(`kibana/claude-code-dashboard.ndjson`) ship as importable NDJSON:
+Importable NDJSON ships under `kibana/`: the **data views**
+(`claude-code-data-views.ndjson`), the **saved searches**
+(`claude-code-saved-searches.ndjson`), and a **dashboard**
+(`claude-code-dashboard.ndjson`):
 
 | Saved object | Type | Shows |
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
-| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes** | saved searches | per-`message` curated column views on the Events data view |
+| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections** | saved searches | per-`message` curated column views on the Events data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -161,7 +162,7 @@ reasoning behind them are in the [Telemetry reference](#saved-search-columns).
 ### 4. See the telemetry in Kibana
 
 - **Discover** — pick the **Claude Code — Metrics** or **Events** data view, or
-  open one of the seven saved searches from the **Open** menu. Each saved search
+  open one of the saved searches from the **Open** menu. Each saved search
   opens with its `message` / `service.name` constraints as removable **filter
   pills** (the query bar stays empty). The field layout is explained in the
   [Telemetry reference](#telemetry-reference).
@@ -201,8 +202,8 @@ claude-code-elastic/
 ├─ config/
 │  └─ apm-server.yml                      # APM Server as the OTLP receiver
 ├─ kibana/
-│  ├─ claude-code-data-views.ndjson       # 2 importable Discover data views
-│  ├─ claude-code-saved-searches.ndjson   # 7 importable per-message saved searches
+│  ├─ claude-code-data-views.ndjson       # importable Discover data views
+│  ├─ claude-code-saved-searches.ndjson   # importable per-message saved searches
 │  └─ claude-code-dashboard.ndjson        # the "Overview" demo dashboard
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification
@@ -270,6 +271,7 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | `claude_code.hook_plugin_metrics` | `labels.plugin_id`, `hook_event`, `skipped`; many `numeric_labels.*` review metrics (`cost_usd`, `vulns_found`, `files_reviewed`, `tok_*`, …) — plugin-specific (security-guidance) |
 | `claude_code.subagent_completed` | `labels.agent_type`, `agent_source`, `model`, `is_async`, `is_built_in`; `numeric_labels.duration_ms`, `total_tokens`, `total_tool_uses` |
 | `claude_code.permission_mode_changed` | `labels.from_mode`, `to_mode` (`default`/`acceptEdits`/`plan`/`auto`), `trigger` (e.g. `shift_tab`), `prompt_id` |
+| `claude_code.mcp_server_connection` | `labels.status` (e.g. `connected`), `transport_type` (`stdio`/…), `server_scope`, `is_plugin`, `duration_ms` (string) — no server-name field, no `prompt_id` (fires at startup) |
 | `claude_code.feedback_survey` | `labels.survey_type`, `event_type`, `response`, `appearance_id` — UI survey, low signal |
 
 `claude_code.api_error` and `claude_code.hook_registered` are documented but
@@ -312,10 +314,11 @@ origins — see below).
 
 ### Saved-search columns
 
-The seven shipped saved searches all live on the **Claude Code — Events** data
-view, sort `@timestamp` desc, constrain on `message` + `service.name: claude-code`
-as filter pills, and end with `labels.prompt_id` (the key that ties together
-every event from one prompt). Columns were chosen against live data:
+The shipped saved searches all live on the **Claude Code — Events** data view,
+sort `@timestamp` desc, and constrain on `message` + `service.name: claude-code`
+as filter pills. Most end with `labels.prompt_id` (the key that ties together
+every event from one prompt) — except **MCP Server Connections**, which fires at
+startup before any prompt. Columns were chosen against live data:
 
 | Saved search (`message:`) | Curated columns (besides `prompt_id`) | Left out |
 | --- | --- | --- |
@@ -326,10 +329,29 @@ every event from one prompt). Columns were chosen against live data:
 | **Hook Executions** (`hook_execution_complete`) | `hook_event`, `hook_name`, `num_hooks`, `num_success`, `num_blocking`, `total_duration_ms` | `hook_source` / `managed_only` (redundant 2-value pair); `num_*` are string labels |
 | **Subagent Completions** (`subagent_completed`) | `agent_type`, `agent_source`, `model`, `is_async`; `numeric_labels` `duration_ms`, `total_tokens`, `total_tool_uses` | `is_built_in` (≡ `agent_source`) |
 | **Permission Mode Changes** (`permission_mode_changed`) | `from_mode`, `to_mode`, `trigger` | — (permission-posture audit: mode cycling via `shift_tab` etc.) |
+| **MCP Server Connections** (`mcp_server_connection`) | `status`, `transport_type`, `server_scope`, `is_plugin`, `duration_ms` | `prompt_id` (n/a — fires at startup) and any server-name field (none in this version) |
 
 Why saved searches and not more data views: a Kibana data view is only an
 index-pattern + time field — it can't store a query or columns — so per-`message`
 curated views are saved searches on the Events data view, not extra data views.
+
+### Generating events that don't occur in a normal session
+
+Some events only fire under specific conditions — handy when populating the demo:
+
+- **`mcp_server_connection`** fires only when an MCP server *actually connects*.
+  claude.ai connectors stuck at "needs authentication" never connect, so they
+  emit nothing. To produce one, add a no-auth local stdio server, start a
+  session (it connects), then remove it:
+
+  ```sh
+  claude mcp add everything -- npx -y @modelcontextprotocol/server-everything
+  claude            # start a session — the server connects → one mcp_server_connection event
+  claude mcp remove everything
+  ```
+
+- **`permission_mode_changed`** — cycle the permission mode with **Shift+Tab**
+  (or `/permissions`) in a session: default → acceptEdits → plan → auto.
 
 ### Not yet covered
 
