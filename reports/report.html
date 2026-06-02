@@ -664,6 +664,35 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Verify the <code>traces</code> signal in <code>smoke-test.sh</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Reused the existing <code>post_otlp</code> / <code>assert_landed</code> helpers verbatim — the traces probe is a third call to each (<code>post_otlp /v1/traces</code>, <code>assert_landed "traces" "traces-apm*"</code>), so the metrics/logs flow and the no-time-filter <code>_count</code> assertion logic are untouched. No new code paths, just one more item in each of the two existing lists.</li>
+      <li>Embedded the pre-verified <code>ExportTraceServiceRequest</code> base64 payload from the PRD task as <code>traces_payload</code> alongside the metrics/logs ones, keeping the "no protobuf tooling" property intact (still only <code>base64 -d | curl</code>).</li>
+      <li>Tidied the surrounding comments to read as three signals rather than two: the 3A header Act/Assert description, the payload-list comment ("two payloads" → "three", "Both bake" → "All three bake", added the traces bullet in signal order), the Prerequisites "two OTLP payloads" line, and the DISCOVER summary (added a <code>traces-apm*</code> block).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The Docker daemon socket is outside the command sandbox, so the smoke test had to run with the sandbox disabled — expected for every Docker-driven task in this repo.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The smoke test now covers all three OTLP signals end to end. A natural follow-up would be a tracing-on documentation pass or a saved search / APM-UI walkthrough for the beta <code>claude_code.interaction</code> spans, so the traces data view added last task has a guided entry point like the events saved searches do.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The stack smoke test now also fires a synthetic trace span at the APM Server and confirms it lands in <code>traces-apm*</code>, so all three OTLP signals (metrics, logs, traces) are verified end to end in one run.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live against the running stack: <code>scripts/smoke-test.sh</code> reaches <strong>PASS</strong> — all three POSTs return HTTP 200 and all three <code>assert_landed</code> (metrics 9 docs, events 3 docs, traces 1 doc for <code>service.name=cce-smoke-test</code>) succeed. Compose-config gate passes; shellcheck absent (skipped per CONVENTIONS).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

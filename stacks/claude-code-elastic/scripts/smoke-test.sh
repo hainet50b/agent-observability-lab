@@ -6,10 +6,11 @@
 #
 #   Arrange — bring the stack up and wait for Elasticsearch, Kibana, and APM
 #             Server to all report healthy.
-#   Act     — POST a synthetic OTLP/protobuf metrics payload and a synthetic
-#             OTLP/protobuf logs payload to the APM Server OTLP/HTTP endpoint,
-#             shaped like the two channels Claude Code emits (one metric data
-#             point + one log/event record), tagged with service.name
+#   Act     — POST a synthetic OTLP/protobuf metrics payload, a synthetic
+#             OTLP/protobuf logs payload, and a synthetic OTLP/protobuf traces
+#             payload to the APM Server OTLP/HTTP endpoint, shaped like the three
+#             channels Claude Code emits (one metric data point + one log/event
+#             record + one trace span), tagged with service.name
 #             "cce-smoke-test". This stack's APM Server always protobuf-decodes
 #             the request body (it ignores Content-Type and has no OTLP/JSON
 #             toggle), so the probe sends protobuf — matching real Claude Code,
@@ -19,9 +20,9 @@
 #             Elasticsearch path that Claude Code relies on works end to end.
 #
 # It then prints a DISCOVER summary: the service.name values currently present
-# in the APM metrics/logs data streams, so real Claude Code telemetry (from an
-# actual `claude` session — see ../README.md, Quick Tour step 2) shows up
-# alongside the probe.
+# in the APM metrics/logs/traces data streams, so real Claude Code telemetry
+# (from an actual `claude` session — see ../README.md, Quick Tour step 2) shows
+# up alongside the probe.
 #
 # Why synthetic telemetry: the Act step must be self-contained and deterministic
 # (no API key, no interactive session) so it can run as a gate. Real Claude Code
@@ -32,7 +33,7 @@
 # Prerequisites: docker (+ a running daemon), curl, jq, base64 (coreutils). If
 # the daemon is not reachable the script SKIPs (exit 0) rather than failing —
 # there is nothing to smoke-test without it. No protobuf tooling is needed: the
-# two OTLP payloads are precomputed and embedded as base64 below.
+# three OTLP payloads are precomputed and embedded as base64 below.
 #
 # Endpoints can be overridden via ES_URL / APM_OTLP_URL if you publish different
 # ports than the defaults below.
@@ -81,15 +82,17 @@ echo "[act] sending synthetic OTLP/protobuf telemetry (service.name=$SERVICE_NAM
 
 # This stack's APM Server always protobuf-decodes the OTLP body (it ignores
 # Content-Type and exposes no OTLP/JSON toggle), so the probe POSTs protobuf —
-# the same wire format real Claude Code uses (http/protobuf). The two payloads
+# the same wire format real Claude Code uses (http/protobuf). The three payloads
 # are precomputed and embedded as base64 to avoid pulling in protobuf tooling:
 #   - metrics: ExportMetricsServiceRequest, one cce.smoke.counter sum point
 #   - logs:    ExportLogsServiceRequest,    one cce.smoke.event log record
-# Both bake service.name=cce-smoke-test and a fixed timeUnixNano (≈2026-05-28);
+#   - traces:  ExportTraceServiceRequest,   one cce.smoke.span span
+# All three bake service.name=cce-smoke-test and a fixed timeUnixNano (≈2026-05-28);
 # the assertions below query _count by service.name with no time filter, so the
 # fixed timestamp does not affect them.
 metrics_payload="ClUKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSLxItChFjY2Uuc21va2UuY291bnRlcjoYChIZAAAytJHUsxgxAQAAAAAAAAAQAhgB"
 logs_payload="CmcKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSQRI/CQAAMrSR1LMYEAkqEQoPY2NlIHNtb2tlIGV2ZW50Mh8KCmV2ZW50Lm5hbWUSEQoPY2NlLnNtb2tlLmV2ZW50"
+traces_payload="CmgKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSQhJAChAREREREREREREREREREREREggiIiIiIiIiIioOY2NlLnNtb2tlLnNwYW4wATkAADK0kdSzGEFAQkG0kdSzGA=="
 
 post_otlp() {
   path=$1 b64=$2
@@ -103,6 +106,7 @@ post_otlp() {
 
 post_otlp /v1/metrics "$metrics_payload"
 post_otlp /v1/logs    "$logs_payload"
+post_otlp /v1/traces  "$traces_payload"
 
 # --- Assert ----------------------------------------------------------------
 es_count() {
@@ -129,6 +133,7 @@ assert_landed() {
 echo "[assert] querying Elasticsearch for the synthetic documents…"
 assert_landed "metrics" "metrics-apm*"
 assert_landed "events"  "logs-apm*"
+assert_landed "traces"  "traces-apm*"
 
 # --- Discover (informational, never fails) ---------------------------------
 discover() {
@@ -143,6 +148,8 @@ echo "  metrics-apm*:"
 discover "metrics-apm*"
 echo "  logs-apm*:"
 discover "logs-apm*"
+echo "  traces-apm*:"
+discover "traces-apm*"
 
 echo
 echo "PASS: OTLP -> APM Server -> Elasticsearch pipeline verified."
