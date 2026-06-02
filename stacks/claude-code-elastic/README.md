@@ -124,21 +124,23 @@ so data lands within ~10–30s.
 
 ### 3. Import the Kibana saved objects
 
-Two **data views** (`kibana/claude-code-data-views.ndjson`) and six **saved
-searches** (`kibana/claude-code-saved-searches.ndjson`) ship as importable NDJSON:
+Two **data views** (`kibana/claude-code-data-views.ndjson`), six **saved searches**
+(`kibana/claude-code-saved-searches.ndjson`), and one **dashboard**
+(`kibana/claude-code-dashboard.ndjson`) ship as importable NDJSON:
 
 | Saved object | Type | Shows |
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
 | **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions** | saved searches | per-`message` curated column views on the Events data view |
+| **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
-The saved searches **reference the Events data view**, so import data views first
-(or both files together). Their columns and the reasoning behind them are in the
-[Telemetry reference](#saved-search-columns).
+The saved searches and the dashboard **reference the data views**, so import the
+data views first (or all files together). The saved searches' columns and the
+reasoning behind them are in the [Telemetry reference](#saved-search-columns).
 
-- **Import helper (recommended)** — imports both files in the right order; run
-  from anywhere:
+- **Import helper (recommended)** — imports the `kibana/` files in dependency
+  order (data views first); run from anywhere:
 
   ```sh
   scripts/import-kibana-objects.sh     # bash/zsh/sh
@@ -200,7 +202,8 @@ claude-code-elastic/
 │  └─ apm-server.yml                      # APM Server as the OTLP receiver
 ├─ kibana/
 │  ├─ claude-code-data-views.ndjson       # 2 importable Discover data views
-│  └─ claude-code-saved-searches.ndjson   # 6 importable per-message saved searches
+│  ├─ claude-code-saved-searches.ndjson   # 6 importable per-message saved searches
+│  └─ claude-code-dashboard.ndjson        # the "Overview" demo dashboard
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification
    ├─ import-kibana-objects.sh            # import the kibana/ objects (data views first)
@@ -330,6 +333,25 @@ curated views are saved searches on the Events data view, not extra data views.
 
 - No saved search for `hook_plugin_metrics` (plugin-specific, 20+ numeric fields —
   a dedicated view later) or `feedback_survey` (noise).
-- **Dashboards (Lens)** are the next visualization layer: cost/token trends, model
-  breakdown, tool frequency & success, latency distribution, session list. Mind
-  the string-vs-numeric caveat above.
+- A starter **Overview dashboard** (Lens) ships in `kibana/claude-code-dashboard.ndjson`;
+  richer dashboards (cost/token trends, model breakdown, tool success, latency
+  distribution) can follow — mind the string-vs-numeric caveat above.
+
+## Regenerating the Kibana saved objects
+
+The data views and saved searches are hand-authored NDJSON; the dashboard was
+built in Kibana and exported. To re-export a saved object after editing it in
+the UI — no UI export step required — use the Saved Objects **export API**:
+
+```sh
+curl -s -X POST "http://localhost:5601/api/saved_objects/_export" \
+  -H "kbn-xsrf: true" -H "Content-Type: application/json" \
+  -d '{"objects":[{"type":"dashboard","id":"cce-claude-code-overview"}],"includeReferencesDeep":false}' \
+  > kibana/claude-code-dashboard.ndjson
+```
+
+`includeReferencesDeep: false` keeps the data views as *references* rather than
+bundling them, matching how these files are split (import data views first, then
+the dependants). UI equivalent: Stack Management → Saved Objects → select →
+**Export**, "Include related objects" off. A freshly-built object exports with a
+random id — give it a stable `cce-…` id (like the others) before committing.
