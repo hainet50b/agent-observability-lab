@@ -67,6 +67,11 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:8200
 export OTEL_METRIC_EXPORT_INTERVAL=10000
 export OTEL_LOGS_EXPORT_INTERVAL=5000
+# Content-exposure gates — kept off; flip a single one to 1 to capture that slice
+export OTEL_LOG_USER_PROMPTS=0     # user prompt text
+export OTEL_LOG_TOOL_DETAILS=0     # tool inputs/args (commands, file paths, …)
+export OTEL_LOG_TOOL_CONTENT=0     # tool input+output content (needs tracing)
+export OTEL_LOG_RAW_API_BODIES=0   # full Messages API request/response bodies
 ```
 
 ```fish
@@ -78,6 +83,11 @@ set -gx OTEL_EXPORTER_OTLP_PROTOCOL http/protobuf
 set -gx OTEL_EXPORTER_OTLP_ENDPOINT http://localhost:8200
 set -gx OTEL_METRIC_EXPORT_INTERVAL 10000
 set -gx OTEL_LOGS_EXPORT_INTERVAL 5000
+# Content-exposure gates — kept off; flip a single one to 1 to capture that slice
+set -gx OTEL_LOG_USER_PROMPTS 0     # user prompt text
+set -gx OTEL_LOG_TOOL_DETAILS 0     # tool inputs/args (commands, file paths, …)
+set -gx OTEL_LOG_TOOL_CONTENT 0     # tool input+output content (needs tracing)
+set -gx OTEL_LOG_RAW_API_BODIES 0   # full Messages API request/response bodies
 ```
 
 ```powershell
@@ -89,6 +99,11 @@ $env:OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
 $env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:8200"
 $env:OTEL_METRIC_EXPORT_INTERVAL = "10000"
 $env:OTEL_LOGS_EXPORT_INTERVAL = "5000"
+# Content-exposure gates — kept off; flip a single one to "1" to capture that slice
+$env:OTEL_LOG_USER_PROMPTS = "0"     # user prompt text
+$env:OTEL_LOG_TOOL_DETAILS = "0"     # tool inputs/args (commands, file paths, …)
+$env:OTEL_LOG_TOOL_CONTENT = "0"     # tool input+output content (needs tracing)
+$env:OTEL_LOG_RAW_API_BODIES = "0"   # full Messages API request/response bodies
 ```
 
 **Option B — `settings.json` `env` block (persistent).** Put the same vars in a
@@ -103,10 +118,21 @@ Claude Code settings file's `env`:
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:8200",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
-    "OTEL_LOGS_EXPORT_INTERVAL": "5000"
+    "OTEL_LOGS_EXPORT_INTERVAL": "5000",
+
+    "OTEL_LOG_USER_PROMPTS": "0",
+    "OTEL_LOG_TOOL_DETAILS": "0",
+    "OTEL_LOG_TOOL_CONTENT": "0",
+    "OTEL_LOG_RAW_API_BODIES": "0"
   }
 }
 ```
+
+The four `OTEL_LOG_*` content-exposure gates are shown here explicitly set to
+`0` (off) so they are visible knobs to flip during verification — Claude Code
+enables each only on `1` (or `file:<dir>` for `OTEL_LOG_RAW_API_BODIES`), so `0`
+and "unset" both mean off. Flip **one at a time** to observe what it adds, and
+keep real secrets out of any session while a gate is on.
 
 Project settings load **only from the directory `claude` is launched in** (not
 inherited from parents), so a stack-local `.claude/settings.local.json` keeps
