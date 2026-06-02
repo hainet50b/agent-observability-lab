@@ -604,6 +604,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Fix smoke-test.sh to send OTLP/protobuf, not JSON</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Followed the PRD verbatim: replaced the two JSON heredocs + <code>Content-Type: application/json</code> with the two precomputed base64 protobuf payloads, POSTed via <code>printf '%s' "$B64" | base64 -d | curl --data-binary @-</code> with <code>Content-Type: application/x-protobuf</code>. No protobuf tooling added — only <code>base64</code> (coreutils), guarded by a new precondition next to the <code>curl</code>/<code>jq</code> checks.</li>
+      <li>Dropped the now-dead <code>now_ns</code> and <code>run_id</code> variables (and the <code>run=</code> token in the act echo): the fixed payloads bake their own <code>service.name</code> and <code>timeUnixNano</code>, so a runtime timestamp/run-id no longer feeds anything. Leaving them would have tripped shellcheck's unused-variable lint and misled the reader.</li>
+      <li>Left the <code>post_otlp</code> contract intact (path + payload args, HTTP-200 check, act echo) and both <code>assert_landed</code> calls unchanged, as instructed — only the payload source and Content-Type changed.</li>
+      <li>The optional runtime-refresh of <code>timeUnixNano</code> was explicitly not required by the task and adds binary-byte juggling for no assertion benefit (the <code>_count</code> query has no time filter), so I skipped it.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Verified live against the running stack: both POSTs return HTTP 200 and both <code>assert_landed</code> calls (metrics + logs) pass — script reaches PASS.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The PRD line mentioned correcting "any <code>scripts/README.md</code> line" describing the probe as OTLP/JSON, but no <code>scripts/README.md</code> exists — only the script header comment needed fixing (done). If a <code>scripts/</code> README is ever wanted to document the helper scripts (smoke-test + the two kibana importers), that could be a small future task.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The pipeline smoke test now sends OTLP/<strong>protobuf</strong> instead of OTLP/JSON, matching what this stack's APM Server actually decodes (it ignores Content-Type and always protobuf-decodes the body). The previously-red gate is green again: both the metrics and logs probes land and the script PASSes.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The two OTLP payloads are now opaque base64 blobs embedded in the script. They were built and verified to return HTTP 200 and land one doc each under <code>service.name=cce-smoke-test</code>; the inline comment records what each decodes to (a <code>cce.smoke.counter</code> sum point and a <code>cce.smoke.event</code> log record) and that the baked <code>timeUnixNano</code> is ≈2026-05-28.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

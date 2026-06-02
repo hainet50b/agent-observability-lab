@@ -6,10 +6,14 @@
 #
 #   Arrange — bring the stack up and wait for Elasticsearch, Kibana, and APM
 #             Server to all report healthy.
-#   Act     — POST a synthetic OTLP metrics payload and a synthetic OTLP logs
-#             payload to the APM Server OTLP/HTTP endpoint, shaped like the two
-#             channels Claude Code emits (one metric data point + one log/event
-#             record), tagged with service.name "cce-smoke-test".
+#   Act     — POST a synthetic OTLP/protobuf metrics payload and a synthetic
+#             OTLP/protobuf logs payload to the APM Server OTLP/HTTP endpoint,
+#             shaped like the two channels Claude Code emits (one metric data
+#             point + one log/event record), tagged with service.name
+#             "cce-smoke-test". This stack's APM Server always protobuf-decodes
+#             the request body (it ignores Content-Type and has no OTLP/JSON
+#             toggle), so the probe sends protobuf — matching real Claude Code,
+#             which exports http/protobuf.
 #   Assert  — query Elasticsearch and confirm those documents were ingested into
 #             the APM data streams, proving the OTLP -> APM Server ->
 #             Elasticsearch path that Claude Code relies on works end to end.
@@ -25,9 +29,10 @@
 #
 # Expected indices / fields are documented in ../README.md (telemetry notes).
 #
-# Prerequisites: docker (+ a running daemon), curl, jq. If the daemon is not
-# reachable the script SKIPs (exit 0) rather than failing — there is nothing to
-# smoke-test without it.
+# Prerequisites: docker (+ a running daemon), curl, jq, base64 (coreutils). If
+# the daemon is not reachable the script SKIPs (exit 0) rather than failing —
+# there is nothing to smoke-test without it. No protobuf tooling is needed: the
+# two OTLP payloads are precomputed and embedded as base64 below.
 #
 # Endpoints can be overridden via ES_URL / APM_OTLP_URL if you publish different
 # ports than the defaults below.
@@ -51,6 +56,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
 command -v curl   >/dev/null 2>&1 || skip "curl not found"
 command -v jq     >/dev/null 2>&1 || skip "jq not found"
+command -v base64 >/dev/null 2>&1 || skip "base64 not found"
 docker info >/dev/null 2>&1        || skip "docker daemon not reachable; nothing to smoke-test"
 
 # --- Arrange ---------------------------------------------------------------
@@ -71,40 +77,29 @@ for c in cce-elasticsearch cce-kibana cce-apm-server; do
 done
 
 # --- Act -------------------------------------------------------------------
-now_ns="$(date +%s)000000000"
-run_id="cce-smoke-$(date +%s)"
-echo "[act] sending synthetic OTLP telemetry (run=$run_id, service.name=$SERVICE_NAME)…"
+echo "[act] sending synthetic OTLP/protobuf telemetry (service.name=$SERVICE_NAME)…"
+
+# This stack's APM Server always protobuf-decodes the OTLP body (it ignores
+# Content-Type and exposes no OTLP/JSON toggle), so the probe POSTs protobuf —
+# the same wire format real Claude Code uses (http/protobuf). The two payloads
+# are precomputed and embedded as base64 to avoid pulling in protobuf tooling:
+#   - metrics: ExportMetricsServiceRequest, one cce.smoke.counter sum point
+#   - logs:    ExportLogsServiceRequest,    one cce.smoke.event log record
+# Both bake service.name=cce-smoke-test and a fixed timeUnixNano (≈2026-05-28);
+# the assertions below query _count by service.name with no time filter, so the
+# fixed timestamp does not affect them.
+metrics_payload="ClUKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSLxItChFjY2Uuc21va2UuY291bnRlcjoYChIZAAAytJHUsxgxAQAAAAAAAAAQAhgB"
+logs_payload="CmcKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSQRI/CQAAMrSR1LMYEAkqEQoPY2NlIHNtb2tlIGV2ZW50Mh8KCmV2ZW50Lm5hbWUSEQoPY2NlLnNtb2tlLmV2ZW50"
 
 post_otlp() {
-  path=$1 payload=$2
-  code=$(curl -s -o /dev/null -w '%{http_code}' \
+  path=$1 b64=$2
+  code=$(printf '%s' "$b64" | base64 -d | curl -s -o /dev/null -w '%{http_code}' \
     -X POST "$APM_OTLP_URL$path" \
-    -H 'Content-Type: application/json' \
-    --data "$payload")
+    -H 'Content-Type: application/x-protobuf' \
+    --data-binary @-)
   [ "$code" = 200 ] || fail "OTLP POST $path returned HTTP $code (expected 200)"
   echo "[act] OTLP POST $path -> HTTP $code"
 }
-
-metrics_payload=$(cat <<JSON
-{"resourceMetrics":[{"resource":{"attributes":[
-  {"key":"service.name","value":{"stringValue":"$SERVICE_NAME"}}]},
- "scopeMetrics":[{"scope":{"name":"cce-smoke"},"metrics":[
-  {"name":"cce.smoke.counter","sum":{"aggregationTemporality":2,"isMonotonic":true,
-   "dataPoints":[{"asInt":"1","startTimeUnixNano":"$now_ns","timeUnixNano":"$now_ns",
-    "attributes":[{"key":"cce.smoke.run","value":{"stringValue":"$run_id"}}]}]}}]}]}]}
-JSON
-)
-
-logs_payload=$(cat <<JSON
-{"resourceLogs":[{"resource":{"attributes":[
-  {"key":"service.name","value":{"stringValue":"$SERVICE_NAME"}}]},
- "scopeLogs":[{"scope":{"name":"cce-smoke"},"logRecords":[
-  {"timeUnixNano":"$now_ns","observedTimeUnixNano":"$now_ns","severityNumber":9,
-   "severityText":"INFO","body":{"stringValue":"cce smoke event $run_id"},
-   "attributes":[{"key":"event.name","value":{"stringValue":"cce.smoke.event"}},
-    {"key":"cce.smoke.run","value":{"stringValue":"$run_id"}}]}]}]}]}
-JSON
-)
 
 post_otlp /v1/metrics "$metrics_payload"
 post_otlp /v1/logs    "$logs_payload"
