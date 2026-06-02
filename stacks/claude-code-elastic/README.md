@@ -291,6 +291,17 @@ sign-*out* audit, not a usage-start signal; for session starts use the
 
 ### Field meanings worth recording
 
+- **Why `session.id` is top-level but `user_email` / `prompt_id` are under
+  `labels`** — Elastic's OTLP/APM intake promotes only attributes whose key
+  matches a field already in its data model to a dedicated top-level field;
+  everything else falls into the generic `labels.*` (strings) / `numeric_labels.*`
+  (numbers) buckets, with dots in the key flattened to underscores. `session.id`
+  is a modeled APM field (the session-tracking concept), so it lands top-level as
+  a `keyword` (aggregatable) keeping its dotted name. Claude-Code-specific
+  attributes aren't modeled, so they become labels — and `user.email` flattens to
+  `labels.user_email` (note: it is *not* promoted to the ECS `user.email` field,
+  which stays empty). So when scanning the Events data view, reach for
+  `session.id` but `labels.prompt_id` / `labels.user_email`.
 - **`query_source`** (api_request) — what triggered the call: `repl_main_thread`
   (the real interactive turn), `away_summary` (background summarization while
   away), `prompt_suggestion`. Separates "real" cost from background/auxiliary calls.
