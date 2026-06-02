@@ -542,6 +542,35 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Lead every saved search with <code>labels.user_email</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The task scopes the change to the <strong>six</strong> originally-shipped searches (API Requests, Tool Results, Tool Decisions, User Prompts, Hook Executions, Subagent Completions). I confirmed the four later searches (Permission Mode Changes, MCP Server Connections, Auth Events, Event Overview) already lead with <code>labels.user_email</code>, so I left them untouched — the post-edit check shows all ten now lead with it.</li>
+      <li>I edited only the first element of each <code>columns</code> array, anchoring each Edit on a unique column prefix (e.g. <code>tool_name,decision_type</code> vs <code>tool_name,decision,source</code> to disambiguate the two tool searches). Filter pills, <code>references[]</code>, the <code>@timestamp desc</code> sort, descriptions, and the trailing <code>labels.prompt_id</code> columns are all byte-for-byte unchanged.</li>
+      <li>Per the task and CLAUDE.md note, I did <strong>not</strong> touch <code>README.md</code> — it was already reworded for this convention.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The "opens with <code>user_email</code> as first column over real telemetry" check could not be run: no Kibana is up in this environment and outbound <code>curl</code> to <code>localhost:5601</code> was denied. Verification was structural only — <code>jq -e</code> confirms every line is valid JSON and that <code>columns[0] == labels.user_email</code> for all ten searches. A live import/open should be confirmed when a stack is available.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>One open task remains: add the <strong>Claude Code — Hook Registered</strong> saved search (the hook provenance/inventory companion to Hook Executions). After it lands, the saved-search set is complete per the current backlog.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Every Claude Code saved search now opens with the "who" column — <code>labels.user_email</code> — as its leftmost field, so each Discover view reads as an audit line from the start. Only column order changed; filters and sorts are identical.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Purely a column-order change to a saved-objects NDJSON; lowest-risk class of edit. Worth a one-time visual confirm in Discover that <code>user_email</code> renders as the first column on the six reworked searches once a live Kibana is reachable.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
