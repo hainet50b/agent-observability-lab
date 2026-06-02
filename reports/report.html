@@ -571,6 +571,39 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add the <code>Claude Code — Hook Registered</code> saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modelled the new object directly on <strong>Permission Mode Changes</strong> — the closest existing sibling: a two-pill search (<code>message: claude_code.hook_registered</code> + <code>service.name: claude-code</code>, empty query bar) with three resolved <code>references[]</code> entries, leading with <code>labels.user_email</code> and ending <em>without</em> <code>labels.prompt_id</code> (this event fires at session start, before any prompt — the third <code>prompt_id</code>-less search after MCP Server Connections and Auth Events).</li>
+      <li>Columns are exactly the five the task specifies: <code>labels.user_email</code>, <code>labels.hook_event</code>, <code>labels.hook_type</code>, <code>labels.hook_source</code>, <code>labels.plugin_name</code>. Kept <code>hook_source</code> despite it being all <code>pluginHook</code> in this single-user lab — judged by its real multi-source meaning per the project's column convention. <code>hook_name</code>, <code>plugin_id_hash</code>, and <code>managed_only</code> were excluded as specified.</li>
+      <li>Bumped the trailing summary footer's <code>exportedCount</code> from 10 to 11 so the NDJSON's self-declared count stays consistent with the eleven <code>search</code> objects; left the <code>missingReferences</code> footer (the by-reference data-view, resolved at import time) unchanged.</li>
+      <li>Per the task and CLAUDE.md note, I did <strong>not</strong> touch <code>README.md</code> — it was already updated for this search.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>The <code>smoke-test.sh</code> gate currently fails — but for a pre-existing reason unrelated to this change.</strong> The stack comes up healthy (ES + Kibana + APM all healthy), then the synthetic OTLP <code>POST /v1/metrics</code> returns HTTP 400 at the <em>Act</em> step. An NDJSON saved-search file cannot affect APM OTLP ingestion, so this is an ingestion-subsystem issue from earlier (APM Server) work, not something introduced here. I did not fold a fix into this task (it would be a correction to past work → a new task, per CLAUDE.md). Outbound raw <code>curl</code> to localhost was also denied in this environment, so I could not capture the 400 body to characterise it further.</li>
+      <li>The task's own verification was met through the sanctioned path instead: <code>scripts/import-kibana-objects.sh</code> imported all objects into the live Kibana with <code>successCount: 11</code> for the saved searches (the new <code>cce-claude-code-hook-registered</code> among them) and zero warnings, with the <code>cce-claude-code-events</code> data-view reference resolving cleanly — proving the filter pills wire through correctly. The pill shape is byte-identical to the six sibling two-pill searches already confirmed to render as pills.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Investigate the <code>smoke-test.sh</code> OTLP <code>/v1/metrics</code> HTTP 400.</strong> Worth a dedicated task: capture the APM Server's 400 response body, determine whether the synthetic JSON-OTLP metrics payload shape drifted from what APM Server 9.4.2 accepts (the logs payload may behave the same), and repair the probe so the end-to-end gate passes again. Real Claude Code OTLP telemetry uses a different transport, so this may only affect the synthetic probe — confirm that too.</li>
+      <li>With Hook Registered shipped, the saved-search backlog is empty (eleven searches). A natural next beat is the deferred <code>hook_plugin_metrics</code> dedicated view mentioned earlier in the PRD.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added an eleventh Kibana saved search — <strong>Claude Code — Hook Registered</strong> — the hook provenance/inventory view (who | hook_event | hook_type | hook_source | plugin_name) that complements Hook Executions. It's the only event carrying the granular <code>hook_source</code> origin. Imports cleanly into Kibana alongside the existing ten.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Please look at the <code>smoke-test.sh</code> failure</strong> — it is real and currently red, but pre-existing and unrelated to this NDJSON change (synthetic OTLP metrics ingestion 400, not anything touched here). Flagged above as a suggested new task rather than silently fixed.</li>
+      <li>Lowest-risk edit class: one appended NDJSON line plus a footer count bump. Live Kibana import succeeded (11/11 searches, references resolved); a one-time visual confirm in Discover that the two pills render with an empty query bar is the only remaining manual check.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
