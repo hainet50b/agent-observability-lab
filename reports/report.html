@@ -850,6 +850,31 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Reorder User Prompts saved-search columns: prompt before prompt_length</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Pure column-order swap on the single <code>cce-claude-code-user-prompts</code> saved search in <code>kibana/claude-code-saved-searches.ndjson</code>: <code>labels.prompt_length, labels.prompt</code> → <code>labels.prompt, labels.prompt_length</code>. The <code>user_email</code> lead, the <code>message</code>/<code>service.name</code> filter pills, the trailing <code>labels.prompt_id</code>, references, and <code>@timestamp</code> desc sort were all left untouched, as the task scoped.</li>
+      <li>Targeted the edit on the exact <code>"columns":[...]</code> array including the <code>user_email</code> lead so the match was unambiguous — <code>labels.prompt_length</code> appears elsewhere only as <code>user_prompt_length</code> on the traces Interactions search, a different token.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Live Kibana verification ("the search opens with <code>prompt</code> before <code>prompt_length</code>") could not be performed: no stack containers are running in this environment and the localhost curl probes were not permitted. Validation was therefore static — every NDJSON line re-validated as JSON, and the swapped order confirmed in the file. Re-run <code>scripts/import-kibana-objects.sh</code> against a live Kibana to confirm the rendered column order when the stack is next up.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — the remaining open tasks (append <code>trace.id</code> to event searches, the <code>trace.id</code> URL formatter, externalizing the trace-routing pipeline) are already well specified.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>The Claude Code — User Prompts saved search now shows the prompt body before its length (content first, size second).</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Nothing needs a close look — single, mechanical column reorder. The only caveat is the deferred live-Kibana check noted above (stack was down).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
