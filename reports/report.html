@@ -634,6 +634,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add a traces data view (claude-code-data-views.ndjson)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Used index pattern <code>traces-apm*</code> (not an <code>.app</code>-scoped variant). The PRD allows scoping it like the metrics/events views <em>if an <code>.app</code>-style stream exists</em>; it does not for traces — Elastic APM <code>.app</code> scoping applies only to metrics/logs (<code>metrics-apm.app*</code>, <code>logs-apm.app*</code>), while OTLP spans land in <code>traces-apm-*</code>. The stack README already documents <code>traces-apm*</code> as the spans data stream, so the data view matches it.</li>
+      <li>Set <code>attributes.name</code> to <code>Claude Code — Traces (claude-code-elastic)</code> with the <code>(claude-code-elastic)</code> suffix, matching the existing two views' convention rather than the bare "Claude Code — Traces" the PRD wrote loosely — the task says to follow the metrics/events views' conventions, and the suffix is part of that. <code>id</code> is <code>cce-claude-code-traces</code>, <code>timeFieldName</code> <code>@timestamp</code>, empty <code>references</code>, same <code>coreMigrationVersion</code> as its siblings.</li>
+      <li>Bumped the file's export-summary <code>exportedCount</code> from 2 to 3. No <code>scripts/import-*</code> change needed — the helper already imports this NDJSON file by name.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Could not query Elasticsearch directly to re-confirm the live <code>traces-apm*</code> index name (direct <code>curl</code> to <code>:9200</code> was not permitted in this environment); relied on the PRD's recorded live confirmation and the README. The Kibana import path <em>was</em> reachable and used for verification (below).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The remaining open task — extending <code>smoke-test.sh</code> with a third <code>/v1/traces</code> probe and <code>assert_landed "traces" "traces-apm*"</code> — pairs naturally with this view: once both land, the Discover companion has guaranteed data behind it.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Claude Code's beta trace spans are now browsable in Discover: a third data view ("Claude Code — Traces", pattern <code>traces-apm*</code>) ships in the importable NDJSON alongside the metrics and events views. With tracing enabled and a real session, the <code>interaction</code> / <code>llm_request</code> / <code>tool</code> spans show up under <code>service.name: claude-code</code> (the APM UI remains the richer home for waterfalls).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: <code>import-kibana-objects.sh</code> reached PASS against the running Kibana — data views 3/3 (including the new <code>cce-claude-code-traces</code>), saved searches 11/11, dashboard 1/1, all references resolved. Compose-config gate and per-line JSON validation pass; shellcheck absent (skipped per CONVENTIONS); no shell scripts touched.</li>
+      <li>Lowest-risk edit class: one appended NDJSON line structurally identical to the two existing data-view lines, plus a footer count bump. A one-time visual confirm that the data view opens in Discover (and shows spans once a tracing session has run) is the only remaining manual check.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
