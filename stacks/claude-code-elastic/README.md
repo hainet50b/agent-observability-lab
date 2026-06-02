@@ -67,6 +67,10 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:8200
 export OTEL_METRIC_EXPORT_INTERVAL=10000
 export OTEL_LOGS_EXPORT_INTERVAL=5000
+# Traces (beta) — span tree (interaction → llm_request / tool); needed for OTEL_LOG_TOOL_CONTENT
+export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+export OTEL_TRACES_EXPORTER=otlp
+export OTEL_TRACES_EXPORT_INTERVAL=5000
 # Content-exposure gates — kept off; flip a single one to 1 to capture that slice
 export OTEL_LOG_USER_PROMPTS=0     # user prompt text
 export OTEL_LOG_TOOL_DETAILS=0     # tool inputs/args (commands, file paths, …)
@@ -83,6 +87,10 @@ set -gx OTEL_EXPORTER_OTLP_PROTOCOL http/protobuf
 set -gx OTEL_EXPORTER_OTLP_ENDPOINT http://localhost:8200
 set -gx OTEL_METRIC_EXPORT_INTERVAL 10000
 set -gx OTEL_LOGS_EXPORT_INTERVAL 5000
+# Traces (beta) — span tree (interaction → llm_request / tool); needed for OTEL_LOG_TOOL_CONTENT
+set -gx CLAUDE_CODE_ENHANCED_TELEMETRY_BETA 1
+set -gx OTEL_TRACES_EXPORTER otlp
+set -gx OTEL_TRACES_EXPORT_INTERVAL 5000
 # Content-exposure gates — kept off; flip a single one to 1 to capture that slice
 set -gx OTEL_LOG_USER_PROMPTS 0     # user prompt text
 set -gx OTEL_LOG_TOOL_DETAILS 0     # tool inputs/args (commands, file paths, …)
@@ -99,6 +107,10 @@ $env:OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
 $env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:8200"
 $env:OTEL_METRIC_EXPORT_INTERVAL = "10000"
 $env:OTEL_LOGS_EXPORT_INTERVAL = "5000"
+# Traces (beta) — span tree (interaction → llm_request / tool); needed for OTEL_LOG_TOOL_CONTENT
+$env:CLAUDE_CODE_ENHANCED_TELEMETRY_BETA = "1"
+$env:OTEL_TRACES_EXPORTER = "otlp"
+$env:OTEL_TRACES_EXPORT_INTERVAL = "5000"
 # Content-exposure gates — kept off; flip a single one to "1" to capture that slice
 $env:OTEL_LOG_USER_PROMPTS = "0"     # user prompt text
 $env:OTEL_LOG_TOOL_DETAILS = "0"     # tool inputs/args (commands, file paths, …)
@@ -119,6 +131,10 @@ Claude Code settings file's `env`:
     "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:8200",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
     "OTEL_LOGS_EXPORT_INTERVAL": "5000",
+
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
+    "OTEL_TRACES_EXPORTER": "otlp",
+    "OTEL_TRACES_EXPORT_INTERVAL": "5000",
 
     "OTEL_LOG_USER_PROMPTS": "0",
     "OTEL_LOG_TOOL_DETAILS": "0",
@@ -228,7 +244,7 @@ claude-code-elastic/
 ├─ config/
 │  └─ apm-server.yml                      # APM Server as the OTLP receiver
 ├─ kibana/
-│  ├─ claude-code-data-views.ndjson       # importable Discover data views
+│  ├─ claude-code-data-views.ndjson       # importable Discover data views (metrics, events, traces)
 │  ├─ claude-code-saved-searches.ndjson   # importable per-message saved searches
 │  └─ claude-code-dashboard.ndjson        # the "Overview" demo dashboard
 └─ scripts/
@@ -245,9 +261,10 @@ source of truth for the version you run — names and fields can change.
 
 ### How to read the data
 
-- **Two data streams:** `metrics-apm.app.claude_code-default` (metrics) and
-  `logs-apm.app.claude_code-default` (events). APM Server also auto-creates an
-  essentially empty `metrics-apm.service_summary.1m-default` marker — not a useful
+- **Three data streams:** `metrics-apm.app.claude_code-default` (metrics),
+  `logs-apm.app.claude_code-default` (events), and — when [Traces](#traces-beta)
+  are enabled — `traces-apm*` (spans). APM Server also auto-creates an essentially
+  empty `metrics-apm.service_summary.1m-default` marker — not a useful
   visualization target.
 - **Where the value/type lives:** a metric's value is in a field *named after the
   metric* (e.g. `claude_code.token.usage`); an event's type is in the `message`
@@ -316,6 +333,32 @@ that produces an `action: login` event is an **in-session `/login`** (switching
 accounts in an already-authenticated session). Treat auth events as a
 sign-*out* audit, not a usage-start signal; for session starts use the
 `claude_code.session.count` metric (`start_type: fresh/continue`) instead.
+
+### Traces (beta)
+
+A third, optional signal. Tracing is **off by default**; the Quick Tour config
+enables it with `CLAUDE_CODE_ENABLE_TELEMETRY=1` + `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
++ `OTEL_TRACES_EXPORTER=otlp` (endpoint/protocol reuse the common OTLP config —
+this stack's `http/protobuf` → `:8200`). Spans land in the **`traces-apm*`** data
+stream (a separate path from metrics/events); APM Server receives them natively on
+`/v1/traces`, no server change.
+
+- **What it adds:** each user prompt becomes a `claude_code.interaction` root span,
+  with `claude_code.llm_request` and `claude_code.tool` children (a tool span has
+  two children — the permission-decision wait and the execution). This links a
+  prompt to the API calls and tool runs it triggered as one trace.
+- **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
+  map and trace waterfalls — is the natural home; a `traces-apm*` data view also
+  lets you scan spans in Discover.
+- **Content is still redacted by default.** Spans redact prompt text, tool input,
+  and tool content unless the matching `OTEL_LOG_*` gate is set. In particular,
+  **`OTEL_LOG_TOOL_CONTENT=1` requires tracing** — it adds a `tool.output` span
+  event (tool input+output bodies, 60 KB cap) on the `tool` execution span, which
+  has no equivalent in the metrics/events streams.
+- **Not adopted: "detailed" beta.** A deeper tier (`ENABLE_BETA_TRACING_DETAILED=1`
+  + `BETA_TRACING_ENDPOINT`, and an org allowlist for interactive sessions) adds the
+  `claude_code.hook` span and extra content attributes. This stack stays on the
+  plain enhanced beta; detailed beta is out of scope.
 
 ### Field meanings worth recording
 
