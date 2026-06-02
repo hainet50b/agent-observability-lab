@@ -258,11 +258,13 @@ claude-code-elastic/
 │  ├─ claude-code-data-views.ndjson       # importable Discover data views (metrics, events, traces)
 │  ├─ claude-code-saved-searches.ndjson   # importable per-message saved searches
 │  └─ claude-code-dashboard.ndjson        # the "Overview" demo dashboard
+├─ elasticsearch/
+│  └─ trace-routing.pipeline.json         # traces-apm@custom ingest pipeline body (reroute rule)
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification
    ├─ import-kibana-objects.sh            # import the kibana/ objects (data views first)
    ├─ import-kibana-objects.ps1           # PowerShell mirror of the import helper
-   ├─ setup-trace-routing.sh             # install traces-apm@custom (route claude-code spans → traces-apm-agents_claude_code)
+   ├─ setup-trace-routing.sh             # PUT elasticsearch/trace-routing.pipeline.json as traces-apm@custom
    └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing setup
 ```
 
