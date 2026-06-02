@@ -186,7 +186,8 @@ Importable NDJSON ships under `kibana/`: the **data views**
 | **Claude Code — Traces** | data view (`traces-apm-agents_claude_code*`) | this agent's beta trace spans (per-agent isolated; see [Trace data model](#trace-data-model)) |
 | **AI Agents — Traces** | data view (`traces-apm-agents_*`) | all AI agents' trace spans (cross-agent: claude_code, codex, …), excludes non-agent traces |
 | **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view (each ends with `trace.id`, a click-through to the APM UI trace) |
-| **Claude Code — Traces** | saved search | one row per trace — the `interaction` root — on the **Claude Code — Traces** data view |
+| **Claude Code — Interactions** | saved search | one row per **interactive turn** (the `interaction` root) — rich turn columns (prompt, sequence, duration); interactive-only |
+| **Claude Code — Traces** | saved search | one row per **trace, all session types** (`processor.event: transaction`); `transaction.name` shows the root type (interaction vs llm_request/tool) |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -430,10 +431,13 @@ below).
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
   map and trace waterfalls — is the natural home; two Discover data views also let
   you scan spans — **Claude Code — Traces** (`traces-apm-agents_claude_code*`, this
-  agent) and **AI Agents — Traces** (`traces-apm-agents_*`, all agents). The
-  **Claude Code — Traces** *saved search* gives **one row per trace** (the
-  `interaction` root), and on these data views `trace.id` is a **click-through to
-  the APM UI trace view** (URL field formatter → `/app/apm/link-to/trace/{{value}}`).
+  agent) and **AI Agents — Traces** (`traces-apm-agents_*`, all agents). Two saved
+  searches sit on the per-agent view: **Claude Code — Interactions** (one row per
+  *interactive turn* — the `interaction` root, with rich prompt/sequence/duration
+  columns; interactive-only) and **Claude Code — Traces** (one row per *trace*,
+  all session types, via `processor.event: transaction`). On these data views
+  `trace.id` is a **click-through to the APM UI trace view** (URL field formatter →
+  `/app/apm/link-to/trace/{{value}}`).
 - **Content is still redacted by default.** Spans redact prompt text, tool input,
   and tool content unless the matching `OTEL_LOG_*` gate is set. In particular,
   **`OTEL_LOG_TOOL_CONTENT=1` requires tracing** — it adds a `tool.output` span
@@ -510,6 +514,25 @@ claude_code.interaction          transaction   ← root, one per prompt turn
 **not** a superset — the event additionally carries `cost_usd`, `query_source`,
 `effort`, while the span uniquely adds `ttft_ms`, `stop_reason`, and the causal
 trace position. They complement each other.
+
+**Trace root depends on session type — so "one trace" means different things.**
+The `claude_code.interaction` root span is emitted **only in interactive REPL
+sessions** (which also emit `user_prompt` events). **Headless / `-p` sessions (e.g.
+Ralph) emit no `interaction` span and no `user_prompt` event** — each `llm_request`
+or `tool` runs parentless and APM promotes it to its own root `transaction` (one
+trace per API call / tool execution). So a "trace" is a whole prompt **turn**
+interactively, but a single **API call / tool execution** headlessly. Consequences:
+the **Claude Code — Interactions** saved search (`span_type: interaction`) is
+interactive-only; **Claude Code — Traces** (`processor.event: transaction`) covers
+every session, with `transaction.name` exposing the root type. Verified live:
+across two sessions, the interactive one rooted at `interaction` (with `user_prompt`
+events), the Ralph one rooted at `llm_request`/`tool` (zero `user_prompt` events).
+
+How the trace signal maps to the event saved searches (activity-level, not 1:1):
+`interaction` ↔ **User Prompts**, `llm_request` ↔ **API Requests**, `tool*` ↔
+**Tool Results** (+ `tool.blocked_on_user` ↔ **Tool Decisions**). One tool call is
+one `tool_result` event but several spans (`tool` + `blocked_on_user` +
+`execution`), so the span side is finer-grained.
 
 ### Field meanings worth recording
 
