@@ -819,6 +819,37 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Claude Code — Traces saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modeled the new <code>search</code> object directly on the shipped <code>cce-claude-code-interactions</code> entry, since both live on the same <code>cce-claude-code-traces</code> data view — same reference wiring (<code>index</code> + <code>filter[0].meta.index</code> → <code>cce-claude-code-traces</code>), same empty kuery query bar, same <code>@timestamp</code> desc sort. Only the single filter pill (<code>processor.event: transaction</code> instead of <code>labels.span_type: interaction</code>) and the column list differ.</li>
+      <li>Used <code>transaction.duration.us</code> rather than the interaction-only <code>numeric_labels.interaction_duration_ms</code> — it is present on <em>every</em> transaction root (interaction, llm_request, tool), so it renders for headless traces too.</li>
+      <li>No <code>service.name</code> pill: the data view is physically scoped to <code>traces-apm-agents_claude_code*</code>, so the agent constraint is already implicit (matches the Interactions search precedent).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. A Kibana fetch-back via <code>curl</code> was permission-denied in this environment, but the import step already confirms reference resolution (data views imported first, search overwritten with no warnings).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The remaining open tasks (User Prompts column reorder, appending <code>trace.id</code> to every event search, the <code>trace.id</code> URL field formatter, the pipeline externalization) all touch these same NDJSON files — the formatter task depends on the <code>trace.id</code> event column landing first, so keep the listed order.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Adds a "Claude Code — Traces" saved search giving one row per trace across all session types (filter pill <code>processor.event: transaction</code>). The <code>transaction.name</code> column distinguishes interactive turns (<code>claude_code.interaction</code>) from headless/<code>-p</code> roots (<code>claude_code.llm_request</code> / <code>claude_code.tool</code>, e.g. Ralph), with duration, outcome, and a <code>trace.id</code> drill-down — browsable from Discover on the per-agent traces data view.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: query <code>processor.event: transaction</code> returns 107 transactions in <code>traces-apm-agents_claude_code*</code>, including Ralph's headless <code>claude_code.tool</code> / <code>claude_code.llm_request</code> roots — so the search shows headless traces as required.</li>
+      <li><code>import-kibana-objects.sh</code> reached <strong>PASS</strong>; the saved-searches file imported <code>13 object(s)</code> (incl. the new <code>cce-claude-code-traces-overview</code>), data views and dashboard clean. Every NDJSON line validated as JSON; <code>exportedCount</code> bumped 12 → 13; compose gate passes; shellcheck absent (skipped per CONVENTIONS).</li>
+      <li>README intentionally untouched (already updated upstream, per the task).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
