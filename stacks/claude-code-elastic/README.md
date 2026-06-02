@@ -46,6 +46,14 @@ end with the smoke test (see [Verify the pipeline](#verify-the-pipeline)):
 scripts/smoke-test.sh
 ```
 
+If you will enable [Traces](#traces-beta), install the trace-routing pipeline once
+(it isolates Claude Code's spans into `traces-apm-claudecode` — see
+[Trace data model](#trace-data-model)); run it any time after the stack is healthy:
+
+```sh
+scripts/setup-trace-routing.sh        # bash/zsh/sh  (or ./setup-trace-routing.ps1)
+```
+
 ### 2. Point a Claude Code session at the stack
 
 The telemetry vars configure **`claude`** itself, not the stack — supply them one
@@ -250,7 +258,9 @@ claude-code-elastic/
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification
    ├─ import-kibana-objects.sh            # import the kibana/ objects (data views first)
-   └─ import-kibana-objects.ps1           # PowerShell mirror of the import helper
+   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import helper
+   ├─ setup-trace-routing.sh             # install traces-apm@custom (route claude-code spans → traces-apm-claudecode)
+   └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing setup
 ```
 
 ## Telemetry reference
@@ -263,9 +273,10 @@ source of truth for the version you run — names and fields can change.
 
 - **Three data streams:** `metrics-apm.app.claude_code-default` (metrics),
   `logs-apm.app.claude_code-default` (events), and — when [Traces](#traces-beta)
-  are enabled — `traces-apm*` (spans). APM Server also auto-creates an essentially
-  empty `metrics-apm.service_summary.1m-default` marker — not a useful
-  visualization target.
+  are enabled — `traces-apm-claudecode` (spans, routed there from the
+  service-agnostic `traces-apm-default`; see [Trace data model](#trace-data-model)).
+  APM Server also auto-creates an essentially empty
+  `metrics-apm.service_summary.1m-default` marker — not a useful visualization target.
 - **Where the value/type lives:** a metric's value is in a field *named after the
   metric* (e.g. `claude_code.token.usage`); an event's type is in the `message`
   field (e.g. `claude_code.api_request`).
@@ -339,17 +350,18 @@ sign-*out* audit, not a usage-start signal; for session starts use the
 A third, optional signal. Tracing is **off by default**; the Quick Tour config
 enables it with `CLAUDE_CODE_ENABLE_TELEMETRY=1` + `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
 + `OTEL_TRACES_EXPORTER=otlp` (endpoint/protocol reuse the common OTLP config —
-this stack's `http/protobuf` → `:8200`). Spans land in the **`traces-apm*`** data
-stream (a separate path from metrics/events); APM Server receives them natively on
-`/v1/traces`, no server change.
+this stack's `http/protobuf` → `:8200`). APM Server receives spans natively on
+`/v1/traces` (no server change); this stack then **routes** Claude Code's spans
+into the dedicated **`traces-apm-claudecode`** data stream (see Trace data model
+below).
 
 - **What it adds:** each user prompt becomes a `claude_code.interaction` root span,
   with `claude_code.llm_request` and `claude_code.tool` children (a tool span has
   two children — the permission-decision wait and the execution). This links a
   prompt to the API calls and tool runs it triggered as one trace.
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
-  map and trace waterfalls — is the natural home; a `traces-apm*` data view also
-  lets you scan spans in Discover.
+  map and trace waterfalls — is the natural home; the `traces-apm-claudecode*` data
+  view also lets you scan spans in Discover.
 - **Content is still redacted by default.** Spans redact prompt text, tool input,
   and tool content unless the matching `OTEL_LOG_*` gate is set. In particular,
   **`OTEL_LOG_TOOL_CONTENT=1` requires tracing** — it adds a `tool.output` span
@@ -362,15 +374,23 @@ stream (a separate path from metrics/events); APM Server receives them natively 
 
 #### Trace data model
 
-Single data stream **`traces-apm-default`** (backing `.ds-traces-apm-default-*`,
-template `traces-apm@template`). Unlike the metrics/events streams — whose dataset
-embeds the service (`*-apm.app.claude_code-default`) — **traces are
-service-agnostic: every OTLP producer's spans co-mingle in `traces-apm-default`**.
-So always scope with `service.name: claude-code` (a data view can't store that
-filter, so it lives in the saved-search pill / your Discover query). Physical
-per-service isolation would mean routing spans into per-service data-stream
-*namespaces* (an ES `reroute` ingest processor or an OTel Collector keyed on
-`service.name`) or a dedicated APM Server — out of scope for the demo.
+APM writes all OTLP spans to one **service-agnostic** data stream
+`traces-apm-default` (template `traces-apm@template`, patterns `traces-apm-*`) —
+unlike the metrics/events streams, whose dataset embeds the service
+(`*-apm.app.claude_code-default`). So out of the box every producer's spans
+co-mingle, and a data view can't store a `service.name` filter to separate them.
+
+This stack therefore **physically isolates Claude Code's spans by routing**: a
+`reroute` processor in the **`traces-apm@custom`** ingest pipeline (installed by
+`scripts/setup-trace-routing.sh`, which the `traces-apm@default-pipeline` already
+hooks) sends docs with `service.name: claude-code` to a dedicated
+**`traces-apm-claudecode`** data stream — it still matches `traces-apm-*`, so it
+keeps the full APM trace mappings; other producers stay in `traces-apm-default`.
+The traces data view is scoped to **`traces-apm-claudecode*`**, so it needs no
+`service.name` filter. (Spans captured before the pipeline was installed remain in
+`traces-apm-default`.) Stronger isolation — per-service namespaces for *every*
+producer, an OTel Collector, or a dedicated APM Server — is possible but out of
+scope; across agents, the per-stack APM Server boundary already isolates.
 
 Two doc kinds, discriminated by `processor.event`: `transaction` (the
 `claude_code.interaction` root, one per prompt turn) and `span` (every child).
