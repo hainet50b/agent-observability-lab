@@ -928,6 +928,34 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Externalize the <code>traces-apm@custom</code> pipeline body out of the scripts</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Created the new <code>elasticsearch/</code> directory at the stack root (parallel to <code>kibana/</code>) with a single <code>trace-routing.pipeline.json</code> holding the exact <code>description</code> + <code>reroute</code> processor that previously lived as an inline heredoc / here-string. No behavior change — same JSON, just one source of truth.</li>
+      <li><code>setup-trace-routing.sh</code> now PUTs <code>--data "@$PIPELINE_FILE"</code> (the <code>@</code>-file form curl already supports), and <code>setup-trace-routing.ps1</code> reads it with <code>Get-Content -Raw</code>. The path is stored relative (<code>elasticsearch/trace-routing.pipeline.json</code>) because both scripts already <code>cd</code>/<code>Set-Location</code> into the stack root, so the relative path is stable regardless of caller cwd.</li>
+      <li>Added a missing-file precondition to each script that fails loudly (<code>fail</code> in bash → exit 1; <code>Write-Error</code> + <code>exit 1</code> in PowerShell), placed next to the existing <code>curl</code>/<code>jq</code> SKIP checks. Used a hard failure rather than SKIP because a missing pipeline body is a broken checkout, not an absent optional tool.</li>
+      <li>Updated the two scripts' inline comments so the "single source of truth shared with the other script" intent is documented at the read site.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Verified live: ran <code>scripts/setup-trace-routing.sh</code> against the running stack — it read the externalized file and the PUT returned <code>{"acknowledged": true}</code>. The reroute target <code>traces-apm-agents_claude_code</code> exists with 921 spans, confirming the pipeline behaves as before. Byte-equivalence of the pipeline body is guaranteed by construction (the JSON was copied verbatim).</li>
+      <li>The follow-up <code>_simulate</code> / pipeline-readback <code>curl</code> probes (with sandbox disabled) were declined at the permission prompt, so the reroute was confirmed via the existing populated data stream rather than a fresh <code>_simulate</code> call. The <code>.ps1</code> mirror was edited symmetrically but not executed (no pwsh runner here).</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>No open tasks remain. If more ES-side bootstrap objects appear (index templates, ILM policies), the new <code>elasticsearch/</code> directory is the natural home — and an <code>elasticsearch/</code>-aware setup helper (parallel to <code>import-kibana-objects.*</code>) could apply them all in one shot.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>The trace-routing pipeline JSON now lives in one reviewable file, <code>elasticsearch/trace-routing.pipeline.json</code>, instead of being duplicated inline in the bash and PowerShell setup scripts. Both scripts read and apply that file — a pure refactor, identical pipeline installed.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Nothing risky. If you run the PowerShell variant on Windows, give it a quick smoke since only the bash path was executed here.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

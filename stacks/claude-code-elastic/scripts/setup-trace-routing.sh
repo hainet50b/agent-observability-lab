@@ -38,6 +38,7 @@ set -euo pipefail
 
 ES_URL=${ES_URL:-http://localhost:9200}
 PIPELINE=traces-apm@custom
+PIPELINE_FILE=elasticsearch/trace-routing.pipeline.json
 
 # Resolve and enter the stack root (parent of this scripts/ directory), matching
 # smoke-test.sh, so behaviour is consistent regardless of the caller's cwd.
@@ -51,20 +52,14 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq   >/dev/null 2>&1 || skip "jq not found"
 
-# A reroute that fires only on Claude Code spans; other producers fall through
-# unchanged and stay in traces-apm-default.
-read -r -d '' BODY <<'JSON' || true
-{
-  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-agents_claude_code",
-  "processors": [
-    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "agents_claude_code" } }
-  ]
-}
-JSON
+# The pipeline body (a reroute that fires only on Claude Code spans; other
+# producers fall through unchanged and stay in traces-apm-default) is the single
+# source of truth shared with setup-trace-routing.ps1.
+[ -f "$PIPELINE_FILE" ] || fail "pipeline body not found: $STACK_DIR/$PIPELINE_FILE"
 
 echo "[setup] installing ingest pipeline '$PIPELINE' on $ES_URL…"
 result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_ingest/pipeline/$PIPELINE" \
-  -H 'Content-Type: application/json' --data "$BODY") || fail "request to Elasticsearch failed"
+  -H 'Content-Type: application/json' --data "@$PIPELINE_FILE") || fail "request to Elasticsearch failed"
 
 code=$(echo "$result" | tail -n1)
 body=$(echo "$result" | sed '$d')

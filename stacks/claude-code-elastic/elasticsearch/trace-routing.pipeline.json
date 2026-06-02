@@ -1,0 +1,6 @@
+{
+  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-agents_claude_code",
+  "processors": [
+    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "agents_claude_code" } }
+  ]
+}

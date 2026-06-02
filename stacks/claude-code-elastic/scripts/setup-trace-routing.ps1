@@ -44,6 +44,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Pipeline = 'traces-apm@custom'
+$PipelineFile = 'elasticsearch/trace-routing.pipeline.json'
 
 # Resolve and enter the stack root (parent of this scripts/ directory), matching
 # the .sh version, so behaviour is consistent regardless of the caller's cwd.
@@ -51,16 +52,14 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir = Split-Path -Parent $ScriptDir
 Set-Location -LiteralPath $StackDir
 
-# A reroute that fires only on Claude Code spans; other producers fall through
-# unchanged and stay in traces-apm-default.
-$Body = @'
-{
-  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-agents_claude_code",
-  "processors": [
-    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "agents_claude_code" } }
-  ]
+# The pipeline body (a reroute that fires only on Claude Code spans; other
+# producers fall through unchanged and stay in traces-apm-default) is the single
+# source of truth shared with setup-trace-routing.sh.
+if (-not (Test-Path -LiteralPath $PipelineFile -PathType Leaf)) {
+    Write-Error "FAIL: pipeline body not found: $StackDir/$PipelineFile"
+    exit 1
 }
-'@
+$Body = Get-Content -Raw -LiteralPath $PipelineFile
 
 Write-Host "[setup] installing ingest pipeline '$Pipeline' on $EsUrl…"
 try {
