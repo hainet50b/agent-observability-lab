@@ -457,6 +457,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Claude Code — MCP Server Connections saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Built the eighth saved search by cloning the proven shape of the Permission Mode Changes search (empty KQL query bar, two <code>phrase</code> filter pills — <code>message: claude_code.mcp_server_connection</code> and <code>service.name: claude-code</code> — each <code>meta.index</code> wired through a <code>references[]</code> entry, <code>@timestamp</code> desc). Only the message value, columns, id, title and description differ.</li>
+      <li>Columns exactly as specified, leading with the universal <code>labels.user_email</code>: <code>user_email</code>, <code>status</code>, <code>transport_type</code>, <code>server_scope</code>, <code>is_plugin</code>, <code>duration_ms</code>. Honored the documented exception — <strong>no <code>labels.prompt_id</code></strong>, since this event fires at session startup before any prompt exists.</li>
+      <li>Bumped the trailing export-summary line's <code>exportedCount</code> from 7 to 8; left <code>missingReferences</code> (the data-view stub) as-is, matching the existing file (the data view is imported separately, first).</li>
+      <li>Left the README untouched — the task states it is already updated; inspection confirmed the <code>mcp_server_connection</code> rows already exist (Events table line 276, Saved-search columns table line 367).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>No live Kibana import was exercised: this environment has no running stack (docker reports no containers) and the sandbox blocks <code>localhost:5601</code>. Verification was structural — <code>jq</code> confirmed all nine lines are valid JSON, the embedded <code>searchSourceJSON</code> parses with its two filters, columns/sort/references are correct, and the object is shape-identical to the seven previously imported-and-verified searches.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Remaining open saved-search tasks: Auth Events, Event Overview, the all-searches <code>user_email</code> rework, and Hook Registered. After they land, a single end-to-end import run against a live Kibana would confirm all objects import cleanly in one pass.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added an eighth Kibana saved search, <strong>Claude Code — MCP Server Connections</strong>, surfacing per-connection status / transport / scope / plugin-flag / duration at session startup, with the constraints shown as removable filter pills. Deliberately has no <code>prompt_id</code> column (the event fires before any prompt).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Please run the import helper against a live Kibana once to confirm this search opens with its two constraints as filter pills (empty query bar) over real telemetry — the one check the sandbox couldn't perform.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
