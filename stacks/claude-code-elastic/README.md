@@ -364,6 +364,18 @@ below).
   with `claude_code.llm_request` and `claude_code.tool` children (a tool span has
   two children — the permission-decision wait and the execution). This links a
   prompt to the API calls and tool runs it triggered as one trace.
+- **Events auto-correlate to traces (and metrics never do).** With tracing active,
+  Claude Code's **events** (OTel *log records*) emitted inside an active span pick up
+  that span's **`trace.id` / `span.id`** — per the OpenTelemetry Logs data model
+  (TraceId/SpanId *"can be set for logs that are part of a particular processing
+  span"*, populated from the active context). It is an OTel-platform behaviour, **not**
+  a Claude-Code-documented event field (the monitoring docs list only `prompt.id` /
+  `workspace.host_paths` as event-only extras). So `events.trace.id == span.trace.id`
+  is the events↔traces join, and only events emitted while a span was open carry it
+  (turn tracing off → no `trace.id`). **Metrics never carry `trace.id`** — high-cardinality
+  correlation IDs are intentionally excluded from metrics to avoid unbounded time-series
+  (the Claude Code docs state the same for `prompt.id`); there is no metric↔trace join,
+  correlate metrics to a run by shared dimensions like `session.id` instead.
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
   map and trace waterfalls — is the natural home; two Discover data views also let
   you scan spans — **Claude Code — Traces** (`traces-apm-agents_claude_code*`, this
