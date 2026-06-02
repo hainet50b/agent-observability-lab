@@ -133,7 +133,7 @@ Importable NDJSON ships under `kibana/`: the **data views**
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
-| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections** | saved searches | per-`message` curated column views on the Events data view |
+| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | per-`message` curated column views on the Events data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -272,11 +272,21 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | `claude_code.subagent_completed` | `labels.agent_type`, `agent_source`, `model`, `is_async`, `is_built_in`; `numeric_labels.duration_ms`, `total_tokens`, `total_tool_uses` |
 | `claude_code.permission_mode_changed` | `labels.from_mode`, `to_mode` (`default`/`acceptEdits`/`plan`/`auto`), `trigger` (e.g. `shift_tab`), `prompt_id` |
 | `claude_code.mcp_server_connection` | `labels.status` (e.g. `connected`), `transport_type` (`stdio`/…), `server_scope`, `is_plugin`, `duration_ms` (string) — no server-name field, no `prompt_id` (fires at startup) |
+| `claude_code.auth` | `labels.action` (`login`/`logout`), `success`, `auth_method` (`oauth`); failure-only `error_category`, `status_code`; has `prompt_id`. ⚠️ Also carries many PII labels (`user_email`, `user_id`, `organization_id`, …) |
 | `claude_code.feedback_survey` | `labels.survey_type`, `event_type`, `response`, `appearance_id` — UI survey, low signal |
 
 `claude_code.api_error` and `claude_code.hook_registered` are documented but
 haven't landed here (`hook_registered` carries the granular `hook_source`
 origins — see below).
+
+**`claude_code.auth` is logout-biased.** `/logout` runs while telemetry is still
+alive, so the `action: logout` event reliably lands — but `/logout` then *exits*
+the CLI, and the next `claude` start goes to the login screen *outside* a
+telemetry session, so a normal cold-start login is never captured. The only path
+that produces an `action: login` event is an **in-session `/login`** (switching
+accounts in an already-authenticated session). Treat auth events as a
+sign-*out* audit, not a usage-start signal; for session starts use the
+`claude_code.session.count` metric (`start_type: fresh/continue`) instead.
 
 ### Field meanings worth recording
 
@@ -317,8 +327,11 @@ origins — see below).
 The shipped saved searches all live on the **Claude Code — Events** data view,
 sort `@timestamp` desc, and constrain on `message` + `service.name: claude-code`
 as filter pills. Most end with `labels.prompt_id` (the key that ties together
-every event from one prompt) — except **MCP Server Connections**, which fires at
-startup before any prompt. Columns were chosen against live data:
+every event from one prompt) — except **MCP Server Connections** (fires at
+startup, has no `prompt_id`) and **Auth Events** (account/session-level, so the
+`prompt_id` it carries is omitted as meaningless). **Auth Events** is also the
+one search that keeps a `user_*` column (`user_email`) — identity is the point of
+a sign-out audit. Columns were chosen against live data:
 
 | Saved search (`message:`) | Curated columns (besides `prompt_id`) | Left out |
 | --- | --- | --- |
@@ -330,6 +343,7 @@ startup before any prompt. Columns were chosen against live data:
 | **Subagent Completions** (`subagent_completed`) | `agent_type`, `agent_source`, `model`, `is_async`; `numeric_labels` `duration_ms`, `total_tokens`, `total_tool_uses` | `is_built_in` (≡ `agent_source`) |
 | **Permission Mode Changes** (`permission_mode_changed`) | `from_mode`, `to_mode`, `trigger` | — (permission-posture audit: mode cycling via `shift_tab` etc.) |
 | **MCP Server Connections** (`mcp_server_connection`) | `status`, `transport_type`, `server_scope`, `is_plugin`, `duration_ms` | `prompt_id` (n/a — fires at startup) and any server-name field (none in this version) |
+| **Auth Events** (`auth`) | `user_email`, `action`, `success`, `auth_method` | `prompt_id` (present but omitted — account/session-level, not prompt-level); the other identity/PII labels (`user_id`, `user_account_*`, `organization_id`); failure-only `error_category` / `status_code`. **`user_email` is kept on purpose** — identity is the subject of a sign-out audit (and varies on in-session account switch), the lone `user_*` column any search includes. Logout-biased — cold-start login isn't captured (see Events notes above) |
 
 Why saved searches and not more data views: a Kibana data view is only an
 index-pattern + time field — it can't store a query or columns — so per-`message`
@@ -352,6 +366,10 @@ Some events only fire under specific conditions — handy when populating the de
 
 - **`permission_mode_changed`** — cycle the permission mode with **Shift+Tab**
   (or `/permissions`) in a session: default → acceptEdits → plan → auto.
+- **`auth` with `action: login`** — only an **in-session `/login`** produces it
+  (account switch in an already-authenticated session). `/logout` exits the CLI,
+  so the subsequent cold-start login lands no event; run `/login` *without*
+  logging out first to capture one. (`action: logout` always lands.)
 
 ### Not yet covered
 
