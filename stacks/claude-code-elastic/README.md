@@ -185,7 +185,8 @@ Importable NDJSON ships under `kibana/`: the **data views**
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
 | **Claude Code — Traces** | data view (`traces-apm-agents_claude_code*`) | this agent's beta trace spans (per-agent isolated; see [Trace data model](#trace-data-model)) |
 | **AI Agents — Traces** | data view (`traces-apm-agents_*`) | all AI agents' trace spans (cross-agent: claude_code, codex, …), excludes non-agent traces |
-| **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view |
+| **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view (each ends with `trace.id`, a click-through to the APM UI trace) |
+| **Claude Code — Traces** | saved search | one row per trace — the `interaction` root — on the **Claude Code — Traces** data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -364,7 +365,10 @@ below).
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
   map and trace waterfalls — is the natural home; two Discover data views also let
   you scan spans — **Claude Code — Traces** (`traces-apm-agents_claude_code*`, this
-  agent) and **AI Agents — Traces** (`traces-apm-agents_*`, all agents).
+  agent) and **AI Agents — Traces** (`traces-apm-agents_*`, all agents). The
+  **Claude Code — Traces** *saved search* gives **one row per trace** (the
+  `interaction` root), and on these data views `trace.id` is a **click-through to
+  the APM UI trace view** (URL field formatter → `/app/apm/link-to/trace/{{value}}`).
 - **Content is still redacted by default.** Spans redact prompt text, tool input,
   and tool content unless the matching `OTEL_LOG_*` gate is set. In particular,
   **`OTEL_LOG_TOOL_CONTENT=1` requires tracing** — it adds a `tool.output` span
@@ -497,7 +501,11 @@ shows (the cross-event-type timeline). Most end with `labels.prompt_id` (the key
 that ties together every event from one prompt) — except **MCP Server
 Connections** and **Hook Registered** (both fire at startup, no `prompt_id`) and
 **Auth Events** (account/session-level, so the `prompt_id` it carries is omitted
-as meaningless).
+as meaningless). Each event search also **appends `trace.id` as its final
+column** — populated only while tracing is on, it is the cross-signal bridge to
+the trace spans (`events.trace.id == span.trace.id`) and renders as a
+**click-through to the APM UI trace view** via a URL field formatter on the data
+view (startup events like MCP Server Connections may have no `trace.id`).
 **Every search leads with `labels.user_email`** — the "who", present on every
 event type. It is part of the audit/observability shape of these views and is
 *not* dropped for being a constant value in this single-user lab (a column is
@@ -510,7 +518,7 @@ live data:
 | **API Requests** (`api_request`) | `model`, `query_source`, `speed`, `effort`; `numeric_labels` `duration_ms`, `cost_usd`, `{input,output,cache_read,cache_creation}_tokens` | `request_id` (opaque) |
 | **Tool Results** (`tool_result`) | `tool_name`, `decision_type`, `decision_source`, `success`, `duration_ms`, `tool_{input,result}_size_bytes` | `tool_use_id`; note `decision_*` is interactive-only |
 | **Tool Decisions** (`tool_decision`) | `tool_name`, `decision`, `source` | `tool_use_id` (the canonical permit decision, present in headless runs too) |
-| **User Prompts** (`user_prompt`) | `prompt_length`, `prompt` | — (`prompt` is `<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`; kept regardless — column choice isn't a PII control) |
+| **User Prompts** (`user_prompt`) | `prompt`, `prompt_length` (content first, size second) | — (`prompt` is `<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`; kept regardless — column choice isn't a PII control) |
 | **Hook Registered** (`hook_registered`) | `hook_event`, `hook_type`, `hook_source`, `plugin_name` | `prompt_id` (n/a — fires at startup); `hook_name` (not on this event — lives on the execution events); `plugin_id_hash` (opaque); `managed_only` (not present here). `hook_source` is the granular origin (only this event carries it) — kept though it is all `pluginHook` in this single-user lab |
 | **Hook Executions** (`hook_execution_complete`) | `hook_event`, `hook_name`, `num_hooks`, `num_success`, `num_blocking`, `total_duration_ms` | `hook_source` / `managed_only` (redundant 2-value pair); `num_*` are string labels |
 | **Subagent Completions** (`subagent_completed`) | `agent_type`, `agent_source`, `model`, `is_async`; `numeric_labels` `duration_ms`, `total_tokens`, `total_tool_uses` | `is_built_in` (≡ `agent_source`) |
