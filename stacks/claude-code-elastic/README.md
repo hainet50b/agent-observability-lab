@@ -133,7 +133,7 @@ Importable NDJSON ships under `kibana/`: the **data views**
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
-| **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view |
+| **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -267,6 +267,7 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | `claude_code.api_request` | `labels.model`, `request_id`, `query_source`, `speed`, `effort`; `numeric_labels.input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `cost_usd`, `cost_usd_micros`, `duration_ms` |
 | `claude_code.tool_decision` | `labels.tool_name`, `decision`, `source`, `tool_use_id` |
 | `claude_code.tool_result` | `labels.tool_name`, `success` (string), `duration_ms` (string), `decision_type`, `decision_source`, `tool_use_id`, `tool_input_size_bytes`, `tool_result_size_bytes` |
+| `claude_code.hook_registered` | `labels.hook_event`, `hook_type`, `hook_source` (granular origin: `userSettings`/`projectSettings`/`localSettings`/`flagSettings`/`pluginHook`/`policySettings`), `plugin_name` (when `hook_source: pluginHook`); fires once per hook at session start, no `prompt_id` |
 | `claude_code.hook_execution_start` | `labels.hook_name`, `hook_event`, `hook_source`, `managed_only`, `num_hooks` |
 | `claude_code.hook_execution_complete` | + `num_blocking`, `num_success`, `num_cancelled`, `num_non_blocking_error`, `total_duration_ms` |
 | `claude_code.hook_plugin_metrics` | `labels.plugin_id`, `hook_event`, `skipped`; many `numeric_labels.*` review metrics (`cost_usd`, `vulns_found`, `files_reviewed`, `tok_*`, …) — plugin-specific (security-guidance) |
@@ -343,8 +344,9 @@ as filter pills — except **Event Overview**, which constrains only on
 `service.name` and leaves `message` as a visible column so every event type
 shows (the cross-event-type timeline). Most end with `labels.prompt_id` (the key
 that ties together every event from one prompt) — except **MCP Server
-Connections** (fires at startup, has no `prompt_id`) and **Auth Events**
-(account/session-level, so the `prompt_id` it carries is omitted as meaningless).
+Connections** and **Hook Registered** (both fire at startup, no `prompt_id`) and
+**Auth Events** (account/session-level, so the `prompt_id` it carries is omitted
+as meaningless).
 **Every search leads with `labels.user_email`** — the "who", present on every
 event type. It is part of the audit/observability shape of these views and is
 *not* dropped for being a constant value in this single-user lab (a column is
@@ -358,6 +360,7 @@ live data:
 | **Tool Results** (`tool_result`) | `tool_name`, `decision_type`, `decision_source`, `success`, `duration_ms`, `tool_{input,result}_size_bytes` | `tool_use_id`; note `decision_*` is interactive-only |
 | **Tool Decisions** (`tool_decision`) | `tool_name`, `decision`, `source` | `tool_use_id` (the canonical permit decision, present in headless runs too) |
 | **User Prompts** (`user_prompt`) | `prompt_length`, `prompt` | — (`prompt` is `<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`; kept regardless — column choice isn't a PII control) |
+| **Hook Registered** (`hook_registered`) | `hook_event`, `hook_type`, `hook_source`, `plugin_name` | `prompt_id` (n/a — fires at startup); `hook_name` (not on this event — lives on the execution events); `plugin_id_hash` (opaque); `managed_only` (not present here). `hook_source` is the granular origin (only this event carries it) — kept though it is all `pluginHook` in this single-user lab |
 | **Hook Executions** (`hook_execution_complete`) | `hook_event`, `hook_name`, `num_hooks`, `num_success`, `num_blocking`, `total_duration_ms` | `hook_source` / `managed_only` (redundant 2-value pair); `num_*` are string labels |
 | **Subagent Completions** (`subagent_completed`) | `agent_type`, `agent_source`, `model`, `is_async`; `numeric_labels` `duration_ms`, `total_tokens`, `total_tool_uses` | `is_built_in` (≡ `agent_source`) |
 | **Permission Mode Changes** (`permission_mode_changed`) | `from_mode`, `to_mode`, `trigger` | — (permission-posture audit: mode cycling via `shift_tab` etc.) |
