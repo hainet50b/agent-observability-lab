@@ -901,6 +901,33 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Make trace.id a click-through to the APM UI trace view</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Added a <code>url</code> field formatter via <code>attributes.fieldFormatMap</code> (a JSON-stringified value, as Kibana stores it) to exactly three data views — <code>cce-claude-code-events</code>, <code>cce-claude-code-traces</code>, and <code>cce-agents-traces</code> — and deliberately <em>not</em> to <code>cce-claude-code-metrics</code>, which carries no <code>trace.id</code>.</li>
+      <li>Kept the primary deep-link template <code>/app/apm/link-to/trace/{{value}}</code> rather than the documented fallback <code>/app/apm/traces/{{value}}</code>. <code>link-to/trace/:traceId</code> is APM's long-standing redirect route (present through 9.x and what the README documents as primary), so no fallback was needed on Stack 9.4.2.</li>
+      <li>Left the file's <code>exportedCount</code> at 4 — the change adds an attribute to existing objects, it does not add or remove any.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The stored config is fully verified: re-imported live via <code>scripts/import-kibana-objects.sh</code> (success), then read back from the <code>.kibana</code> index — all three target data views carry the <code>trace.id</code> url formatter with the right template, and metrics does not.</li>
+      <li>The <em>rendered</em> click-through (clicking the link in Discover and landing on the trace in the APM UI) was not exercised — that needs a real browser, which isn't drivable from here. Direct <code>curl</code> probes to Kibana were declined at the permission prompt, and a route probe wouldn't be conclusive anyway since Kibana serves its SPA shell for every <code>/app/*</code> path. A human should click a <code>trace.id</code> once to confirm the landing page; if it ever mis-lands on this Stack version, switch the template to <code>/app/apm/traces/{{value}}</code>.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The last remaining open task (externalize the <code>traces-apm@custom</code> pipeline body into <code>elasticsearch/trace-routing.pipeline.json</code>) is unblocked and ready.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li><code>trace.id</code> now renders as a clickable link in Discover on the events and traces data views, jumping straight to that trace in the APM UI — the cross-signal bridge is one click instead of a copy-paste.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Please click a <code>trace.id</code> value in Discover once to confirm it lands on the correct trace; if not, the fallback template <code>/app/apm/traces/{{value}}</code> is the documented alternative.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
