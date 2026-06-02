@@ -360,6 +360,45 @@ stream (a separate path from metrics/events); APM Server receives them natively 
   `claude_code.hook` span and extra content attributes. This stack stays on the
   plain enhanced beta; detailed beta is out of scope.
 
+#### Trace data model
+
+Single data stream **`traces-apm-default`** (backing `.ds-traces-apm-default-*`,
+template `traces-apm@template`). Unlike the metrics/events streams — whose dataset
+embeds the service (`*-apm.app.claude_code-default`) — **traces are
+service-agnostic: every OTLP producer's spans co-mingle in `traces-apm-default`**.
+So always scope with `service.name: claude-code` (a data view can't store that
+filter, so it lives in the saved-search pill / your Discover query). Physical
+per-service isolation would mean routing spans into per-service data-stream
+*namespaces* (an ES `reroute` ingest processor or an OTel Collector keyed on
+`service.name`) or a dedicated APM Server — out of scope for the demo.
+
+Two doc kinds, discriminated by `processor.event`: `transaction` (the
+`claude_code.interaction` root, one per prompt turn) and `span` (every child).
+They join on `trace.id` (one whole turn) and `parent.id` (the tree). Durations are
+**microseconds** (`transaction.duration.us` / `span.duration.us`; also mirrored as
+`numeric_labels.duration_ms`); outcome in `event.outcome`.
+
+```
+claude_code.interaction          transaction   ← root, one per prompt turn
+├─ claude_code.llm_request       span  genai/anthropic
+└─ claude_code.tool              span  app/internal
+   ├─ claude_code.tool.blocked_on_user   span   (awaiting the permission decision)
+   └─ claude_code.tool.execution         span   (the actual tool run)
+```
+
+| `span.name` | `processor.event` | type/subtype | Distinctive fields (besides the `user_*` / `organization_id` / `terminal_type` envelope) |
+| --- | --- | --- | --- |
+| `claude_code.interaction` | transaction | —/unknown | `labels.user_prompt` (`<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`); `numeric_labels.user_prompt_length`, `interaction_duration_ms`, `interaction_sequence` |
+| `claude_code.llm_request` | span | genai/anthropic | `labels.model`, `gen_ai_response_finish_reasons`, `stop_reason`, `request_id` / `gen_ai_response_id`, `client_request_id`, `llm_request_context`, `speed`; `numeric_labels.ttft_ms` (**not in the `api_request` event**), `duration_ms`, `attempt`, `{input,output,cache_read,cache_creation}_tokens`; `span.links` → the server-side trace |
+| `claude_code.tool` | span | app/internal | `labels.tool_name`; `numeric_labels.duration_ms` — parent of the two below |
+| `claude_code.tool.blocked_on_user` | span | app/internal | `labels.decision` (accept/reject), `source` (config/user_temporary); `numeric_labels.duration_ms` = time spent awaiting the permission decision |
+| `claude_code.tool.execution` | span | app/internal | `labels.success`; `numeric_labels.duration_ms`. Gains `tool_input` / `file_path` with `OTEL_LOG_TOOL_DETAILS=1`, and a `tool.output` span event (input+output bodies, 60 KB) with `OTEL_LOG_TOOL_CONTENT=1` |
+
+`llm_request` overlaps the `api_request` *event* (model, tokens, duration) but is
+**not** a superset — the event additionally carries `cost_usd`, `query_source`,
+`effort`, while the span uniquely adds `ttft_ms`, `stop_reason`, and the causal
+trace position. They complement each other.
+
 ### Field meanings worth recording
 
 - **Why `session.id` is top-level but `user_email` / `prompt_id` are under
