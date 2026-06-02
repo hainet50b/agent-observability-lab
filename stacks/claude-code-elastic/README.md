@@ -124,7 +124,7 @@ so data lands within ~10–30s.
 
 ### 3. Import the Kibana saved objects
 
-Two **data views** (`kibana/claude-code-data-views.ndjson`), six **saved searches**
+Two **data views** (`kibana/claude-code-data-views.ndjson`), seven **saved searches**
 (`kibana/claude-code-saved-searches.ndjson`), and one **dashboard**
 (`kibana/claude-code-dashboard.ndjson`) ship as importable NDJSON:
 
@@ -132,7 +132,7 @@ Two **data views** (`kibana/claude-code-data-views.ndjson`), six **saved searche
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
-| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions** | saved searches | per-`message` curated column views on the Events data view |
+| **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes** | saved searches | per-`message` curated column views on the Events data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
 The saved searches and the dashboard **reference the data views**, so import the
@@ -161,7 +161,7 @@ reasoning behind them are in the [Telemetry reference](#saved-search-columns).
 ### 4. See the telemetry in Kibana
 
 - **Discover** — pick the **Claude Code — Metrics** or **Events** data view, or
-  open one of the six saved searches from the **Open** menu. Each saved search
+  open one of the seven saved searches from the **Open** menu. Each saved search
   opens with its `message` / `service.name` constraints as removable **filter
   pills** (the query bar stays empty). The field layout is explained in the
   [Telemetry reference](#telemetry-reference).
@@ -202,7 +202,7 @@ claude-code-elastic/
 │  └─ apm-server.yml                      # APM Server as the OTLP receiver
 ├─ kibana/
 │  ├─ claude-code-data-views.ndjson       # 2 importable Discover data views
-│  ├─ claude-code-saved-searches.ndjson   # 6 importable per-message saved searches
+│  ├─ claude-code-saved-searches.ndjson   # 7 importable per-message saved searches
 │  └─ claude-code-dashboard.ndjson        # the "Overview" demo dashboard
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification
@@ -269,6 +269,7 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | `claude_code.hook_execution_complete` | + `num_blocking`, `num_success`, `num_cancelled`, `num_non_blocking_error`, `total_duration_ms` |
 | `claude_code.hook_plugin_metrics` | `labels.plugin_id`, `hook_event`, `skipped`; many `numeric_labels.*` review metrics (`cost_usd`, `vulns_found`, `files_reviewed`, `tok_*`, …) — plugin-specific (security-guidance) |
 | `claude_code.subagent_completed` | `labels.agent_type`, `agent_source`, `model`, `is_async`, `is_built_in`; `numeric_labels.duration_ms`, `total_tokens`, `total_tool_uses` |
+| `claude_code.permission_mode_changed` | `labels.from_mode`, `to_mode` (`default`/`acceptEdits`/`plan`/`auto`), `trigger` (e.g. `shift_tab`), `prompt_id` |
 | `claude_code.feedback_survey` | `labels.survey_type`, `event_type`, `response`, `appearance_id` — UI survey, low signal |
 
 `claude_code.api_error` and `claude_code.hook_registered` are documented but
@@ -311,7 +312,7 @@ origins — see below).
 
 ### Saved-search columns
 
-The six shipped saved searches all live on the **Claude Code — Events** data
+The seven shipped saved searches all live on the **Claude Code — Events** data
 view, sort `@timestamp` desc, constrain on `message` + `service.name: claude-code`
 as filter pills, and end with `labels.prompt_id` (the key that ties together
 every event from one prompt). Columns were chosen against live data:
@@ -324,6 +325,7 @@ every event from one prompt). Columns were chosen against live data:
 | **User Prompts** (`user_prompt`) | `prompt_length`, `prompt` | — (`prompt` is `<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`; kept regardless — column choice isn't a PII control) |
 | **Hook Executions** (`hook_execution_complete`) | `hook_event`, `hook_name`, `num_hooks`, `num_success`, `num_blocking`, `total_duration_ms` | `hook_source` / `managed_only` (redundant 2-value pair); `num_*` are string labels |
 | **Subagent Completions** (`subagent_completed`) | `agent_type`, `agent_source`, `model`, `is_async`; `numeric_labels` `duration_ms`, `total_tokens`, `total_tool_uses` | `is_built_in` (≡ `agent_source`) |
+| **Permission Mode Changes** (`permission_mode_changed`) | `from_mode`, `to_mode`, `trigger` | — (permission-posture audit: mode cycling via `shift_tab` etc.) |
 
 Why saved searches and not more data views: a Kibana data view is only an
 index-pattern + time field — it can't store a query or columns — so per-`message`
