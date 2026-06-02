@@ -247,6 +247,57 @@ scripts/smoke-test.sh    # from anywhere — it locates its own stack directory
 Needs `docker` (running daemon), `curl`, `jq`; it **SKIPs** (exit 0) when the
 daemon is unreachable. Override endpoints with `ES_URL` / `APM_OTLP_URL`.
 
+## Inspect Elasticsearch from Claude (optional)
+
+Purely a developer convenience — **not part of the stack**. It lets a Claude Code
+session query this stack's Elasticsearch through the [Elasticsearch MCP
+server](https://github.com/elastic/mcp-server-elasticsearch) (read-only tools:
+`search`, `esql`, `list_indices`, `get_mappings`, `get_shards`). The MCP server is
+not a service you deploy — in stdio mode Claude Code launches it as a per-session
+subprocess (a `docker run -i --rm …` that exits with the session) and it connects
+*to* Elasticsearch as a client.
+
+Register it once, in **`local` scope** (the `claude mcp add` default) so it is
+active **only in this repo** (not your other projects) and is **not committed**
+(it lives in your `~/.claude.json` keyed by project path). Run from the directory
+you launch `claude` in, with the stack up:
+
+Linux (reach the host's `:9200` via host networking):
+
+```sh
+claude mcp add elasticsearch -- \
+  docker run -i --rm --network host \
+  -e ES_URL=http://localhost:9200 \
+  docker.elastic.co/mcp/elasticsearch stdio
+```
+
+macOS / Windows (Docker Desktop has no host networking — reach the host via
+`host.docker.internal`):
+
+```sh
+claude mcp add elasticsearch -- \
+  docker run -i --rm \
+  -e ES_URL=http://host.docker.internal:9200 \
+  docker.elastic.co/mcp/elasticsearch stdio
+```
+
+```powershell
+claude mcp add elasticsearch -- `
+  docker run -i --rm `
+  -e ES_URL=http://host.docker.internal:9200 `
+  docker.elastic.co/mcp/elasticsearch stdio
+```
+
+- **No API key** — this stack runs with security disabled, so `ES_URL` alone
+  connects (the image's `ES_API_KEY` / basic-auth vars are unneeded here).
+- Check status with `/mcp`; remove with `claude mcp remove elasticsearch`. When the
+  stack is down the subprocess just fails to connect (no harm).
+- ⚠️ This standalone server is **deprecated**; the supported successor is the
+  [Elastic Agent Builder MCP server](https://www.elastic.co/docs/explore-analyze/ai-features/agent-builder/mcp-server)
+  (built into Kibana at `/api/agent_builder/mcp`, GA in Stack 9.3+). It requires an
+  API key + Kibana privileges — i.e. **security enabled** — so it does not fit this
+  security-disabled demo, but it is the path on a real cluster.
+
 ## Layout
 
 ```
