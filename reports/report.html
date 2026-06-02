@@ -756,6 +756,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Switch trace-isolation namespace to per-agent <code>agents_claude_code</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Kept the <code>reroute</code> <strong>namespace</strong> approach (now <code>agents_claude_code</code>) rather than a dataset — the task and prior work confirmed a namespace still matches the <code>traces-apm-*</code> template and inherits APM trace mappings, whereas a <code>traces-apm.agents_claude_code-*</code> dataset has no matching template.</li>
+      <li>For the new cross-agent data view I named the object <code>AI Agents — Traces (claude-code-elastic)</code> (kept the <code>(claude-code-elastic)</code> stack suffix used by every sibling data view), id <code>cce-agents-traces</code>, pattern <code>traces-apm-agents_*</code> — the <code>agents_</code> prefix glob spans claude_code, codex, … while still excluding non-agent traces.</li>
+      <li>Bumped the NDJSON export-summary <code>exportedCount</code> from 3 to 4 for the added data view; left <code>metrics</code>/<code>logs</code> untouched (already per-service, nothing to route).</li>
+      <li>Refreshed the script header comments on both <code>.sh</code> and <code>.ps1</code> to state the per-agent isolation rationale (PII / experimental-churn / droppable per-agent stream) so the "why per-agent, not bare <code>claude_code</code>" reasoning lives next to the code.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Per the task, cleaning up the now-stale <code>traces-apm-claude_code</code> data stream is a <strong>manual operator step, out of scope</strong> — not scripted or invoked here.</li>
+      <li>End-to-end "a real session's spans land in <code>traces-apm-agents_claude_code</code>" could not be auto-verified: direct Elasticsearch GET/<code>_simulate</code> calls were permission-declined this session. The namespace validity was already verified by the human via <code>_simulate</code> (per the task), the pipeline PUT returned <code>acknowledged: true</code>, and the data views imported cleanly — so the routing path is in place and populates once a tracing-enabled session runs.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Now that a cross-agent <code>traces-apm-agents_*</code> view exists, a companion cross-agent <strong>dashboard</strong> (spans-per-agent, latency by agent) would make the multi-agent comparison the <code>agents_</code> prefix enables actually visible — currently only the Discover data view exists.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Claude Code's isolated trace stream is renamed once more — to the per-agent <code>traces-apm-agents_claude_code</code> — and a second "AI Agents — Traces" data view on <code>traces-apm-agents_*</code> is added so traces from any agent (claude_code, codex, …) can be browsed together while staying separated from non-agent production traces.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: <code>setup-trace-routing.sh</code> re-ran with <code>acknowledged: true</code> and reports routing to <code>traces-apm-agents_claude_code</code>; the data-views NDJSON imported with <code>successCount: 4</code> (incl. the new <code>cce-agents-traces</code>), saved searches 11 and dashboard 1 all clean; <code>smoke-test.sh</code> reached <strong>PASS</strong> (its <code>cce-smoke-test</code> span correctly stays in <code>traces-apm-default</code>). Compose gate passes; shellcheck absent (skipped per CONVENTIONS).</li>
+      <li>README was intentionally not touched (already updated upstream, per the task).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
