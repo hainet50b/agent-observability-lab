@@ -693,6 +693,39 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Physically isolate Claude Code's trace spans via reroute</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Followed the PRD's sanctioned hook exactly: a <code>reroute</code> processor on <code>traces-apm@custom</code> (which <code>traces-apm@default-pipeline</code> already calls with <code>ignore_missing_pipeline: true</code>), guarded by <code>ctx.service?.name == 'claude-code'</code> and rerouting to <code>namespace: claudecode</code> → the <code>traces-apm-claudecode</code> data stream. Other producers fall through untouched and stay in <code>traces-apm-default</code>; same-namespace reroute is a no-op so there is no loop.</li>
+      <li>Used a plain <code>PUT _ingest/pipeline/traces-apm@custom</code> for idempotency — a PUT replaces the definition, so re-running the setup script is safe with no create/exists branching.</li>
+      <li>Mirrored the established script conventions of <code>import-kibana-objects.{sh,ps1}</code> and <code>smoke-test.sh</code>: locate-own-stack-dir, <code>ES_URL</code> overridable (default <code>http://localhost:9200</code>), <code>skip()</code> on missing <code>curl</code>/<code>jq</code>, and fail-loud on non-2xx / un-acknowledged. The bash version captures the body + HTTP code in one <code>curl -w</code> call; the <code>.ps1</code> uses <code>Invoke-RestMethod</code> and checks <code>.acknowledged</code>, matching the import-helper pairing.</li>
+      <li>Re-pointed only the traces data view title (<code>traces-apm*</code> → <code>traces-apm-claudecode*</code>) in <code>claude-code-data-views.ndjson</code>; since the stream is now physically Claude-Code-only, no <code>service.name</code> filter is needed (and a data view can't store one anyway). <code>exportedCount</code> was already 3 and is unchanged — no new object was added, an existing one was re-pointed.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The Docker daemon socket and (in this session) direct <code>curl</code> to Elasticsearch were outside / blocked by the command sandbox, so verification ran with the sandbox disabled, and the standalone <code>_simulate</code> re-check I attempted was declined. Ground truth instead came from the setup script's own run returning <code>acknowledged: true</code> and the reroute shape being identical to the one the PRD records as already <code>_simulate</code>-verified (claude-code → <code>traces-apm-claudecode</code>, others → default).</li>
+      <li>The 134 pre-existing <code>claude-code</code> trace docs visible in <code>traces-apm*</code> were captured before the pipeline existed and remain in <code>traces-apm-default</code> — expected per the task; only spans ingested after install route to <code>traces-apm-claudecode</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Consider folding the routing-pipeline install into the smoke test (or a one-shot bootstrap) so a fresh <code>docker compose up</code> + smoke-test run leaves the stack fully wired without a separate manual step — today <code>setup-trace-routing.sh</code> is a documented post-up call.</li>
+      <li>A short Discover/APM-UI walkthrough for a real tracing-on session (showing the <code>claude_code.interaction</code> span tree now isolated in <code>traces-apm-claudecode</code>) would give the traces signal the same guided entry point the events saved searches have.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Claude Code's trace spans are now physically isolated: a new <code>setup-trace-routing.sh</code> (+ PowerShell mirror) installs an ingest-pipeline reroute that sends <code>service.name=claude-code</code> spans to their own <code>traces-apm-claudecode</code> data stream, and the Traces data view is re-pointed there — so it needs no <code>service.name</code> filter and other producers stay out of view.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: <code>setup-trace-routing.sh</code> PUT returned <code>acknowledged: true</code>; the import helper imported all objects cleanly (3 data views incl. the re-pointed <code>cce-claude-code-traces</code>, 11 saved searches, 1 dashboard); <code>smoke-test.sh</code> reached <strong>PASS</strong> (all three signals land, smoke-test's own span correctly stays in <code>traces-apm*</code>/default). Compose-config gate passes; shellcheck absent (skipped per CONVENTIONS).</li>
+      <li>Standalone <code>_simulate</code> re-verification was declined in this session — the reroute condition relies on the PRD's prior live <code>_simulate</code> confirmation. Worth a glance if you want an independent re-check.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
