@@ -9,13 +9,13 @@
 # hook: a `reroute` processor in the **`traces-apm@custom`** ingest pipeline,
 # which `traces-apm@default-pipeline` already calls with
 # `ignore_missing_pipeline: true`. Docs whose `service.name` is `claude-code`
-# are rerouted into the dedicated **`traces-apm-claudecode`** data stream — it
+# are rerouted into the dedicated **`traces-apm-claude_code`** data stream — it
 # still matches the `traces-apm-*` index template, so it inherits the full APM
 # trace mappings; other producers stay in `traces-apm-default`. Rerouting to the
 # same namespace is a no-op, so there is no pipeline loop.
 #
 # The traces data view (kibana/claude-code-data-views.ndjson, id
-# `cce-claude-code-traces`) is scoped to `traces-apm-claudecode*`, so it needs no
+# `cce-claude-code-traces`) is scoped to `traces-apm-claude_code*`, so it needs no
 # `service.name` filter once this pipeline is installed. Spans captured before
 # the pipeline existed stay in `traces-apm-default`; that is expected.
 #
@@ -49,9 +49,9 @@ command -v jq   >/dev/null 2>&1 || skip "jq not found"
 # unchanged and stay in traces-apm-default.
 read -r -d '' BODY <<'JSON' || true
 {
-  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-claudecode",
+  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-claude_code",
   "processors": [
-    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "claudecode" } }
+    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "claude_code" } }
   ]
 }
 JSON
@@ -76,5 +76,5 @@ acknowledged=$(echo "$body" | jq -r '.acknowledged // false')
 echo "[setup] pipeline '$PIPELINE' installed ✓"
 echo
 echo "PASS: Claude Code trace spans (service.name=claude-code) now route to"
-echo "'traces-apm-claudecode'. Enable tracing on a session (see ../README.md,"
+echo "'traces-apm-claude_code'. Enable tracing on a session (see ../README.md,"
 echo "Quick Tour step 2) and open the Claude Code — Traces data view in Discover."

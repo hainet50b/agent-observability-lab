@@ -11,13 +11,13 @@
 # hook: a `reroute` processor in the **`traces-apm@custom`** ingest pipeline,
 # which `traces-apm@default-pipeline` already calls with
 # `ignore_missing_pipeline: true`. Docs whose `service.name` is `claude-code`
-# are rerouted into the dedicated **`traces-apm-claudecode`** data stream — it
+# are rerouted into the dedicated **`traces-apm-claude_code`** data stream — it
 # still matches the `traces-apm-*` index template, so it inherits the full APM
 # trace mappings; other producers stay in `traces-apm-default`. Rerouting to the
 # same namespace is a no-op, so there is no pipeline loop.
 #
 # The traces data view (kibana/claude-code-data-views.ndjson, id
-# `cce-claude-code-traces`) is scoped to `traces-apm-claudecode*`, so it needs no
+# `cce-claude-code-traces`) is scoped to `traces-apm-claude_code*`, so it needs no
 # `service.name` filter once this pipeline is installed. Spans captured before
 # the pipeline existed stay in `traces-apm-default`; that is expected.
 #
@@ -49,9 +49,9 @@ Set-Location -LiteralPath $StackDir
 # unchanged and stay in traces-apm-default.
 $Body = @'
 {
-  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-claudecode",
+  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-claude_code",
   "processors": [
-    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "claudecode" } }
+    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "claude_code" } }
   ]
 }
 '@
@@ -78,5 +78,5 @@ if (-not $result.acknowledged) {
 Write-Host "[setup] pipeline '$Pipeline' installed"
 Write-Host ""
 Write-Host "PASS: Claude Code trace spans (service.name=claude-code) now route to"
-Write-Host "'traces-apm-claudecode'. Enable tracing on a session (see ../README.md,"
+Write-Host "'traces-apm-claude_code'. Enable tracing on a session (see ../README.md,"
 Write-Host "Quick Tour step 2) and open the Claude Code — Traces data view in Discover."

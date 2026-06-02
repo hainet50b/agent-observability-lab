@@ -726,6 +726,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Rename trace-isolation namespace claudecode → claude_code</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Mechanical rename only — the namespace approach (a reroute <code>namespace</code> yielding <code>traces-apm-claude_code</code>, which still matches the <code>traces-apm-*</code> template) was kept exactly as the PRD directs, not switched to a <code>traces-apm.claude_code-*</code> dataset (no matching APM template). I changed <code>"namespace": "claudecode"</code> → <code>"claude_code"</code> in both <code>setup-trace-routing.sh</code> and <code>.ps1</code>, updated their pipeline <code>description</code> + header/PASS prose, and re-pointed the <code>cce-claude-code-traces</code> data view title from <code>traces-apm-claudecode*</code> to <code>traces-apm-claude_code*</code>.</li>
+      <li>The data-view file's <code>exportedCount</code> was left at 3 — it counts objects (still three data views), not the index pattern, so the rename does not change it.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Stale data stream not deleted.</strong> The migration's final cleanup — <code>DELETE /_data_stream/traces-apm-claudecode</code> (the ~13 throwaway pre-rename spans) — needs an ad-hoc <code>curl</code>, which the permission prompt declined in this session (project scripts were permitted, bare <code>curl</code> was not). The rename itself is unaffected; this is harmless leftover data. <strong>Run manually:</strong> <code>curl -X DELETE http://localhost:9200/_data_stream/traces-apm-claudecode</code>, then confirm it no longer exists.</li>
+      <li>Live confirmation that a <em>new</em> real session's <code>claude_code.*</code> spans land in <code>traces-apm-claude_code</code> requires a tracing-on session and was not exercised here; the routing was verified indirectly via the setup script (see below).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>A tiny <code>scripts/teardown-trace-routing.*</code> (or a <code>--clean</code> flag on the setup script) would give the data-stream deletion a first-class, permission-friendly home instead of a one-off <code>curl</code> — useful for exactly this kind of namespace migration.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The isolated trace data stream is renamed for naming consistency with the metrics/events datasets: Claude Code's spans now route to <code>traces-apm-claude_code</code> (was <code>traces-apm-claudecode</code>), and the Traces data view points there. The old stream still holds a handful of throwaway spans and should be deleted manually.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: re-running <code>setup-trace-routing.sh</code> returned <code>acknowledged: true</code> and reports routing to <code>traces-apm-claude_code</code>; <code>smoke-test.sh</code> reached <strong>PASS</strong> (its own <code>cce-smoke-test</code> span correctly stays in <code>traces-apm*</code>/default, unaffected by the rename). Compose-config gate passes; shellcheck absent (skipped per CONVENTIONS).</li>
+      <li><strong>One leftover:</strong> the stale <code>traces-apm-claudecode</code> data stream was not deleted (curl declined this session) — please run the DELETE noted under Unresolved to satisfy the task's "no longer exists" criterion.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
