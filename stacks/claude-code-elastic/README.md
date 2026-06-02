@@ -183,6 +183,8 @@ Importable NDJSON ships under `kibana/`: the **data views**
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
 | **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
+| **Claude Code — Traces** | data view (`traces-apm-agents_claude_code*`) | this agent's beta trace spans (per-agent isolated; see [Trace data model](#trace-data-model)) |
+| **AI Agents — Traces** | data view (`traces-apm-agents_*`) | all AI agents' trace spans (cross-agent: claude_code, codex, …), excludes non-agent traces |
 | **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view |
 | **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
@@ -360,8 +362,9 @@ below).
   two children — the permission-decision wait and the execution). This links a
   prompt to the API calls and tool runs it triggered as one trace.
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
-  map and trace waterfalls — is the natural home; the `traces-apm-agents_claude_code*` data
-  view also lets you scan spans in Discover.
+  map and trace waterfalls — is the natural home; two Discover data views also let
+  you scan spans — **Claude Code — Traces** (`traces-apm-agents_claude_code*`, this
+  agent) and **AI Agents — Traces** (`traces-apm-agents_*`, all agents).
 - **Content is still redacted by default.** Spans redact prompt text, tool input,
   and tool content unless the matching `OTEL_LOG_*` gate is set. In particular,
   **`OTEL_LOG_TOOL_CONTENT=1` requires tracing** — it adds a `tool.output` span
