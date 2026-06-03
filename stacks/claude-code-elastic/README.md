@@ -174,10 +174,13 @@ so data lands within ~10–30s.
 
 ### 3. Import the Kibana saved objects
 
-Importable NDJSON ships under `kibana/`: the **data views**
-(`claude-code-data-views.ndjson`), the **saved searches**
-(`claude-code-saved-searches.ndjson`), and a **dashboard**
-(`claude-code-dashboard.ndjson`):
+The importable NDJSON lives in the component directories — the backend's
+cross-agent data view in `../../components/backends/elastic/kibana/`
+(`agents-data-views.ndjson`), and the Claude Code agent's **data views**
+(`data-views.ndjson`), **saved searches** (`saved-searches.ndjson`), and
+**dashboard** (`dashboard.ndjson`) in
+`../../components/agents/claude-code/kibana/`. The import helper below pulls
+them in dependency order:
 
 | Saved object | Type | Shows |
 | --- | --- | --- |
@@ -194,8 +197,8 @@ The saved searches and the dashboard **reference the data views**, so import the
 data views first (or all files together). The saved searches' columns and the
 reasoning behind them are in the [Telemetry reference](#saved-search-columns).
 
-- **Import helper (recommended)** — imports the `kibana/` files in dependency
-  order (data views first); run from anywhere:
+- **Import helper (recommended)** — runs the backend import then the agent
+  import, each in dependency order (data views first); run from anywhere:
 
   ```sh
   scripts/import-kibana-objects.sh     # bash/zsh/sh
@@ -306,16 +309,18 @@ claude-code-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
-   ├─ import-kibana-objects.sh            # → forwards to the backend component script
-   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import shim
+   ├─ import-kibana-objects.sh            # → orchestrates the backend + agent imports
+   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import orchestrator
    ├─ setup-trace-routing.sh             # → forwards to the backend component script
    └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
 ```
 
-The backend services, their config, the Kibana NDJSON (data views, saved
-searches, dashboard), the `traces-apm@custom` pipeline body, and the Backend
-bootstrap scripts the shims forward to all live in
-`../../components/backends/elastic/`.
+The backend services, their config, the cross-agent data view, the
+`traces-apm@custom` pipeline body, and the Backend bootstrap scripts live in
+`../../components/backends/elastic/`; the Claude Code agent's data views, saved
+searches, and Overview dashboard — with their own import script — live in
+`../../components/agents/claude-code/`. The stack's `import-kibana-objects`
+shim runs both component imports in order.
 
 ## Telemetry reference
 
@@ -645,7 +650,7 @@ Some events only fire under specific conditions — handy when populating the de
 
 - No saved search for `hook_plugin_metrics` (plugin-specific, 20+ numeric fields —
   a dedicated view later) or `feedback_survey` (noise).
-- A starter **Overview dashboard** (Lens) ships in `kibana/claude-code-dashboard.ndjson`;
+- A starter **Overview dashboard** (Lens) ships in `../../components/agents/claude-code/kibana/dashboard.ndjson`;
   richer dashboards (cost/token trends, model breakdown, tool success, latency
   distribution) can follow — mind the string-vs-numeric caveat above.
 
@@ -659,7 +664,7 @@ the UI — no UI export step required — use the Saved Objects **export API**:
 curl -s -X POST "http://localhost:5601/api/saved_objects/_export" \
   -H "kbn-xsrf: true" -H "Content-Type: application/json" \
   -d '{"objects":[{"type":"dashboard","id":"claude-code-overview"}],"includeReferencesDeep":false}' \
-  > kibana/claude-code-dashboard.ndjson
+  > ../../components/agents/claude-code/kibana/dashboard.ndjson
 ```
 
 `includeReferencesDeep: false` keeps the data views as *references* rather than
