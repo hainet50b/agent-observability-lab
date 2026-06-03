@@ -181,8 +181,8 @@ Importable NDJSON ships under `kibana/`: the **data views**
 
 | Saved object | Type | Shows |
 | --- | --- | --- |
-| **Claude Code — Metrics** | data view (`metrics-apm.app*`) | the numeric metric documents |
-| **Claude Code — Events** | data view (`logs-apm.app*`) | the prompt / tool-result / API-request events |
+| **Claude Code — Metrics** | data view (`metrics-apm.app.claude_code*`) | the numeric metric documents (physically scoped to the agent's data stream) |
+| **Claude Code — Events** | data view (`logs-apm.app.claude_code*`) | the prompt / tool-result / API-request events (physically scoped to the agent's data stream) |
 | **Claude Code — Traces** | data view (`traces-apm-agents_claude_code*`) | this agent's beta trace spans (per-agent isolated; see [Trace data model](#trace-data-model)) |
 | **AI Agents — Traces** | data view (`traces-apm-agents_*`) | all AI agents' trace spans (cross-agent: claude_code, codex, …), excludes non-agent traces |
 | **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view (each ends with `trace.id`, a click-through to the APM UI trace) |
@@ -581,11 +581,15 @@ one `tool_result` event but several spans (`tool` + `blocked_on_user` +
 
 ### Saved-search columns
 
-The shipped saved searches all live on the **Claude Code — Events** data view,
-sort `@timestamp` desc, and constrain on `message` + `service.name: claude-code`
-as filter pills — except **Event Overview**, which constrains only on
-`service.name` and leaves `message` as a visible column so every event type
-shows (the cross-event-type timeline). Most end with `labels.prompt_id` (the key
+The shipped saved searches all live on the **Claude Code — Events** data view —
+which is **physically scoped to the agent's own data stream**
+(`logs-apm.app.claude_code*`), so **no `service.name` filter pill is needed** (the
+`*-apm.app.<service>-default` dataset is keyed by `service.name`, and the
+smoke-test probe / any other producer land in their own `*.app.<service>-default`
+streams). They sort `@timestamp` desc and constrain on `message` as a **single
+filter pill** — except **Event Overview**, which has **no filter pill at all** and
+leaves `message` as a visible column, so every event type shows (the
+cross-event-type timeline). Most end with `labels.prompt_id` (the key
 that ties together every event from one prompt) — except **MCP Server
 Connections** and **Hook Registered** (both fire at startup, no `prompt_id`) and
 **Auth Events** (account/session-level, so the `prompt_id` it carries is omitted
