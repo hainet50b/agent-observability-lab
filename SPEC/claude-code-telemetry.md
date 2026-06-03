@@ -32,9 +32,25 @@ these signals are documented in [`kibana-saved-objects.md`](kibana-saved-objects
 **Common envelope** (every doc): `@timestamp`, `service.name`, `service.version`,
 `agent.name` (`otlp`), `service.framework.name` (`com.anthropic.claude_code` on
 the metrics stream, `com.anthropic.claude_code.events` on the events stream),
-`host.os.*`, `data_stream.*`, and `session.id` (top-level, not a label — see
+the host fields `host.architecture` / `host.os.platform` / `host.os.type` /
+`host.os.version`, `data_stream.*`, and `session.id` (top-level, not a label — see
 [Field meanings](#field-meanings-worth-recording)); common `labels.*` are
 `user_*`, `organization_id`, `terminal_type`.
+
+⚠️ **No host identity.** Claude Code's exporter sets the OS/architecture resource
+attributes above but **not `host.name` / `host.hostname`** (nor
+`service.node.name` / `service.instance.id`, nor any `cloud.*`). So a document can
+be attributed to a **person** (`labels.user_email` — the "who") and to a
+**session** (`session.id`), but **not to a device** — there is no "which machine"
+axis in the native telemetry, only a coarse OS class. For fleet auditing where
+device-level attribution matters (managed vs personal machine, which laptop), it
+must be **added downstream**: a local OpenTelemetry Collector (the `otelcol-sidecar`
+path) can stamp `host.name` / `host.id` onto every passing signal via a
+`resourcedetection` processor. Caveat for this lab: the Collector runs in a
+*container*, so a `system` detector reports the **container's** hostname, not the
+laptop's — the dockerized stacks demonstrate the *mechanism*; a real fleet runs the
+Collector as a host service (systemd / launchd) where it picks up the true host
+name.
 
 ## Metrics (`metrics-apm.app.claude_code-default`)
 
