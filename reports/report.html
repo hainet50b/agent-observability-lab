@@ -1212,6 +1212,43 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 3d — host-identity enrichment at the sidecar Collector</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Bare <code>resourcedetection</code> name, <code>system</code> detector only.</strong> Used the unnamed processor id (not <code>resourcedetection/system</code>) so the pipeline lists read exactly as the task specified — <code>[resourcedetection, batch]</code>. Single detector <code>system</code> with <code>hostname_sources: [os]</code> (OS hostname, no cloud-metadata probing — there is none to probe in this local demo).</li>
+      <li><strong><code>override: false</code> — additive only.</strong> Top-level processor key (not under <code>system</code>). It stamps <code>host.name</code> where absent and is guaranteed never to overwrite the agent's own <code>host.os.*</code> / <code>host.architecture</code>. Verified host.name lands; see Unresolved for why the no-clobber path can't be exercised by the synthetic probe.</li>
+      <li><strong>Placed before <code>batch</code> in all three pipelines.</strong> Detection enriches the resource before batching/export; order matches the task. Confirmed live that metrics, logs, and traces all gained <code>host.name</code>.</li>
+      <li><strong>Did NOT enable <code>host.id</code> (the task's optional extra).</strong> The <code>system</code> detector's <code>host.id</code> reads a machine identity file (e.g. <code>/etc/machine-id</code>) that is unreliable inside a distroless container and can make the detector error at <em>startup</em>. Since the verification only requires <code>host.name</code> and the dockerized value is a demo placeholder anyway, leaving <code>host.id</code> off is the lower-risk, on-spec choice. The detector's default-enabled <code>os.type</code> did come along (docs now carry <code>host.os.type: linux</code>) — harmless and additive (the probe carries no <code>os.type</code> to clobber).</li>
+      <li><strong>Deterministic container <code>hostname: otelcol-sidecar-demo</code>.</strong> So the detected <code>host.name</code> is a stable, recognizable string in ES rather than a random 12-hex container id — and so the README's "this is the container's name, not the laptop's" caveat has a concrete value to point at.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>The <code>override: false</code> no-clobber behaviour is correct-by-construction but not exercised live here.</strong> The synthetic smoke probe carries no <code>host.*</code> attributes, so it can only prove the <em>additive</em> case (host.name appears where it was absent). Proving the processor does <em>not</em> overwrite an agent-supplied <code>host.os.*</code> would need a real <code>claude</code> session (which supplies those attrs) — out of reach of a deterministic gate. The config is the documented default-safe shape; flagged for awareness, not a blocker.</li>
+      <li><strong>Stale path-component compose header.</strong> <code>components/paths/otelcol-sidecar/docker-compose.yml</code>'s top comment still narrates "Phase-3a config is a plain relay: no durable queue yet (3b)… no self-telemetry yet (3c)" — already stale after 3b/3c and now 3d. Left untouched to keep this iteration to one concern; see Next PRD suggestions.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Surface <code>host.name</code> in the agent's Kibana views.</strong> Now that every relayed doc carries a device axis, an event saved-search column (or a dashboard facet) on <code>host.name</code> would make per-device attribution visible alongside <code>user_email</code> / <code>session.id</code> — the natural follow-on to this enrichment.</li>
+      <li><strong>Refresh the otelcol-sidecar compose header.</strong> Its phase narrative is three phases behind reality (relay-only → now durable queue + self-telemetry + host enrichment). A small docs-only task to rewrite that comment block would stop it misleading a reader.</li>
+      <li><strong>A host-service (systemd/launchd) deployment note.</strong> The container caveat says the real machine name only appears when the Collector runs as a host service; a short worked example of that would close the gap between the demo mechanism and real fleet device attribution.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The local Collector now stamps <strong>host identity</strong> onto every signal it relays. Claude Code emits OS/arch attributes but no <code>host.name</code>, so a document could be tied to a person and a session but not a device; a <code>resourcedetection</code> processor (added before <code>batch</code> in all three pipelines, <code>override: false</code> so it only adds where absent) closes that gap. Verified live: smoke-test docs in <code>metrics-apm*</code> / <code>logs-apm*</code> / <code>traces-apm*</code> now carry <code>host.name = otelcol-sidecar-demo</code> (and <code>host.hostname</code> too) where Phase 3c left it absent. The Phase 3b resilience check and Phase 3c self-telemetry still PASS.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Both <code>host.name</code> and <code>host.hostname</code> surface in ES</strong> (same value). The task anticipated this version difference and said either is acceptable — recording that on this Stack (9.4.2 / APM) the OTLP <code>host.name</code> resource attribute lands as <em>both</em>.</li>
+      <li><strong>Self-telemetry is correctly NOT enriched.</strong> Confirmed the 164 <code>otelcol-sidecar</code> self-metric docs carry no <code>host.name</code> — because <code>service.telemetry</code> is a path separate from the data pipelines where <code>resourcedetection</code> lives. This is the intended scoping (only relayed agent telemetry gets device identity), and it's a useful confirmation that the processor didn't leak onto the health path.</li>
+      <li><strong>Container caveat is in the stack README, prominently.</strong> Added as a ⚠️ callout so the demo <code>host.name</code> (the container's, not the laptop's) is not mistaken for real device attribution — per the task's "document in the stack README only, no <code>SPEC/</code> links" instruction.</li>
+      <li><strong>Verification swapped stacks.</strong> Took <code>claude-code-elastic</code> down (volume preserved) to free the shared <code>cce-*</code> names/ports, brought the otelcol stack up fresh for the live gates (smoke + host.name check + resilience), then restored <code>claude-code-elastic</code>. The otelcol ES volume was wiped before the run so the host.name check started from a clean slate.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

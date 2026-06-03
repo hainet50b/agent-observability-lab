@@ -31,6 +31,23 @@ distinct from `claude-code`. This self-telemetry travels a path separate from th
 data pipelines, so it does **not** ride the on-disk queue above — query
 `metrics-apm*` for `service.name: otelcol-sidecar` to see it.
 
+The Collector also **stamps host identity** onto every signal it relays. Claude
+Code's native telemetry carries OS/architecture resource attributes but **no
+`host.name`** — a document can be attributed to a person (`labels.user_email`)
+and a session (`session.id`) but not to a *device*. A `resourcedetection`
+processor adds `host.name` (only where absent — it never overwrites the agent's
+own attributes), so every metric, event, and span gains device attribution. The
+local Collector is the natural place to do this: it sees every signal on the way
+out, and host identity is a property of where the agent runs, not of the agent.
+
+> ⚠️ **Container caveat — the demo `host.name` is the Collector's, not your
+> laptop's.** Because the Collector runs in a *container*, its `system` hostname
+> detector reports the **container's** hostname — set deterministically to
+> `otelcol-sidecar-demo` on the service — **not** the host machine's. This
+> dockerized stack demonstrates the *mechanism*; a real fleet runs the Collector
+> as a host service (systemd / launchd), where the same detector picks up the
+> true machine name. Don't mistake the demo value for real device attribution.
+
 > ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
 > backend's fixed `cce-*` container names and host ports (`9200` / `5601` /
 > `8200`). Run only one of the two at a time — `docker compose down` the other

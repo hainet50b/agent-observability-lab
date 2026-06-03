@@ -1,16 +1,20 @@
-# otelcol-sidecar Collector config — Phase 3c (Collector self-telemetry).
+# otelcol-sidecar Collector config — Phase 3d (host-identity enrichment).
 #
 # Minimal pipeline shared by all three signals: receive OTLP (gRPC + HTTP) from
-# the local agent, batch, and forward to the Elastic backend's APM Server over
-# OTLP/HTTP. The exporter's sending_queue is backed by the file_storage
-# extension, so telemetry the agent emits while the central backend is
-# unreachable is persisted to disk and drained on reconnect rather than lost —
-# the reason the sidecar exists.
+# the local agent, detect host identity, batch, and forward to the Elastic
+# backend's APM Server over OTLP/HTTP. The exporter's sending_queue is backed by
+# the file_storage extension, so telemetry the agent emits while the central
+# backend is unreachable is persisted to disk and drained on reconnect rather
+# than lost — the reason the sidecar exists.
 #
 # Phase 3c adds the Collector's own health telemetry via service.telemetry (see
 # the service: block below). A silently-dead sidecar is an audit hole, so the
 # Collector reports on itself — over a path that is SEPARATE from the data
 # pipelines and so does not ride the agent payload's file_storage queue.
+#
+# Phase 3d adds a resourcedetection processor to every pipeline (before batch):
+# Claude Code's native telemetry carries no host identity, so the local Collector
+# stamps host.name onto each relayed signal. See the processors: block.
 
 extensions:
   # Persists the exporter sending_queue to disk so queued telemetry survives a
@@ -30,6 +34,26 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  # Stamp host identity onto every passing signal. Claude Code's native telemetry
+  # carries OS/arch resource attributes (host.os.*, host.architecture) but NO
+  # host.name / host.hostname, so a document can be attributed to a person
+  # (labels.user_email) and a session (session.id) but not to a DEVICE. A local
+  # Collector is the natural place to add device identity to everything it relays.
+  #
+  #   override: false        — only ADD host.name where absent; never clobber the
+  #                            agent's existing host.os.* / host.architecture.
+  #   hostname_sources: [os] — use the OS hostname (no cloud-metadata lookups).
+  #
+  # Container caveat: running in a container, the `system` detector reports the
+  # CONTAINER's hostname — set deterministically via the service `hostname:` in
+  # docker-compose.yml — NOT the laptop's. The dockerized stack demonstrates the
+  # mechanism; a real fleet runs the Collector as a host service (systemd/launchd)
+  # where it picks up the true machine name.
+  resourcedetection:
+    detectors: [system]
+    system:
+      hostname_sources: [os]
+    override: false
   batch: {}
 
 exporters:
@@ -94,13 +118,13 @@ service:
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [resourcedetection, batch]
       exporters: [otlp_http]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [resourcedetection, batch]
       exporters: [otlp_http]
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [resourcedetection, batch]
       exporters: [otlp_http]

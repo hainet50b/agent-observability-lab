@@ -24,6 +24,12 @@ services:
     # explicitly — never :latest.
     image: otel/opentelemetry-collector-contrib:0.153.0
     container_name: otel-collector
+    # Deterministic container hostname so the resourcedetection `system` detector
+    # stamps a stable, recognizable host.name (otelcol-sidecar-demo) onto every
+    # relayed signal instead of a random container ID. NOTE: this is the
+    # CONTAINER's hostname, not the laptop's — see config/otel-collector.yaml and
+    # the stack README "host identity" caveat.
+    hostname: otelcol-sidecar-demo
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     # Run as root in this local demo so the Collector can write the file_storage
     # named volume: the contrib image runs as uid 10001, but a fresh named
