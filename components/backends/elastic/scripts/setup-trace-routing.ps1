@@ -23,7 +23,7 @@
 # any co-tenant production traces with independent deletion / ILM / RBAC.
 #
 # The traces data view (kibana/claude-code-data-views.ndjson, id
-# `cce-claude-code-traces`) is scoped to `traces-apm-agents_claude_code*`, so it
+# `claude-code-traces`) is scoped to `traces-apm-agents_claude_code*`, so it
 # needs no `service.name` filter once this pipeline is installed. Spans captured
 # before the pipeline existed stay in `traces-apm-default`; that is expected.
 #

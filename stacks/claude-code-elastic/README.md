@@ -658,7 +658,7 @@ the UI — no UI export step required — use the Saved Objects **export API**:
 ```sh
 curl -s -X POST "http://localhost:5601/api/saved_objects/_export" \
   -H "kbn-xsrf: true" -H "Content-Type: application/json" \
-  -d '{"objects":[{"type":"dashboard","id":"cce-claude-code-overview"}],"includeReferencesDeep":false}' \
+  -d '{"objects":[{"type":"dashboard","id":"claude-code-overview"}],"includeReferencesDeep":false}' \
   > kibana/claude-code-dashboard.ndjson
 ```
 

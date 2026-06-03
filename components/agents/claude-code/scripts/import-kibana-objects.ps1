@@ -10,7 +10,7 @@
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
 # `_import?overwrite=true` API, in dependency order: **data views first**, so the
-# `cce-claude-code-events` / `cce-claude-code-metrics` / `cce-claude-code-traces`
+# `claude-code-events` / `claude-code-metrics` / `claude-code-traces`
 # references in the saved searches and the dashboard resolve, then the **saved
 # searches**, then the **dashboard**. Prints the per-file import result.
 #
@@ -37,8 +37,8 @@ $ComponentDir = Split-Path -Parent $ScriptDir
 Set-Location -LiteralPath $ComponentDir
 
 # Data views BEFORE saved searches BEFORE the dashboard — the saved searches and
-# the dashboard reference the data views (cce-claude-code-events /
-# cce-claude-code-metrics / cce-claude-code-traces), and those references must
+# the dashboard reference the data views (claude-code-events /
+# claude-code-metrics / claude-code-traces), and those references must
 # already exist.
 $Files = @(
     'kibana/data-views.ndjson'

@@ -1067,6 +1067,42 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 2b — drop the <code>cce-</code> stack prefix from Kibana saved-object IDs</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Byte-level literal replacement over hand-edited JSON.</strong> The four NDJSON files are single giant minified lines (the dashboard is ~50 ID occurrences on one line), so per-occurrence <code>Edit</code> matching was impractical. I drove the rename with a tiny Python pass doing three literal substitutions — <code>cce-claude-code</code>→<code>claude-code</code>, <code>cce-agents</code>→<code>agents</code>, and stripping the display-name suffix <code> (claude-code-elastic)</code>. All three target strings are pure ASCII, so I replaced at the <em>byte</em> level: that guarantees the em-dashes (<code>—</code>, multi-byte UTF-8) and LF line endings are preserved untouched, and the trailing-newline state of each file is unchanged (dashboard has none; the other three do). I then re-validated every line as JSON and confirmed zero <code>cce-</code> leftovers.</li>
+      <li><strong>Scoped the rename to exactly the grep target.</strong> The transformation is uniform: <code>cce-claude-code</code>/<code>cce-agents</code> only ever appear as object <code>id</code>s and <code>references[].id</code>s. Index-pattern <em>titles</em> like <code>metrics-apm.app.claude_code*</code> use an underscore and no <code>cce-</code> prefix, so they were never touched; container names <code>cce-elasticsearch</code>/<code>cce-kibana</code>/<code>cce-apm-server</code> don't match <code>cce-claude-code</code>/<code>cce-agents</code> and correctly stayed (explicitly out of scope per the task).</li>
+      <li><strong>Updated stale ID references in four script <em>comments</em> too.</strong> The task body framed this as "NDJSON + one README line," but verification gate&nbsp;#1 demands <code>grep -r "cce-claude-code\|cce-agents" stacks/ components/ README.md</code> return <em>nothing</em>. The agent import scripts (<code>.sh</code>/<code>.ps1</code>) and the backend trace-routing scripts (<code>.sh</code>/<code>.ps1</code>) carried the old IDs in header comments. I renamed those comment references to satisfy the gate and keep the tree internally consistent — comment-only, no behaviour change.</li>
+      <li><strong>Verified against the live stack instead of <code>down -v</code>.</strong> The migration note offers <code>docker compose down -v &amp;&amp; up -d</code> as the "standard cleanup," but the stack is up and healthy with real accumulated telemetry (metrics 688 / events 577 / traces 579 docs). Wiping volumes would irreversibly destroy that data <em>and</em> empty the very indices the dashboard panels read — failing gate&nbsp;#4 ("panels populate against live telemetry") on an empty cluster. So I imported the renamed objects onto the live instance (<code>overwrite=true</code>), which creates the new no-prefix objects and resolves all references against the existing data views. The pre-existing <code>cce-*</code> objects remain as orphans — explicitly documented as acceptable for a demo.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Live Kibana now holds orphaned old <code>cce-*</code> objects.</strong> Because I imported onto the running instance (to preserve telemetry) rather than <code>down -v</code>, Kibana shows both the renamed objects and their old <code>cce-*</code> twins (e.g. two "Claude Code — Events" data views, one with the stale <code>(claude-code-elastic)</code> suffix). This is the documented, acceptable migration artifact. An operator wanting a clean slate can either <code>docker compose down -v &amp;&amp; up -d</code> then re-import, or delete the old <code>cce-*</code> saved objects in place — I deliberately did neither (out of scope; the task says no migration script is needed).</li>
+      <li><strong>Smoke test not driven to a true PASS in this environment.</strong> <code>scripts/smoke-test.sh</code> requires <code>jq</code>, which is not installed here, so it SKIPs gracefully (exit 0) on its precondition. It is entirely orthogonal to this Kibana-only change (it exercises the OTLP ingest path, not saved objects), so the rename cannot have regressed it. The trace-routing pipeline PUT (the other live ES step) was re-run and returned <code>acknowledged: true</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Stale Phase-2a file-path references in script comments + README.</strong> While renaming IDs I noticed both <code>setup-trace-routing</code> scripts still cite <code>kibana/claude-code-data-views.ndjson</code> in a comment, and the stack README's re-export example writes to <code>kibana/claude-code-dashboard.ndjson</code> — both are pre-split (Phase 2a) paths; the real files are now <code>components/agents/claude-code/kibana/{data-views,dashboard}.ndjson</code>. Not ID references (so out of this task's grep gate and scope), but worth a small cleanup task.</li>
+      <li><strong>Optional orphan-cleanup helper.</strong> If re-importing onto a live demo (the data-preserving path) becomes the norm, a tiny "delete superseded <code>cce-*</code> saved objects" step would let operators converge to the clean ID set without wiping telemetry. Could live next to the import helpers.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <ul>
+      <li>Renamed every Kibana saved object's ID to drop the <code>cce-</code> stack prefix (e.g. <code>cce-claude-code-events</code>→<code>claude-code-events</code>, <code>cce-agents-traces</code>→<code>agents-traces</code>) and stripped the stale <code>(claude-code-elastic)</code> suffix from their display names, across the 13 saved searches, 4 data views, and 1 dashboard — references updated so everything still resolves. Now that these assets live under <code>components/</code> rather than one stack, their names no longer pretend to belong to the <code>claude-code-elastic</code> stack.</li>
+    </ul>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Import verified clean on the live stack via the PowerShell orchestrator: backend <code>agents-data-views.ndjson</code> (1) → agent <code>data-views.ndjson</code> (3) + <code>saved-searches.ndjson</code> (13) + <code>dashboard.ndjson</code> (1), every file <code>success: true</code>, orchestrator exit 0.</li>
+      <li>The <code>claude-code-overview</code> dashboard resolves as <code>exactMatch</code> with all 15 references pointing at the renamed <code>claude-code-events</code>/<code>claude-code-metrics</code> data views, both of which exist and target the live telemetry indices — so panels populate.</li>
+      <li>Decision worth a glance: I chose <em>not</em> to <code>down -v</code> (to protect ~1.8k accumulated telemetry docs), which leaves orphaned old <code>cce-*</code> objects in Kibana. If you'd prefer a pristine object set, run the documented <code>down -v &amp;&amp; up -d</code> + re-import.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
