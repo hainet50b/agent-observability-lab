@@ -956,6 +956,32 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Scope metrics &amp; events data views to the agent stream; drop service.name pills</h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Confirmed the premise against live data before editing: <code>logs-apm.app.claude_code*</code> is 100% <code>service.name: claude-code</code> and <code>metrics-apm.app.claude_code*</code> likewise, while every other producer (the smoke-test's <code>cce-smoke-test</code>, plus stray <code>compose</code> / <code>cce-smoke-trace</code>) lands in its own <code>*-apm.app.&lt;service&gt;-default</code> stream — so the dataset segment <em>is</em> the service name and physically scoping the data views makes the <code>service.name</code> pill genuinely redundant.</li>
+      <li>The <code>service.name</code> filter was <code>filter[1]</code> (identical JSON) in all ten per-message searches, so I removed it — and its <code>filter[1].meta.index</code> reference — with two <code>replace_all</code> edits; no re-indexing was needed because the surviving <code>message</code> filter was already <code>filter[0]</code>. Event Overview, whose <em>only</em> filter was <code>service.name</code> at <code>filter[0]</code>, was handled with a single targeted edit emptying its filter array and dropping the <code>filter[0].meta.index</code> reference.</li>
+      <li>Beyond the spec's literal scope, I corrected Event Overview's saved-object <em>description</em>, which still claimed "the only pill is service.name: claude-code" — left as-is it would have contradicted the now-pill-less search. The README was already updated by the human, so only the in-object description was touched.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Docs ingested before this change are unaffected (this only re-points data-view title patterns and removes pills); nothing to migrate. The <code>localhost</code> curl/import/smoke-test steps had to run outside the command sandbox (its allowlist excludes localhost ports) — the MCP Elasticsearch tools were unaffected.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The traces data views (<code>cce-claude-code-traces</code>, <code>cce-agents-traces</code>) are physically scoped but their Interactions/Traces searches still rely on <code>span_type</code>/<code>processor.event</code> pills (no <code>service.name</code> there, so already consistent). A future pass could audit whether any remaining pill is redundant given the scoped view.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>The Metrics and Events data views now point at the agent's own data streams (<code>metrics-apm.app.claude_code*</code> / <code>logs-apm.app.claude_code*</code>) instead of the broad <code>*-apm.app*</code>, so they show only Claude Code's telemetry (smoke-test and other producers excluded). Every event saved search lost its now-redundant <code>service.name: claude-code</code> filter pill — per-message searches keep a single <code>message</code> pill, and Event Overview is now pill-less.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: all 13 saved objects + 4 data views + dashboard re-import cleanly, each per-message search has exactly one (<code>message</code>) filter with correct references, Event Overview has zero, and the smoke-test still PASSes (its synthetic docs land in their own streams, invisible to the scoped views — exactly the intended isolation).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
