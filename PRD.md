@@ -119,3 +119,67 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   6. On a PowerShell host the `.ps1` shims behave equivalently: `scripts/import-kibana-objects.ps1` and `scripts/setup-trace-routing.ps1` exit `0` and produce identical effects.
 
   If Compose's relative-path resolution around `include:` behaves differently from the assumption above on this version, **fix it by adjusting the bind-mount paths inside the component compose so they resolve unambiguously component-relative** rather than by parameterizing through env vars — keep the composition explainable from its files. Note in the report whatever was needed.
+- [ ] **Phase 2a of the components refactor — extract the Claude Code agent component into `components/agents/claude-code/`**, moving agent-specific Kibana assets out of the Backend and refactoring the import orchestration. **IDs stay as-is** (`cce-claude-code-*` / `cce-agents-traces`); the ID rename is its own task (Phase 2b). Tree must remain green: from a fresh `docker compose down -v && up -d`, the full Kibana import must succeed and `scripts/smoke-test.sh` must reach PASS.
+
+  **Data-views NDJSON split.** `components/backends/elastic/kibana/claude-code-data-views.ndjson` currently holds four data views — three agent-specific, one cross-agent. Split them by ownership:
+
+  - **Backend keeps** (new file `components/backends/elastic/kibana/agents-data-views.ndjson`):
+    - `cce-agents-traces` — the AI Agents cross-agent traces data view (`traces-apm-agents_*`)
+    - trailing summary line `{"exportedCount":1,"missingRefCount":0,"missingReferences":[]}`
+  - **Agent gets** (new file `components/agents/claude-code/kibana/data-views.ndjson`):
+    - `cce-claude-code-metrics`
+    - `cce-claude-code-events`
+    - `cce-claude-code-traces`
+    - trailing summary line `{"exportedCount":3,"missingRefCount":0,"missingReferences":[]}`
+  - **Delete** the original `components/backends/elastic/kibana/claude-code-data-views.ndjson` after the split.
+
+  **Whole-file moves** (rename to drop the redundant `claude-code-` prefix — the agent name is now in the directory path):
+
+  - `components/backends/elastic/kibana/claude-code-saved-searches.ndjson` → `components/agents/claude-code/kibana/saved-searches.ndjson` (content unchanged)
+  - `components/backends/elastic/kibana/claude-code-dashboard.ndjson` → `components/agents/claude-code/kibana/dashboard.ndjson` (content unchanged)
+
+  **Import-script refactor.** Three layers, each owning what it can see:
+
+  - **Backend `components/backends/elastic/scripts/import-kibana-objects.{sh,ps1}`** — change the `FILES` list to import only `kibana/agents-data-views.ndjson` (the cross-agent data view; what the backend now owns). Update the header comment to describe the new scope: "cross-agent backend assets only — agent-specific assets are imported by each agent's own import script". Keep the `KIBANA_URL` override, the `success: true` gate, and the existing self-locating behaviour unchanged.
+  - **New `components/agents/claude-code/scripts/import-kibana-objects.sh` and `.ps1`** — copy the structure of the backend's import scripts (POSIX/bash with `curl` + `jq` for `.sh`, PowerShell 7+ with `Invoke-RestMethod` for `.ps1`), self-locating its own component dir (`COMPONENT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)` and PowerShell equivalent), `FILES` = `kibana/data-views.ndjson`, `kibana/saved-searches.ndjson`, `kibana/dashboard.ndjson` in that dependency order, same `KIBANA_URL` / `-KibanaUrl` override semantics. Header comment names the agent and notes that the data view references resolve because data-views.ndjson is imported first.
+  - **Stack `stacks/claude-code-elastic/scripts/import-kibana-objects.{sh,ps1}`** — rewrite the routing shim from a single forward into an **orchestrator** that runs (1) the Backend's import script and then (2) `components/agents/claude-code/scripts/import-kibana-objects.{sh,ps1}` in that order. Forward `$@` / `@args` to both sub-scripts (so `KIBANA_URL=…` / `-KibanaUrl …` still propagates), and fail fast on the first non-zero exit. Keep the script name unchanged so the stack-local UX is preserved (`scripts/import-kibana-objects.sh` still works the same way from a user's perspective).
+
+  **Untouched in this task**: trace-routing scripts (`setup-trace-routing.{sh,ps1}` at both levels), `smoke-test.sh`, the `traces-apm@custom` pipeline body, the stack `docker-compose.yml`, all `cce-*` IDs (those move in Phase 2b), and any README. Do not create `components/agents/claude-code/README.md` yet — defer until there is a second agent for symmetry.
+
+  **Verification** (every gate must pass before marking complete):
+
+  1. `for d in stacks/*/; do (cd "$d" && docker compose config -q); done` passes.
+  2. From a fresh state (`cd stacks/claude-code-elastic && docker compose down -v && docker compose up -d`):
+     - `scripts/import-kibana-objects.sh` runs the backend's import (one file: `agents-data-views.ndjson`, 1 object) **then** the agent's import (three files: `data-views.ndjson` → 3 objects, `saved-searches.ndjson` → 13 objects, `dashboard.ndjson` → 1 object). All sub-imports report `success: true`; the orchestrator exits 0.
+     - `scripts/setup-trace-routing.sh` still PUTs the pipeline (unchanged).
+     - `scripts/smoke-test.sh` reaches **PASS**.
+  3. Kibana UI: Stack Management → Data Views shows all four (Metrics / Events / Traces / AI Agents — Traces). Discover Open menu shows all 13 saved searches with their filter pills intact. The Claude Code — Overview dashboard opens and its panels populate (real `claude-code` telemetry is flowing into this stack already).
+  4. The PowerShell orchestrator `scripts/import-kibana-objects.ps1` is functionally equivalent: exits `0`, produces identical Kibana state.
+- [ ] **Phase 2b of the components refactor — rename saved-object IDs to drop the `cce-` (claude-code-elastic) stack prefix.** Now that Kibana assets live under `components/{backends,agents}/<name>/kibana/` (not under any one stack), the `cce-` prefix in their IDs and the ` (claude-code-elastic)` suffix in their display names are stale — they encode a stack name on assets the stack no longer owns. This task is a **pure content edit**: rename IDs and display names per the rule below, update every `references[]` block so cross-references still resolve, and update the one matching ID reference in the stack `README.md`. **Container names** (`cce-elasticsearch`, `cce-kibana`, `cce-apm-server` in the Backend compose) are NOT in scope — they are a separate convention and stay as-is until a future task addresses them deliberately.
+
+  **Rename rule** (mechanical — applies uniformly to every saved-object across all NDJSON in `components/{agents,backends}/*/kibana/`):
+
+  - **ID**: strip the leading `cce-` prefix. So `cce-claude-code-events` → `claude-code-events`; `cce-claude-code-overview` → `claude-code-overview`; `cce-agents-traces` → `agents-traces`. The 13 saved searches under `components/agents/claude-code/kibana/saved-searches.ndjson`, the 3 agent data views under `components/agents/claude-code/kibana/data-views.ndjson`, the 1 dashboard under `components/agents/claude-code/kibana/dashboard.ndjson`, and the 1 cross-agent data view under `components/backends/elastic/kibana/agents-data-views.ndjson` all rename this way — every `cce-` prefixed `"id":` field plus every `references[].id` entry that targets a renamed object.
+  - **Display name** (`attributes.name` / `attributes.title` on dashboards): strip the trailing ` (claude-code-elastic)` suffix where present. So `"Claude Code — Events (claude-code-elastic)"` → `"Claude Code — Events"`; `"AI Agents — Traces (claude-code-elastic)"` → `"AI Agents — Traces"`. Same reasoning — the stack-name suffix is now stale on component-owned assets.
+
+  **`stacks/claude-code-elastic/README.md` — single update**: in the "Regenerating the Kibana saved objects" section, the curl example references `"id":"cce-claude-code-overview"` in its `-d` JSON payload; update to `"id":"claude-code-overview"`. That is the only saved-object ID reference in the README (verified via grep); no other README changes.
+
+  **Out of scope** (do NOT touch):
+
+  - Container names in `components/backends/elastic/docker-compose.yml` (`cce-elasticsearch`, etc.) — separate convention.
+  - The Compose project `name: claude-code-elastic` in `stacks/claude-code-elastic/docker-compose.yml` — this is the stack's identity, unrelated to saved-object IDs.
+  - Past PRD task text — completed tasks are immutable history and refer to the old IDs by their then-current names; do not edit them.
+  - `SPEC/` files, `CONVENTIONS.md`, the top-level `README.md` — no saved-object IDs are mentioned there.
+
+  **Migration note**: a Kibana instance with the old `cce-*` IDs already imported will end up with orphaned old objects after re-importing the renamed NDJSON (Kibana imports by `id`; the renamed objects have new IDs, so the old ones are not overwritten). The standard lab cleanup is `docker compose down -v && docker compose up -d` before re-running the import. This is acceptable for a demo stack; no in-place migration script is needed.
+
+  **Verification** (every gate must pass before marking complete):
+
+  1. `grep -r "cce-claude-code\|cce-agents" stacks/ components/ README.md` returns **nothing** (the only legitimate `cce-` references left in the working tree are the container names in `components/backends/elastic/docker-compose.yml`, the `cce-` healthcheck output, and any `cce-` in `PRD.md` history). Verify with the precise grep above.
+  2. `for d in stacks/*/; do (cd "$d" && docker compose config -q); done` passes.
+  3. From a fresh state (`cd stacks/claude-code-elastic && docker compose down -v && docker compose up -d`):
+     - `scripts/import-kibana-objects.sh` imports every file with `success: true` and **`missingRefCount: 0`** in each `_import` response (references resolve after rename).
+     - `scripts/setup-trace-routing.sh` still PUTs the pipeline (unchanged).
+     - `scripts/smoke-test.sh` reaches PASS.
+  4. Kibana UI: every data view, saved search, and dashboard opens under its new (no-suffix) display name; the Claude Code — Overview dashboard's panels populate against the live `claude-code` telemetry already flowing.
+  5. The `.ps1` orchestrator is functionally equivalent.
