@@ -1,11 +1,16 @@
-# otelcol-sidecar Collector config — Phase 3b (durable on-disk queue).
+# otelcol-sidecar Collector config — Phase 3c (Collector self-telemetry).
 #
 # Minimal pipeline shared by all three signals: receive OTLP (gRPC + HTTP) from
 # the local agent, batch, and forward to the Elastic backend's APM Server over
-# OTLP/HTTP. The exporter's sending_queue is now backed by the file_storage
+# OTLP/HTTP. The exporter's sending_queue is backed by the file_storage
 # extension, so telemetry the agent emits while the central backend is
 # unreachable is persisted to disk and drained on reconnect rather than lost —
-# the reason the sidecar exists. (Phase 3c adds Collector self-telemetry.)
+# the reason the sidecar exists.
+#
+# Phase 3c adds the Collector's own health telemetry via service.telemetry (see
+# the service: block below). A silently-dead sidecar is an audit hole, so the
+# Collector reports on itself — over a path that is SEPARATE from the data
+# pipelines and so does not ride the agent payload's file_storage queue.
 
 extensions:
   # Persists the exporter sending_queue to disk so queued telemetry survives a
@@ -51,6 +56,39 @@ exporters:
       storage: file_storage/queue
 
 service:
+  # Collector self-telemetry. service.telemetry is a SEPARATE subsystem from the
+  # data pipelines below: these metrics describe the Collector's OWN health and
+  # are exported straight to the APM Server — they do NOT ride the agent
+  # payload's file_storage sending_queue (so a broken central link, which is
+  # exactly when the queue backs up, does not also lose the signal that reports
+  # it). The single most useful metric is otelcol_exporter_queue_size — a growing
+  # persistent queue means the link to the central backend is failing while the
+  # agent keeps working locally against the always-up Collector.
+  telemetry:
+    resource:
+      # A recognizable service.name so the self-metrics are distinguishable in
+      # Elasticsearch from claude-code and the smoke-test producers (they land in
+      # metrics-apm.app.otelcol_sidecar-default, keyed by this name). The
+      # array-of-attributes form is the current schema (the inline-map form is
+      # deprecated and warns on startup).
+      attributes:
+        - name: service.name
+          value: otelcol-sidecar
+    metrics:
+      # Push the internal metrics to the same APM Server over OTLP rather than
+      # exposing the default Prometheus scrape endpoint (:8888): the backend
+      # already speaks OTLP and nothing scrapes the sidecar in this demo.
+      readers:
+        - periodic:
+            # Export every 15s (milliseconds), in line with the lab's lowered
+            # intervals so self-metrics show up quickly in the demo.
+            interval: 15000
+            exporter:
+              otlp:
+                # Same APM Server as the data pipeline, reached by Compose
+                # service name; http/protobuf is the wire format APM decodes.
+                protocol: http/protobuf
+                endpoint: http://apm-server:8200
   # The durable queue is only active while its backing extension is enabled.
   extensions: [file_storage/queue]
   pipelines:

@@ -21,8 +21,15 @@ The Collector buffers telemetry to a **durable on-disk queue**: if the central
 backend (APM Server) is unreachable, the agent's exports are still accepted by
 the always-up local Collector and persisted to disk, then drained automatically
 when the link recovers — no loss during a backend outage. The queue is a named
-Docker volume, so it survives a Collector restart too. (The Collector's own
-self-telemetry is added in a later phase.)
+Docker volume, so it survives a Collector restart too.
+
+The Collector also reports its **own** health. A silently-dead sidecar would be
+an audit hole, so its internal metrics (`otelcol_*` — most usefully
+`otelcol_exporter_queue_size`, which grows when the central link is failing)
+are exported to the same backend under the `service.name` **`otelcol-sidecar`**,
+distinct from `claude-code`. This self-telemetry travels a path separate from the
+data pipelines, so it does **not** ride the on-disk queue above — query
+`metrics-apm*` for `service.name: otelcol-sidecar` to see it.
 
 > ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
 > backend's fixed `cce-*` container names and host ports (`9200` / `5601` /

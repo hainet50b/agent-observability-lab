@@ -1177,6 +1177,41 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 3c — Collector self-telemetry to the Elastic backend</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Schema form: <code>service.telemetry.metrics.readers</code> with a <code>periodic</code> OTLP reader.</strong> That is the current opentelemetry-configuration schema in collector 0.153.0 — a periodic reader whose <code>exporter.otlp</code> pushes to <code>http://apm-server:8200</code> over <code>http/protobuf</code> (matches the data pipeline and what APM decodes). Confirmed live the SDK appends <code>/v1/metrics</code> (the export hit <code>.../v1/metrics</code>).</li>
+      <li><strong>Recognizable <code>service.name: otelcol-sidecar</code> via <code>service.telemetry.resource</code>.</strong> First wrote it as the inline-map form (<code>resource: {service.name: …}</code>); the Collector accepted it but logged <em>"Using legacy service.telemetry.resource inline map format; prefer …resource.attributes (array of maps with name/value keys)"</em>. Switched to the preferred <code>resource.attributes: [{name, value}]</code> array form and restarted — warning gone. Kept this reference config clean and forward-compatible.</li>
+      <li><strong>15s interval, default (normal) level.</strong> Interval in line with the lab's other lowered export intervals so self-metrics appear quickly in the demo; left <code>level</code> unset (normal), which already emits <code>otelcol_exporter_queue_size</code> — the task's key signal. Did <em>not</em> set <code>detailed</code> (avoids extra cardinality for no demo benefit).</li>
+      <li><strong>Pushed OTLP rather than keeping the default :8888 Prometheus reader.</strong> Specifying <code>readers</code> replaces the default scrape endpoint; nothing scrapes the sidecar here, the backend already speaks OTLP, and this avoids publishing another port — the standard sidecar self-telemetry config the task asked for.</li>
+      <li><strong>Stated explicitly in config comments that this path is separate from the data pipelines</strong> and so does <em>not</em> ride the <code>file_storage</code> queue — the design point that the signal reporting a broken link must not be lost by that same broken link.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>One benign startup-ordering miss.</strong> On first boot (~23s in) the self-telemetry exporter logged <code>lookup apm-server … no such host</code> because the Collector came up before <code>apm-server</code> had attached to the network. The <code>periodic</code> reader retries on the next 15s tick and self-heals; after a restart with the backend up, exports were clean. The data-pipeline exporter already tolerates this via <code>retry_on_failure</code>. Noted because the self-telemetry path has no explicit retry/backoff config — it relies on periodic re-export, which is sufficient here.</li>
+      <li><strong>Activity-gated counters absent at idle.</strong> <code>otelcol_exporter_send_failed_*</code> / <code>otelcol_receiver_accepted_*</code> only appear after relevant traffic; at steady state the present <code>otelcol_*</code> set is <code>exporter_queue_size</code> / <code>exporter_queue_capacity</code> + <code>process_*</code> (cpu/memory/uptime/heap) + <code>processor_batch_metadata_cardinality</code>. The requested <code>otelcol_exporter_queue_size</code> is present (value 0 = healthy/empty while the backend is reachable).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>A Kibana view for sidecar health.</strong> The self-metrics are queryable but invisible in the shipped UI. An "AI Agents — Sidecar Health" saved search / dashboard panel on <code>metrics-apm.app.otelcol_sidecar*</code> charting <code>otelcol_exporter_queue_size</code> over time would surface the edge-side health signal next to the agent telemetry.</li>
+      <li><strong>Central-side heartbeat-absence alerting</strong> stays explicitly out of scope (per <code>SPEC/threat-model.md</code>), but it is the load-bearing half of sidecar observability — worth a pointer wherever fleet rollout is documented so the edge config isn't mistaken for the whole story.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The local Collector now reports its <em>own</em> health to the same Elastic backend: its internal metrics (<code>otelcol_*</code>, including <code>otelcol_exporter_queue_size</code> — the signal that the central link is backing up) flow to the APM Server under <code>service.name otelcol-sidecar</code>, on a path separate from the agent's data so a backend outage doesn't also drop the health signal. Verified live — 100+ self-metric docs landed in <code>metrics-apm.app.otelcol_sidecar-default</code>, distinct from <code>claude-code</code>; the smoke and resilience gates still PASS.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Deprecation-warning fix.</strong> Adopted the current <code>resource.attributes</code> array form over the now-legacy inline map — confirm you're happy locking to the newer schema (it's the one the 0.153.0 binary recommends).</li>
+      <li><strong>Stale README line corrected.</strong> The stack README said self-telemetry "is added in a later phase"; replaced it with a short self-contained paragraph (no <code>SPEC/</code> links) on what the Collector now reports and how to see it (<code>metrics-apm*</code> / <code>service.name: otelcol-sidecar</code>). This is the task's optional README note; the stale sentence couldn't be left as-is.</li>
+      <li><strong>Verification swapped stacks, then restored.</strong> Took <code>claude-code-elastic</code> down (volume preserved) to free the shared <code>cce-*</code> names/ports, brought the otelcol stack up for the live gates (self-metrics + smoke + resilience), then brought <code>claude-code-elastic</code> back up — its data volume was untouched throughout. A throwaway otelcol ES volume remains from the verification (harmless).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
