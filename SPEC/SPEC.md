@@ -24,7 +24,7 @@ Component responsibilities:
 - **`components/paths/<path>/`** owns transport-layer services (e.g. a local OpenTelemetry Collector) and their default config. Non-trivial wiring (multi-Backend fan-out, alternative pipelines) is expressed as a per-stack configuration override rather than by parameterizing the path component, so each composition stays explainable from its own files.
 - **`components/agents/<agent>/`** owns the agent's telemetry-config template (the `OTEL_*` block, `managed-settings.json` excerpt) and per-agent Kibana / UI assets (data views, saved searches, dashboards scoped to that agent's data stream).
 
-Per-stack architecture / Quick Tour (signals, Kibana objects, generated events) lives in that stack's own `README.md` — see `stacks/claude-code-elastic/README.md`.
+Each stack's own `README.md` is the **operational Quick Tour** — bring it up, point a session at it, import the Kibana objects, view, tear down — see `stacks/claude-code-elastic/README.md`. The developer-facing **deep references** (per-signal field reference, Kibana-view design, threat model) live beside this spec under `SPEC/` and are indexed in [Reference documents](#reference-documents) below; the user-facing `README.md` files deliberately do **not** link into `SPEC/` (they stay self-contained).
 
 ## Invariants
 
@@ -35,3 +35,11 @@ Per-stack architecture / Quick Tour (signals, Kibana objects, generated events) 
 ## Audit-coverage scope
 
 Telemetry-as-audit in this lab targets the **non-adversarial / network-reliability** threat model only; the adversarial / audit-evasion model is explicitly out of scope and belongs to endpoint-security tooling outside the lab. This framing is what motivates the planned `*-otelcol-*` sidecar variants of every direct stack. The full rationale, the (A)/(B) distinction, the sidecar + `file_storage` solution, and the real cost of fleet rollout are in [`threat-model.md`](threat-model.md).
+
+## Reference documents
+
+Developer-facing references that sit beside this spec. The user-facing `README.md` files do **not** link into these — they are found here, via `SPEC/`:
+
+- [`threat-model.md`](threat-model.md) — audit-coverage threat model: the (A) non-adversarial / (B) adversarial split, why telemetry only solves (A), and the local-sidecar (`file_storage`) solution the `*-otelcol-*` stacks demonstrate.
+- [`claude-code-telemetry.md`](claude-code-telemetry.md) — what Claude Code emits into the `claude-code-elastic` stack: every metric / event / span field, the string-vs-numeric and PII caveats, the trace data model, and the trace-isolation routing.
+- [`kibana-saved-objects.md`](kibana-saved-objects.md) — the design of the stack's Kibana data views, saved searches, and dashboard: the curated columns and the reasoning, why saved searches rather than data views, and how to regenerate the NDJSON.
