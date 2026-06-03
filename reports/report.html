@@ -982,6 +982,32 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Externalize Elasticsearch and Kibana config into <code>config/</code></h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The default image <code>elasticsearch.yml</code> ships <code>network.host: 0.0.0.0</code> and <code>cluster.name: docker-cluster</code>. Replacing the file dropped both; the first attempt left ES bound to <code>::1</code>, breaking the host-mapped port and causing Kibana to fall into interactive-enrollment mode (the "Kibana has not been configured" wizard) because it couldn't reach ES. Fix: carry both settings forward in the new <code>config/elasticsearch.yml</code>. The task brief asserted ES tolerates world-readable bind mounts without <code>--strict.perms=false</code>; that held — no perms flag needed — but the default-yml carry-forward was the actual surprise.</li>
+      <li>Restarting the stack with <code>docker compose up -d</code> after editing a bind-mounted file is a no-op (the compose hash is unchanged). Used <code>docker compose restart elasticsearch kibana</code> explicitly to pick up the config change.</li>
+      <li>Kept <code>ES_JAVA_OPTS</code> in the compose <code>environment:</code> block as the task brief specified (process env, not a YAML setting) and left a comment in compose explaining why.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Local <code>shellcheck</code> and <code>jq</code> are not installed in this sandbox, so the shellcheck gate skipped silently and <code>smoke-test.sh</code> exited <code>0</code> via its <code>jq</code>-missing precondition. Verified the stack the other way: <code>docker compose config -q</code>, both containers reaching <code>healthy</code>, and external curls to <code>:9200</code> / <code>:5601</code> returning data.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>If a future task wants to externalize ES heap sizing too, the natural home is a sibling <code>config/jvm.options.d/heap.options</code> mount — but the task brief deliberately scoped that out.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>Elasticsearch and Kibana settings moved out of the compose <code>environment:</code> blocks into <code>config/elasticsearch.yml</code> and <code>config/kibana.yml</code>, bind-mounted read-only — matching the APM Server pattern. Only <code>ES_JAVA_OPTS</code> stays in compose. Both services come up healthy with no behavior change to clients.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The new <code>elasticsearch.yml</code> intentionally carries <code>cluster.name: "docker-cluster"</code> and <code>network.host: 0.0.0.0</code> from the image's auto-generated default — without <code>network.host</code>, ES binds IPv6-only and the host port mapping silently breaks. Worth keeping in mind for any future config-file edit.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
