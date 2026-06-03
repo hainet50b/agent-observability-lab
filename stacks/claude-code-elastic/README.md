@@ -303,22 +303,19 @@ claude mcp add elasticsearch -- `
 
 ```
 claude-code-elastic/
-├─ docker-compose.yml                     # Elasticsearch + Kibana + APM Server (Stack 9.4.2)
-├─ config/
-│  └─ apm-server.yml                      # APM Server as the OTLP receiver
-├─ kibana/
-│  ├─ claude-code-data-views.ndjson       # importable Discover data views (metrics, events, traces)
-│  ├─ claude-code-saved-searches.ndjson   # importable per-message saved searches
-│  └─ claude-code-dashboard.ndjson        # the "Overview" demo dashboard
-├─ elasticsearch/
-│  └─ trace-routing.pipeline.json         # traces-apm@custom ingest pipeline body (reroute rule)
+├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
 └─ scripts/
-   ├─ smoke-test.sh                       # end-to-end pipeline verification
-   ├─ import-kibana-objects.sh            # import the kibana/ objects (data views first)
-   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import helper
-   ├─ setup-trace-routing.sh             # PUT elasticsearch/trace-routing.pipeline.json as traces-apm@custom
-   └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing setup
+   ├─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
+   ├─ import-kibana-objects.sh            # → forwards to the backend component script
+   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import shim
+   ├─ setup-trace-routing.sh             # → forwards to the backend component script
+   └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
 ```
+
+The backend services, their config, the Kibana NDJSON (data views, saved
+searches, dashboard), the `traces-apm@custom` pipeline body, and the Backend
+bootstrap scripts the shims forward to all live in
+`../../components/backends/elastic/`.
 
 ## Telemetry reference
 

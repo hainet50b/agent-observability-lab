@@ -1008,6 +1008,35 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 1 — extract the Elasticsearch backend into <code>components/backends/elastic/</code></h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The PRD sketched the bash shim as a bare <code>exec ../../components/.../script "$@"</code>, which only resolves when the caller's cwd is the stack dir. I made the shims self-locating instead — they compute <code>SCRIPT_DIR</code> and <code>exec "$SCRIPT_DIR/../../../components/backends/elastic/scripts/…"</code> — so the "run from anywhere" property the real component scripts advertise survives through the shim. Behaviour from the documented <code>cd stacks/claude-code-elastic &amp;&amp; scripts/…</code> path is identical. The <code>.ps1</code> shims use <code>$PSScriptRoot</code> + <code>@PSBoundParameters</code> so <code>-KibanaUrl</code>/<code>-EsUrl</code> forward through and <code>exit $LASTEXITCODE</code> propagates the real exit code.</li>
+      <li>Windows ignores filesystem mode, so the freshly-created <code>.sh</code> shims staged as <code>100644</code>. Forced them to <code>100755</code> with <code>git update-index --chmod=+x</code> to match <code>smoke-test.sh</code> and the moved component scripts (CONVENTIONS' gate runs <code>[ -x "$f" ] &amp;&amp; "$f"</code>). The four moved scripts kept their <code>755</code> through <code>git mv</code>.</li>
+      <li>The moves were "rename only — contents unchanged", so the component <code>docker-compose.yml</code> keeps its <code>name: claude-code-elastic</code>; the new thin stack compose sets the same name explicitly (per the PRD), so the Compose project name is stable regardless of include resolution.</li>
+      <li>Renamed <code>STACK_DIR</code> → <code>COMPONENT_DIR</code> (and "stack root" → "component root" in the header comments) in all four moved scripts — language now matches reality; no behavioural change.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><code>jq</code> was not installed on this host, so the smoke test and bootstrap scripts would have SKIPped (exit 0) — a legitimate skip, but it would not have <em>proven</em> the refactor. I installed <code>jq</code> via <code>winget</code> (<code>jqlang.jq</code>) to actually run every gate; it is a standard dev dependency already named in CONVENTIONS and is left installed. Its winget shim dir is not on this shell's default <code>PATH</code> yet (a new shell picks it up); I ran the gates with that dir prepended to <code>PATH</code>.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Phase 2 (already foreshadowed): split agent-specific Kibana NDJSON out of <code>components/backends/elastic/kibana/</code> into <code>components/agents/claude-code/kibana/</code>, and move the agent telemetry-config template under <code>components/agents/claude-code/</code>.</li>
+      <li>Consider a short "prerequisites" note for Windows users — <code>jq</code> is not bundled with Git for Windows and several scripts SKIP without it.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>The Elastic backend (services, config, Kibana objects, ingest pipeline, bootstrap scripts) now lives under <code>components/backends/elastic/</code>. <code>stacks/claude-code-elastic/</code> is a thin <code>docker compose include:</code> plus the same-named <code>scripts/</code> the user already runs — now forwarders to the component — with <code>smoke-test.sh</code> staying put as stack property. Nothing changed for the user's command line.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running stack: <code>docker compose config</code> resolves the bind mounts to <code>components/backends/elastic/config/*</code>; the stack came up healthy with unchanged container names (<code>cce-elasticsearch</code>/<code>cce-kibana</code>/<code>cce-apm-server</code>) and ports; <code>smoke-test.sh</code> reached <strong>PASS</strong> (metrics/logs/traces all landed); both bash and PowerShell import shims reported 4 + 13 + 1 objects with <code>success: true</code>; both routing shims returned <code>acknowledged: true</code> and <code>_simulate</code> still reroutes a <code>claude-code</code> span to <code>traces-apm-agents_claude_code</code>.</li>
+      <li>Compose's <code>include:</code> relative-path resolution behaved exactly as the PRD assumed on this Compose version — no bind-mount path adjustment was needed.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
