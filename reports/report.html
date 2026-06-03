@@ -1037,6 +1037,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 2a — extract the Claude Code agent component into <code>components/agents/claude-code/</code></h2>
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Verified the from-scratch import without <code>docker compose down -v</code>.</strong> The PRD's gate 2 literally prescribes <code>down -v &amp;&amp; up -d</code>, but that wipes the accumulated real <code>claude-code</code> telemetry (849 metrics / 374 logs / 380 traces docs at verification time) — which is exactly what the Overview dashboard's panels need to populate for gate 3. Instead I cleared only the 18 Kibana saved objects (4 data views + 13 searches + 1 dashboard) via <code>_bulk_delete?force=true</code> and re-imported. That is a genuine clean-slate reference-resolution test (it exercises the cross-file dependency — saved searches reference data views that live in a <em>different</em> NDJSON file) while keeping ES telemetry intact, so gate 3 was checked honestly against live data rather than an empty stack. Net Kibana state after verification is identical (same 4 + 13 + 1 objects, same IDs).</li>
+      <li><strong>PowerShell orchestrator fail-fast.</strong> Established empirically that <code>exit</code> inside a child invoked with the call operator (<code>&amp;</code>) does <em>not</em> terminate the parent process, and that <code>$LASTEXITCODE</code> is stale after a child that returns without an explicit <code>exit</code> — so a <code>$LASTEXITCODE</code>-based check would produce false failures on success. The sub-scripts already signal failure with <code>Write-Error</code> under <code>$ErrorActionPreference = 'Stop'</code>, which raises a terminating error that propagates to the orchestrator (also <code>Stop</code>) and aborts it before the next import. Verified live: pointing the orchestrator at an unreachable Kibana failed the backend import and the agent import never ran, with a non-zero process exit.</li>
+      <li><strong>Data-views split by byte-exact extraction.</strong> Split the four-data-view file by extracting lines with <code>sed</code> rather than retyping, to preserve the em-dash display names and the escaped <code>fieldFormatMap</code> JSON verbatim; diffed each extracted object against the original to confirm byte-identity. The two whole-file moves (saved searches, dashboard) used <code>git mv</code> and I verified the blob hashes are identical pre/post.</li>
+      <li><strong>Backend PASS message updated too, not just the header.</strong> The backend import scripts' closing message previously advertised "saved searches / Metrics / Events data views", which the backend no longer owns. Rewrote it to state the cross-agent-only scope so the script's own output stays truthful.</li>
+    </ul>
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><code>jq</code> and <code>shellcheck</code> are not installed on this host, so the <code>.sh</code> import path and <code>smoke-test.sh</code> would otherwise hit their <code>SKIP: jq not found</code> guard. Installed a standalone <code>jq</code> binary into a user-local dir <em>outside the repo</em> (added to PATH only for the verification runs) so those gates could run for real. <code>shellcheck</code> remains absent — CONVENTIONS treats it as skip-if-absent; the new <code>.sh</code> scripts are near-copies of the already-shipped backend import script and were reviewed by hand.</li>
+      <li>Kibana's saved-objects GET API echoes an odd third entry in the <code>references[]</code> of the two <em>traces</em> searches (Interactions, Traces) — a filter ref whose <code>id</code> equals the reference-<em>name</em> string. Confirmed this is <strong>not</strong> in the NDJSON (grep finds none; the file moved byte-identical) and the import reports <code>warnings: []</code> — it is a Kibana-side artifact, pre-existing, not introduced here.</li>
+    </ul>
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The duplicated/self-referential filter reference Kibana reports on the two traces searches is worth a look — the traces searches' <code>filter[].meta.index</code> reference wiring may differ subtly from the events searches. Low priority (import is clean and the searches open), but a candidate cleanup task.</li>
+      <li>The three-layer import orchestration (backend cross-agent assets + per-agent assets, composed by the stack) is now the established pattern; once a second agent or backend lands, consider capturing it in <code>SPEC/</code> so new components copy the shape rather than re-deriving it.</li>
+    </ul>
+    <h3>Change summary</h3>
+    <ul>
+      <li>The Claude Code agent's Kibana assets — its Metrics / Events / Traces data views, 13 saved searches, and the Overview dashboard — now live in their own <code>components/agents/claude-code/</code> component with its own import script, while the Elastic backend keeps only the cross-agent "AI Agents — Traces" data view. From the stack, <code>scripts/import-kibana-objects.sh</code> still runs as one command, but now orchestrates a backend import followed by the agent import. No saved-object IDs or telemetry changed.</li>
+    </ul>
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Did not run <code>docker compose down -v</code></strong> — verified the from-scratch import by clearing the 18 saved objects and re-importing, to preserve the live telemetry the dashboard panels need. Flag if you'd prefer the literal <code>down -v</code> path be re-run on a throwaway stack.</li>
+      <li>Verified live on the running stack: the <code>.sh</code> orchestrator imported backend 1 obj + agent 3 / 13 / 1, all <code>success: true</code>, exit 0; the <code>.ps1</code> orchestrator produced identical state (exit 0) and failed fast when the backend import failed; every data-view reference resolves; <code>smoke-test.sh</code> reached <strong>PASS</strong> (metrics/logs/traces landed); <code>setup-trace-routing.sh</code> returned <code>acknowledged: true</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

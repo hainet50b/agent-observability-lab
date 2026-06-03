@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# import-kibana-objects.sh — import the Elastic backend's cross-agent Kibana
-# saved objects.
+# import-kibana-objects.sh — import the Claude Code agent's Kibana saved objects.
 #
-# Scope: **cross-agent backend assets only** — agent-specific assets (per-agent
-# data views, saved searches, dashboards) are imported by each agent's own import
-# script (e.g. components/agents/claude-code/scripts/import-kibana-objects.sh). A
-# stack composes the two by running this script first, then the agent's.
+# Scope: the Claude Code **agent** assets — its per-agent data views (Metrics /
+# Events / Traces), saved searches, and the Overview dashboard. The cross-agent
+# backend data view (AI Agents — Traces) is imported separately by the Elastic
+# backend's own import script; a stack composes the two by running the backend's
+# import first, then this one.
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
-# `_import?overwrite=true` API. Prints the per-file import result.
+# `_import?overwrite=true` API, in dependency order: **data views first**, so the
+# `cce-claude-code-events` / `cce-claude-code-metrics` / `cce-claude-code-traces`
+# references in the saved searches and the dashboard resolve, then the **saved
+# searches**, then the **dashboard**. Prints the per-file import result.
 #
 # Prerequisites: curl, jq. Override the Kibana base URL with KIBANA_URL if you
 # publish a different port than the default below.
@@ -34,11 +37,14 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq   >/dev/null 2>&1 || skip "jq not found"
 
-# The cross-agent data view this backend owns (AI Agents — Traces,
-# traces-apm-agents_*). Agent-specific data views / saved searches / dashboards
-# are imported by the agent's own import script.
+# Data views BEFORE saved searches BEFORE the dashboard — the saved searches and
+# the dashboard reference the data views (cce-claude-code-events /
+# cce-claude-code-metrics / cce-claude-code-traces), and those references must
+# already exist.
 FILES="
-kibana/agents-data-views.ndjson
+kibana/data-views.ndjson
+kibana/saved-searches.ndjson
+kibana/dashboard.ndjson
 "
 
 import_file() {
@@ -56,10 +62,11 @@ import_file() {
   echo "[import] $f -> $count object(s) imported ✓"
 }
 
-echo "[import] importing Kibana saved objects into $KIBANA_URL…"
+echo "[import] importing Claude Code Kibana saved objects into $KIBANA_URL…"
 for f in $FILES; do
   import_file "$f"
 done
 
 echo
-echo "PASS: backend cross-agent Kibana objects imported into $KIBANA_URL."
+echo "PASS: Claude Code Kibana saved objects imported. Open Discover (Open menu) to"
+echo "use the saved searches, or the data-view selector for the Metrics / Events views."

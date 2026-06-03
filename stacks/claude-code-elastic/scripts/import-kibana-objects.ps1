@@ -1,18 +1,29 @@
 #!/usr/bin/env pwsh
-# import-kibana-objects.ps1 — stack shim.
+# import-kibana-objects.ps1 — stack import orchestrator.
 #
-# The real implementation lives in the Elastic backend component:
-#   ../../components/backends/elastic/scripts/import-kibana-objects.ps1
-# This forwarder keeps the command the user is accustomed to
-# (`scripts/import-kibana-objects.ps1` from the stack dir) working. It mirrors the
-# real script's parameter signature so -KibanaUrl forwards through, then exits
-# with the real script's exit code.
+# PowerShell mirror of import-kibana-objects.sh. This stack composes the Elastic
+# backend with the Claude Code agent, so a full Kibana import is two component
+# imports run in order:
+#   1. components/backends/elastic/scripts/import-kibana-objects.ps1
+#      — the cross-agent backend data view (AI Agents — Traces)
+#   2. components/agents/claude-code/scripts/import-kibana-objects.ps1
+#      — the per-agent data views, saved searches, and Overview dashboard
+# Keeping the script name preserves the command the user is accustomed to.
+# -KibanaUrl forwards to both sub-scripts. Both sub-scripts (and this one) run
+# with $ErrorActionPreference = 'Stop', so a sub-script failure raises a
+# terminating error that propagates here and aborts before the next import —
+# fail-fast, with the agent import only running if the backend import succeeded.
 
 [CmdletBinding()]
 param(
     [string]$KibanaUrl
 )
 
-$Real = Join-Path $PSScriptRoot '../../../components/backends/elastic/scripts/import-kibana-objects.ps1'
-& $Real @PSBoundParameters
-exit $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+
+$Components = Join-Path $PSScriptRoot '../../../components'
+
+& (Join-Path $Components 'backends/elastic/scripts/import-kibana-objects.ps1') @PSBoundParameters
+& (Join-Path $Components 'agents/claude-code/scripts/import-kibana-objects.ps1') @PSBoundParameters
+
+exit 0

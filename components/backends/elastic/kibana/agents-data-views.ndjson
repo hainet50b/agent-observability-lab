@@ -1,0 +1,2 @@
+{"id":"cce-agents-traces","type":"index-pattern","managed":false,"attributes":{"name":"AI Agents — Traces (claude-code-elastic)","title":"traces-apm-agents_*","timeFieldName":"@timestamp","fieldFormatMap":"{\"trace.id\":{\"id\":\"url\",\"params\":{\"urlTemplate\":\"/app/apm/link-to/trace/{{value}}\",\"labelTemplate\":\"{{value}}\"}}}"},"references":[],"coreMigrationVersion":"9.4.2"}
+{"exportedCount":1,"missingRefCount":0,"missingReferences":[]}
