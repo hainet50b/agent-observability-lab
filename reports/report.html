@@ -1103,6 +1103,45 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 3a — otelcol-sidecar path + claude-code-otelcol-elastic stack (basic relay)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Collector image: contrib 0.153.0.</strong> Pinned the latest stable <code>otel/opentelemetry-collector-contrib</code> (probed Docker Hub: 0.153.0 is the newest non-nightly). The <em>contrib</em> distro — not core — is required because Phase 3b needs its <code>file_storage</code> extension.</li>
+      <li><strong>Exporter named <code>otlp_http</code>, not <code>otlphttp</code>.</strong> On first run the Collector logged <code>"otlphttp" alias is deprecated; use "otlp_http" instead</code>. Confirmed via <code>collector components</code> that <code>otlp_http</code> is the canonical name in 0.153.0 (module <code>otlphttpexporter</code>), switched the exporter + the three pipeline refs, restarted, and the warning is gone. Keeps this reference config clean and forward-compatible for the 3b/3c edits.</li>
+      <li><strong>No Collector healthcheck.</strong> The contrib image is distroless (no shell, no curl/wget), so an in-container probe isn't practical (unlike the APM image, which has bash for its <code>/dev/tcp</code> probe). Chose to omit the compose healthcheck and instead make the exporter resilient to startup ordering with <code>retry_on_failure</code> (<code>depends_on</code> isn't expressible across <code>include:</code>-d components). The smoke-test waits for the Collector by polling its OTLP port from the host (which has curl). Recorded this choice in a compose comment.</li>
+      <li><strong>Service-name resolution verified.</strong> <code>include:</code> merges the path + backend components into one Compose project on a shared default network, so the Collector reaches the backend as <code>http://apm-server:8200</code> with no explicit network declaration — confirmed live (probes relayed through and landed).</li>
+      <li><strong><code>container_name: otel-collector</code></strong> (neutral, matches the service) rather than a <code>cce-</code> name — the path component is reusable across agents/backends, so a stack-specific prefix would be wrong. Does not collide with the backend's <code>cce-*</code> names.</li>
+      <li><strong>Self-contained smoke-test.</strong> Per the per-stack-smoke-test convention I duplicated the assert-landed/discover logic rather than extracting a shared helper into the backend (the task flagged this as an optional judgment call). Two copies is acceptable; revisit if a third stack appears. The routing/import shims were copied verbatim from <code>claude-code-elastic</code> (identical <code>../../../components</code> depth).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>The "run all smoke-tests" CONVENTIONS loop has a latent name-collision now.</strong> Both stacks share the fixed <code>cce-*</code> container names, so running <code>stacks/*/scripts/smoke-test.sh</code> back-to-back (with <code>jq</code> present, leaving the first stack up) would fail the second <code>docker compose up -d</code> on a duplicate container name. In the default shell <code>jq</code> is absent so both SKIP (exit 0) and the gate stays green; I verified each smoke-test individually with the other stack down. This is inherent to the shared-backend design (the task itself says the two stacks can't run simultaneously), not new behaviour Phase 3a introduced.</li>
+      <li><strong>jq not on the default PATH.</strong> <code>jq</code> 1.8.1 <em>is</em> installed (winget package dir) but not on the shell PATH, so I prepended that dir for this run to drive the smoke-test to a real PASS. Left a throwaway <code>claude-code-otelcol-elastic_elasticsearch-data</code> volume after the verification <code>down</code> (no <code>-v</code>) — harmless, speeds a re-up. The user's <code>claude-code-elastic</code> stack and its data volume were preserved throughout and restored to healthy at the end.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Document/handle the one-stack-at-a-time constraint in CONVENTIONS.</strong> A future "run all smoke tests" gate should tear a stack down before bringing the next up (or the convention should state stacks sharing <code>cce-*</code> names run one at a time). Currently relies on the jq-absent SKIP to stay green.</li>
+      <li><strong>Shared <code>assert-landed</code> helper</strong> — if a third stack duplicates the smoke-test assertion block, lift it into <code>components/backends/elastic/</code> (still 2 copies today, acceptable).</li>
+      <li>(carry-over, still open) Phase 3b layers the durable <code>file_storage</code> queue onto this Collector; Phase 3c adds its <code>service.telemetry</code> self-metrics. Both build directly on the config landed here.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <ul>
+      <li>New <code>claude-code-otelcol-elastic</code> stack: the same Elastic backend + Claude Code agent as <code>claude-code-elastic</code>, but a local OpenTelemetry Collector now sits between the agent and the APM Server. Point a session at <code>http://localhost:4318</code> and its metrics/events/traces relay through the Collector into Elasticsearch — verified end to end (synthetic probe + live <code>claude-code</code> docs both landed via the Collector). Import / trace-routing reuse the existing component scripts unchanged.</li>
+    </ul>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Exporter spelling <code>otlp_http</code></strong> (vs the more familiar <code>otlphttp</code>) — it is the canonical, non-deprecated name in the pinned 0.153.0; flag if you'd prefer the legacy alias for recognizability.</li>
+      <li><strong>Collector has no healthcheck</strong> (distroless image) — say so if you'd rather add the <code>health_check</code> extension on <code>:13133</code> with a host-probed compose healthcheck instead of the host-side OTLP-port poll in the smoke-test.</li>
+      <li><strong>This stack cannot run alongside <code>claude-code-elastic</code></strong> (shared <code>cce-*</code> names + ports). The README leads with that caveat; the verification took <code>claude-code-elastic</code> down (volume preserved) and restored it afterward.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

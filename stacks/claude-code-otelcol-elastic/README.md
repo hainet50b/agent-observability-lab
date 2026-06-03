@@ -1,0 +1,223 @@
+# claude-code-otelcol-elastic
+
+> Claude Code → **local OpenTelemetry Collector** → APM Server (Elastic-native
+> OTLP) → Elasticsearch → Kibana. Same backend and Kibana views as
+> `claude-code-elastic`, but the agent talks to a same-host Collector instead of
+> the APM Server directly.
+
+```
+Claude Code  ──OTLP──▶  otel-collector  ──OTLP──▶  APM Server  ──▶  Elasticsearch  ──▶  Kibana
+(metrics + events + traces)  :4317/:4318           :8200            :9200                :5601
+```
+
+This stack inserts a **local OpenTelemetry Collector** between the agent and the
+backend. The agent exports to `localhost:4318` — always reachable on the same
+host — and the Collector relays the telemetry on to the APM Server. Everything
+downstream of the Collector (APM Server, Elasticsearch, Kibana, the Kibana saved
+objects, the trace-routing pipeline) is the **same Elastic backend** as
+`claude-code-elastic`; only the transport path differs.
+
+In Phase 3a the Collector is a **plain relay** — it receives, batches, and
+forwards. The durable on-disk queue that makes the sidecar resilient to a
+central-backend outage, and the Collector's own self-telemetry, are added in
+later phases.
+
+> ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
+> backend's fixed `cce-*` container names and host ports (`9200` / `5601` /
+> `8200`). Run only one of the two at a time — `docker compose down` the other
+> stack first. (The Collector adds `:4317` / `:4318`.)
+
+> ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
+> `127.0.0.1`. Never expose this publicly. The events/traces channels can capture
+> your prompt text and tool I/O — don't run a telemetry-enabled session containing
+> secrets or confidential material against this stack, and never commit captured
+> telemetry into the repo.
+
+## Prerequisites
+
+- Docker with a running daemon (`docker compose`).
+- `curl` and `jq` (used by the smoke test and the manual import path).
+- Claude Code, to generate real telemetry.
+
+## Quick Tour
+
+The shortest path from clone to "I see Claude Code telemetry — sent through a
+local Collector — in Kibana."
+
+### 1. Bring the stack up
+
+```sh
+cd stacks/claude-code-otelcol-elastic
+docker compose up -d
+docker compose ps        # wait until elasticsearch, kibana, apm-server report healthy
+```
+
+The Collector (`otel-collector`) carries no healthcheck — its image is
+distroless — so it shows no health column; it accepts OTLP within a second or two
+of starting. Kibana is at <http://localhost:5601>. Optionally prove the whole
+path end to end with the smoke test (see [Verify the pipeline](#verify-the-pipeline)):
+
+```sh
+scripts/smoke-test.sh
+```
+
+If you will enable traces, install the trace-routing pipeline once (it isolates
+Claude Code's spans into the `traces-apm-agents_claude_code` data stream); run it
+any time after the stack is healthy:
+
+```sh
+scripts/setup-trace-routing.sh        # bash/zsh/sh  (or ./setup-trace-routing.ps1)
+```
+
+### 2. Point a Claude Code session at the Collector
+
+The telemetry vars configure **`claude`** itself, not the stack. The only
+difference from `claude-code-elastic` is the endpoint: point
+`OTEL_EXPORTER_OTLP_ENDPOINT` at the **Collector** on `:4318`, not the APM Server
+on `:8200`. Paste into the shell that runs `claude`, then launch it from *any*
+directory (ephemeral and side-effect-free — creates no files).
+
+```sh
+# bash / zsh
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_METRICS_EXPORTER=otlp
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   # ← the local Collector
+export OTEL_METRIC_EXPORT_INTERVAL=10000
+export OTEL_LOGS_EXPORT_INTERVAL=5000
+# Traces (beta) — span tree (interaction → llm_request / tool); needed for OTEL_LOG_TOOL_CONTENT
+export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+export OTEL_TRACES_EXPORTER=otlp
+export OTEL_TRACES_EXPORT_INTERVAL=5000
+# Content-exposure gates — kept off; flip a single one to 1 to capture that slice
+export OTEL_LOG_USER_PROMPTS=0     # user prompt text
+export OTEL_LOG_TOOL_DETAILS=0     # tool inputs/args (commands, file paths, …)
+export OTEL_LOG_TOOL_CONTENT=0     # tool input+output content (needs tracing)
+export OTEL_LOG_RAW_API_BODIES=0   # full Messages API request/response bodies
+```
+
+```fish
+# fish
+set -gx CLAUDE_CODE_ENABLE_TELEMETRY 1
+set -gx OTEL_METRICS_EXPORTER otlp
+set -gx OTEL_LOGS_EXPORTER otlp
+set -gx OTEL_EXPORTER_OTLP_PROTOCOL http/protobuf
+set -gx OTEL_EXPORTER_OTLP_ENDPOINT http://localhost:4318   # ← the local Collector
+set -gx OTEL_METRIC_EXPORT_INTERVAL 10000
+set -gx OTEL_LOGS_EXPORT_INTERVAL 5000
+# Traces (beta) — span tree (interaction → llm_request / tool); needed for OTEL_LOG_TOOL_CONTENT
+set -gx CLAUDE_CODE_ENHANCED_TELEMETRY_BETA 1
+set -gx OTEL_TRACES_EXPORTER otlp
+set -gx OTEL_TRACES_EXPORT_INTERVAL 5000
+# Content-exposure gates — kept off; flip a single one to 1 to capture that slice
+set -gx OTEL_LOG_USER_PROMPTS 0     # user prompt text
+set -gx OTEL_LOG_TOOL_DETAILS 0     # tool inputs/args (commands, file paths, …)
+set -gx OTEL_LOG_TOOL_CONTENT 0     # tool input+output content (needs tracing)
+set -gx OTEL_LOG_RAW_API_BODIES 0   # full Messages API request/response bodies
+```
+
+```powershell
+# PowerShell
+$env:CLAUDE_CODE_ENABLE_TELEMETRY = "1"
+$env:OTEL_METRICS_EXPORTER = "otlp"
+$env:OTEL_LOGS_EXPORTER = "otlp"
+$env:OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"   # ← the local Collector
+$env:OTEL_METRIC_EXPORT_INTERVAL = "10000"
+$env:OTEL_LOGS_EXPORT_INTERVAL = "5000"
+# Traces (beta) — span tree (interaction → llm_request / tool); needed for OTEL_LOG_TOOL_CONTENT
+$env:CLAUDE_CODE_ENHANCED_TELEMETRY_BETA = "1"
+$env:OTEL_TRACES_EXPORTER = "otlp"
+$env:OTEL_TRACES_EXPORT_INTERVAL = "5000"
+# Content-exposure gates — kept off; flip a single one to "1" to capture that slice
+$env:OTEL_LOG_USER_PROMPTS = "0"     # user prompt text
+$env:OTEL_LOG_TOOL_DETAILS = "0"     # tool inputs/args (commands, file paths, …)
+$env:OTEL_LOG_TOOL_CONTENT = "0"     # tool input+output content (needs tracing)
+$env:OTEL_LOG_RAW_API_BODIES = "0"   # full Messages API request/response bodies
+```
+
+Persistent (`settings.json` `env` block) and org-enforced (`managed-settings.json`)
+configurations work the same way as in `claude-code-elastic` — just with the
+`:4318` Collector endpoint. Then run `claude` from a configured shell and do a
+little work; telemetry flushes on the export interval, so data lands within
+~10–30s (the Collector adds only a brief batching delay).
+
+### 3. Import the Kibana saved objects
+
+Identical to `claude-code-elastic` — the saved objects belong to the Elastic
+backend and the Claude Code agent, which this stack reuses unchanged. The import
+helper runs the backend import then the agent import, each in dependency order
+(data views first); run from anywhere:
+
+```sh
+scripts/import-kibana-objects.sh     # bash/zsh/sh
+```
+```pwsh
+./scripts/import-kibana-objects.ps1  # PowerShell 7+
+```
+
+Override the Kibana base URL with `KIBANA_URL` (or `-KibanaUrl` for the `.ps1`);
+both default to `http://localhost:5601`. You can also import from the Kibana UI
+(Stack Management → Saved Objects → **Import**, data views first).
+
+This brings in the **Metrics**, **Events**, **Traces**, and **AI Agents — Traces**
+data views, the curated **saved searches** (Event Overview, API Requests, Tool
+Results, …, Interactions, Traces), and the **Claude Code — Overview** dashboard.
+
+### 4. See the telemetry in Kibana
+
+- **Discover** — pick the **Claude Code — Metrics** or **Events** data view, or
+  open one of the saved searches from the **Open** menu.
+- **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM
+  **service** (`claude-code`). Telemetry routed through the Collector lands here
+  exactly as the direct path does.
+
+### 5. Tear down
+
+```sh
+docker compose down        # keep the Elasticsearch volume
+docker compose down -v     # also wipe ingested telemetry
+```
+
+## Verify the pipeline
+
+`scripts/smoke-test.sh` checks the full **Claude Code → Collector → APM Server →
+Elasticsearch** path end to end, following the 3A pattern: **Arrange** brings the
+stack up, waits for the backend services to report healthy, then waits for the
+Collector to accept OTLP on `:4318`; **Act** POSTs a synthetic OTLP/protobuf
+metrics + logs + traces probe (tagged `service.name = cce-smoke-test`) to the
+**Collector**, which forwards it to the APM Server; **Assert** confirms the docs
+landed in the APM data streams in Elasticsearch — proving the telemetry traversed
+the Collector. A synthetic probe is used (not a real `claude` session) so the
+check is deterministic and runnable as a gate; real telemetry travels the
+identical path under its own name.
+
+```sh
+scripts/smoke-test.sh    # from anywhere — it locates its own stack directory
+```
+
+Needs `docker` (running daemon), `curl`, `jq`, `base64`; it **SKIPs** (exit 0)
+when the daemon is unreachable. Override endpoints with `ES_URL` /
+`OTEL_COLLECTOR_URL`.
+
+## Layout
+
+```
+claude-code-otelcol-elastic/
+├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
+└─ scripts/
+   ├─ smoke-test.sh                       # end-to-end pipeline verification through the Collector (stack property)
+   ├─ import-kibana-objects.sh            # → orchestrates the backend + agent imports
+   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import orchestrator
+   ├─ setup-trace-routing.sh             # → forwards to the backend component script
+   └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
+```
+
+The Collector service and its config live in
+`../../components/paths/otelcol-sidecar/`. The backend services, their config,
+the cross-agent data view, the `traces-apm@custom` pipeline body, and the Backend
+bootstrap scripts live in `../../components/backends/elastic/`; the Claude Code
+agent's data views, saved searches, and Overview dashboard — with their own
+import script — live in `../../components/agents/claude-code/`. The stack's
+`import-kibana-objects` shim runs both component imports in order.

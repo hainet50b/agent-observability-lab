@@ -1,0 +1,48 @@
+# otelcol-sidecar Collector config — Phase 3a (plain relay).
+#
+# Minimal pipeline shared by all three signals: receive OTLP (gRPC + HTTP) from
+# the local agent, batch, and forward to the Elastic backend's APM Server over
+# OTLP/HTTP. No durable queue yet (Phase 3b adds the file_storage extension and
+# the exporter sending_queue) and no Collector self-telemetry yet (Phase 3c).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  # otlp_http is the OTLP/HTTP exporter (the `otlphttp` spelling is a deprecated
+  # alias in this Collector version).
+  otlp_http:
+    # Reached by Compose service name: `include:` merges this path component and
+    # the Elastic backend into one Compose project, so `apm-server` resolves on
+    # the shared default network. http/protobuf is the default and is the wire
+    # format the APM Server decodes.
+    endpoint: http://apm-server:8200
+    retry_on_failure:
+      # Resilient to startup ordering: depends_on cannot be expressed across
+      # components, so if the APM Server is not yet up when the Collector starts,
+      # retry instead of dropping. In-memory only in Phase 3a; Phase 3b makes the
+      # queue durable on disk.
+      enabled: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]

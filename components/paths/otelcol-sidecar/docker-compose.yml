@@ -1,0 +1,39 @@
+# otelcol-sidecar — local OpenTelemetry Collector path component.
+#
+# A Path component adds a transport-layer hop between the agent and the backend.
+# This one inserts a same-host OpenTelemetry Collector:
+#
+#   Agent ──OTLP(localhost:4318/4317)──▶ Collector ──OTLP──▶ APM Server ──▶ ES
+#
+# so the agent points at the always-reachable local Collector instead of talking
+# to the backend's APM Server directly. This Phase-3a config is a plain relay:
+# no durable on-disk queue yet (Phase 3b adds file_storage + sending_queue) and
+# no Collector self-telemetry yet (Phase 3c).
+#
+# Composed into a stack via `include:` alongside a backend component. The
+# Collector reaches the backend's APM Server by its Compose service name
+# (`apm-server`) because `include:` merges both components into one Compose
+# project on a shared default network.
+#
+# Single-node local demo posture — ports bound to 127.0.0.1, never exposed.
+
+services:
+  otel-collector:
+    # The contrib distribution (not core) is required: Phase 3b needs its
+    # file_storage extension. Pinned explicitly — never :latest.
+    image: otel/opentelemetry-collector-contrib:0.153.0
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      # OTLP gRPC + HTTP, bound to localhost only (demo posture).
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    # No healthcheck: the contrib image is distroless (no shell, no curl/wget) so
+    # an in-container probe is impractical. Startup ordering is handled instead by
+    # the exporter's retry_on_failure (see config/otel-collector.yaml) — if the
+    # APM Server is not up yet the Collector retries rather than depending on it.
+    # The stack smoke-test waits for the Collector by polling its OTLP port from
+    # the host (which does have curl).
+    restart: unless-stopped
