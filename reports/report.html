@@ -1142,6 +1142,41 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Phase 3b — durable on-disk queue for the otelcol-sidecar Collector (backend-outage resilience)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Ran the Collector as root (<code>user: "0:0"</code>) to write the queue volume.</strong> The contrib image runs as uid <code>10001</code>, but a fresh named volume is created root-owned, so a non-root Collector cannot create its <code>file_storage</code> queue files. Alternatives considered and rejected: a chown init-container (heavy for a demo) and the world-writable <code>/tmp</code> (not persistent — the queue must survive restarts). Root in a single-node localhost demo is consistent with the backend's security-disabled posture; documented inline that a real deployment would chown the queue dir instead. Verified live: the <code>file_storage/queue</code> extension and a per-signal persistent queue start with no permission errors.</li>
+      <li><strong>Made the resilience test stronger than the task's literal 5 steps — it restarts the Collector mid-outage.</strong> A pure in-memory <code>sending_queue</code> (no <code>storage</code>) would <em>pass</em> a plain stop&rarr;send&rarr;start check, because the in-memory queue holds the item across a short outage — so that check can't distinguish disk from memory. Restarting <code>otel-collector</code> while <code>apm-server</code> is down is what actually proves the on-disk property the phase is about. Added an 8s wait after the POST so the in-memory batch processor (default 200ms timeout) flushes into the persistent queue before the restart, avoiding a false failure.</li>
+      <li><strong>Dedicated <code>scripts/resilience-test.sh</code></strong> (the task's stated "cleaner" option over extending <code>smoke-test.sh</code>), modelled on the smoke test's 3A shape and helpers.</li>
+      <li><strong>Unique <code>service.name=cce-resilience-test</code> + baseline-then-increment assertion.</strong> The probe never collides with the smoke-test probe or real telemetry, and asserting <code>count &gt; baseline</code> (not <code>&ge; 1</code>) makes re-runs robust and proves the doc that lands is the one sent during the outage. Also asserts the doc is <em>absent</em> from ES during the outage, so the simulated outage is real.</li>
+      <li><strong>A single logs probe</strong> (not all three signals): one uniquely-tagged record is sufficient, lands directly in <code>logs-apm*</code>, and is precomputed/base64-embedded exactly like the smoke-test payloads to preserve the no-protobuf-tooling property. <code>retry_on_failure</code> was already enabled and kept; the outage is far shorter than its 5-minute <code>max_elapsed_time</code>, so retries are still in flight when the backend returns.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><code>user: "0:0"</code> is a demo concession for the named-volume ownership problem; a production path component would chown the queue directory to the runtime uid (or bake it into a derived image) rather than run the Collector as root.</li>
+      <li>Environment note: <code>jq</code> was installed via winget but its shim was not on the Git Bash PATH, so the smoke/resilience gates would have SKIPped. Copied <code>jq.exe</code> into <code>~/bin</code> (already on PATH) so the gates ran for real. Worth making <code>jq</code> reliably reachable from Git Bash if these gates are run often.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Phase 3c (Collector self-telemetry) is the only remaining open task — it will surface <code>otelcol_exporter_queue_size</code>, the health signal that pairs directly with this durable queue.</li>
+      <li><code>smoke-test.sh</code> and <code>resilience-test.sh</code> now duplicate <code>es_count</code> / <code>wait_healthy</code> / <code>wait_collector</code>. The Phase 3a task already floated extracting a shared <code>assert-landed</code> helper into the backend component; with a second consumer it's now slightly more justified.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The local Collector now persists telemetry to a durable on-disk queue (the <code>file_storage</code> extension backing the exporter's <code>sending_queue</code>, on a named volume). If the central backend goes dark, the agent's telemetry is buffered locally and drains automatically the moment it recovers — nothing is lost. A new <code>resilience-test.sh</code> proves it end to end, surviving even a Collector restart during the outage.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>The <code>user: "0:0"</code> (root) decision</strong> for the named-volume ownership issue — flag if you'd rather a non-root approach (chown init-container or a derived image with a pre-owned queue dir).</li>
+      <li><strong>The resilience test restarts the Collector mid-outage</strong> to prove on-disk (not in-memory) durability — deliberately stronger than the task's literal stop/send/start steps. Confirm you're comfortable with that interpretation; if you only want the literal flow, the restart step is easy to drop.</li>
+      <li><strong>Verification swapped stacks:</strong> <code>claude-code-elastic</code> was taken down (volume preserved) to free the shared <code>cce-*</code> names/ports, the otelcol stack was brought up for the live gates, then <code>claude-code-elastic</code> was restored to running afterward.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

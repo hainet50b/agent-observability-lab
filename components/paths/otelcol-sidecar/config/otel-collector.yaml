@@ -1,9 +1,20 @@
-# otelcol-sidecar Collector config — Phase 3a (plain relay).
+# otelcol-sidecar Collector config — Phase 3b (durable on-disk queue).
 #
 # Minimal pipeline shared by all three signals: receive OTLP (gRPC + HTTP) from
 # the local agent, batch, and forward to the Elastic backend's APM Server over
-# OTLP/HTTP. No durable queue yet (Phase 3b adds the file_storage extension and
-# the exporter sending_queue) and no Collector self-telemetry yet (Phase 3c).
+# OTLP/HTTP. The exporter's sending_queue is now backed by the file_storage
+# extension, so telemetry the agent emits while the central backend is
+# unreachable is persisted to disk and drained on reconnect rather than lost —
+# the reason the sidecar exists. (Phase 3c adds Collector self-telemetry.)
+
+extensions:
+  # Persists the exporter sending_queue to disk so queued telemetry survives a
+  # backend outage AND a Collector restart (the queue directory is a named
+  # volume — see docker-compose.yml). One instance per exporter keeps the design
+  # forward-looking: a future multi-backend fan-out queues each backend
+  # independently under its own subtree.
+  file_storage/queue:
+    directory: /var/lib/otelcol/file_storage
 
 receivers:
   otlp:
@@ -26,13 +37,22 @@ exporters:
     # format the APM Server decodes.
     endpoint: http://apm-server:8200
     retry_on_failure:
-      # Resilient to startup ordering: depends_on cannot be expressed across
-      # components, so if the APM Server is not yet up when the Collector starts,
-      # retry instead of dropping. In-memory only in Phase 3a; Phase 3b makes the
-      # queue durable on disk.
+      # When a batch can't be delivered (backend down, transient error) it is
+      # retried with backoff instead of dropped; retries that exhaust their
+      # backoff are re-enqueued onto the durable sending_queue below.
       enabled: true
+    sending_queue:
+      # Durable queue: accepted telemetry is enqueued and exported
+      # asynchronously, and the queue is persisted to disk via file_storage. If
+      # the APM Server is unreachable, the agent's exports are still accepted by
+      # the always-up local Collector and buffered on disk, then flushed when the
+      # link recovers — no permanent loss during a central-backend outage.
+      enabled: true
+      storage: file_storage/queue
 
 service:
+  # The durable queue is only active while its backing extension is enabled.
+  extensions: [file_storage/queue]
   pipelines:
     metrics:
       receivers: [otlp]

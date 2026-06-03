@@ -17,10 +17,12 @@ downstream of the Collector (APM Server, Elasticsearch, Kibana, the Kibana saved
 objects, the trace-routing pipeline) is the **same Elastic backend** as
 `claude-code-elastic`; only the transport path differs.
 
-In Phase 3a the Collector is a **plain relay** — it receives, batches, and
-forwards. The durable on-disk queue that makes the sidecar resilient to a
-central-backend outage, and the Collector's own self-telemetry, are added in
-later phases.
+The Collector buffers telemetry to a **durable on-disk queue**: if the central
+backend (APM Server) is unreachable, the agent's exports are still accepted by
+the always-up local Collector and persisted to disk, then drained automatically
+when the link recovers — no loss during a backend outage. The queue is a named
+Docker volume, so it survives a Collector restart too. (The Collector's own
+self-telemetry is added in a later phase.)
 
 > ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
 > backend's fixed `cce-*` container names and host ports (`9200` / `5601` /
@@ -201,6 +203,19 @@ Needs `docker` (running daemon), `curl`, `jq`, `base64`; it **SKIPs** (exit 0)
 when the daemon is unreachable. Override endpoints with `ES_URL` /
 `OTEL_COLLECTOR_URL`.
 
+### Durable queue (backend-outage resilience)
+
+`scripts/resilience-test.sh` proves the on-disk queue end to end: it stops
+`apm-server` to simulate the central backend going dark, POSTs a uniquely-tagged
+probe to the Collector (which accepts and queues it), **restarts the Collector**
+(a pure in-memory queue would lose the probe here — only the file_storage queue
+survives), then starts `apm-server` again and asserts the probe drains into
+Elasticsearch. Same prerequisites and SKIP behaviour as the smoke test.
+
+```sh
+scripts/resilience-test.sh    # from anywhere — it locates its own stack directory
+```
+
 ## Layout
 
 ```
@@ -208,6 +223,7 @@ claude-code-otelcol-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification through the Collector (stack property)
+   ├─ resilience-test.sh                  # durable-queue / backend-outage check (stack property)
    ├─ import-kibana-objects.sh            # → orchestrates the backend + agent imports
    ├─ import-kibana-objects.ps1           # PowerShell mirror of the import orchestrator
    ├─ setup-trace-routing.sh             # → forwards to the backend component script

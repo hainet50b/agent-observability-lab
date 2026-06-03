@@ -19,13 +19,25 @@
 
 services:
   otel-collector:
-    # The contrib distribution (not core) is required: Phase 3b needs its
-    # file_storage extension. Pinned explicitly — never :latest.
+    # The contrib distribution (not core) is required: it carries the
+    # file_storage extension that backs the durable sending_queue. Pinned
+    # explicitly — never :latest.
     image: otel/opentelemetry-collector-contrib:0.153.0
     container_name: otel-collector
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    # Run as root in this local demo so the Collector can write the file_storage
+    # named volume: the contrib image runs as uid 10001, but a fresh named
+    # volume is created root-owned, so a non-root Collector cannot create its
+    # queue files. Acceptable for a single-node localhost demo (consistent with
+    # the backend's security-disabled posture); a real deployment would chown
+    # the queue dir to the runtime uid instead.
+    user: "0:0"
     volumes:
       - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # Durable sending_queue backing store (file_storage extension). A named
+      # volume so queued telemetry survives container restarts, not just the
+      # process — the whole point of the on-disk queue.
+      - otelcol-queue:/var/lib/otelcol/file_storage
     ports:
       # OTLP gRPC + HTTP, bound to localhost only (demo posture).
       - "127.0.0.1:4317:4317"
@@ -37,3 +49,8 @@ services:
     # The stack smoke-test waits for the Collector by polling its OTLP port from
     # the host (which does have curl).
     restart: unless-stopped
+
+volumes:
+  # Durable on-disk queue for the otlp_http exporter's sending_queue. Survives
+  # container restarts so telemetry buffered during a backend outage is not lost.
+  otelcol-queue:
