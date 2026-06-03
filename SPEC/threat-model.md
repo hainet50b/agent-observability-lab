@@ -96,6 +96,38 @@ Treat the sidecar rollout as a cross-functional project
 (Observability + IT/MDM + SecOps + legal/privacy), not as the Observability
 team's solo work.
 
+## Observing the sidecar itself
+
+A sidecar that dies silently is an audit hole, so the Collector must be
+observable too. This splits into two responsibilities on **two sides**, which
+are complementary — not alternatives:
+
+- **Edge side — the Collector reports its own health.** An OpenTelemetry
+  Collector emits its own internal telemetry (`otelcol_exporter_queue_size`,
+  `otelcol_exporter_send_failed_*`, `otelcol_receiver_accepted_*`, `process_*`
+  CPU/memory, …) via the **`service.telemetry`** subsystem — which is a
+  *separate path* from the data pipelines that carry the agent's telemetry, so
+  the Collector's self-metrics do **not** ride the agent payload's
+  `file_storage` queue. This is the standard, natural configuration: point
+  `service.telemetry.metrics` at the same backend over OTLP. The single most
+  useful signal is `otelcol_exporter_queue_size` — a growing persistent queue
+  means the link to the central backend is failing while the agent keeps
+  working locally. This lab's `*-otelcol-*` stacks demonstrate this edge side.
+- **Central side — detect the *absence* of an edge.** Edge self-telemetry only
+  arrives when the edge can reach the center. When the VPN is down, the
+  Collector is dead, or the laptop is powered off, the central backend receives
+  **nothing** from that host — by definition no edge mechanism can self-report
+  that condition. The only way to catch a host that has gone silent is to
+  detect it **centrally**: alert on "no telemetry from device X for Y minutes"
+  (heartbeat-absence) against the expected fleet inventory. This is an operator
+  responsibility on the central backend, **out of scope for the lab to
+  implement** (it needs the real fleet roster and alerting policy), but it is
+  the load-bearing half of sidecar observability and is recorded here so it is
+  not mistaken for something the edge configuration solves.
+
+In short: the edge can tell you *how* it is doing while it is reachable; only
+the center can tell you *that* an edge has gone dark. Build both.
+
 ## Where this leaves the lab
 
 - The first stack **`claude-code-elastic`** is **direct** (no sidecar) — it
