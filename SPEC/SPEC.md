@@ -31,6 +31,7 @@ Each stack's own `README.md` is the **operational Quick Tour** — bring it up, 
 - **Demo posture, not production.** Stacks run locally with security relaxed and ports bound to localhost; never expose one publicly or point it at sensitive infrastructure.
 - **Telemetry can carry sensitive content.** Agent telemetry may include prompt text and tool I/O — treat anything sent to a stack as sensitive: don't run a telemetry-enabled session containing secrets, and never commit captured telemetry into the repo.
 - **Components are composable; stacks are compositions.** Reusable building blocks live under `components/{backends,paths,agents}/<name>/`. Each stack under `stacks/<combo>/` is one composition expressed as a `docker compose include:` over those components, plus the combination's `README.md` and any combination-specific glue — no services are defined inline in `stacks/<combo>/`.
+- **Stacks share definitions, never runtime state.** Each stack runs as its own Compose project, and named volumes are project-scoped (`<project>_<volume>`), so two stacks composing the same backend component still have fully separate data — bringing up a second stack starts from an empty backend, and a stack's data lies dormant in its own volume while another stack runs. Comparing multiple agents in one backend is done by composing those agents into **one** stack, not by sharing state across stacks. (Backend components pin fixed host ports, so only one stack of a given backend runs at a time.)
 
 ## Audit-coverage scope
 
