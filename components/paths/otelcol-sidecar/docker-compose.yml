@@ -38,6 +38,14 @@ services:
     # the backend's security-disabled posture); a real deployment would chown
     # the queue dir to the runtime uid instead.
     user: "0:0"
+    # Organization-assigned asset ID, injected into every relayed signal as a
+    # top-level host.id by the Collector's `env` resourcedetection detector (see
+    # config/collector.yaml). Compose interpolates AOL_ASSET_ID from the host
+    # shell at `up` time, falling back to the demo default — the lab analogue of
+    # an MDM writing the per-device asset number into the Collector service
+    # definition at install time. The agent is untouched.
+    environment:
+      - OTEL_RESOURCE_ATTRIBUTES=host.id=${AOL_ASSET_ID:-aol-demo-asset-0001}
     volumes:
       - ./config/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       # Durable sending_queue backing store (file_storage extension). A named

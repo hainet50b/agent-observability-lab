@@ -1433,6 +1433,39 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Inject an organization-assigned asset ID at the sidecar (env detector → host.id)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Followed the task's prescription verbatim.</strong> Added <code>env</code> in front of <code>system</code> (<code>detectors: [env, system]</code>) so the injected organizational <code>host.id</code> wins conflicts over the <code>system</code> detector's intrinsic machine-id <code>host.id</code> (which stays default-off here). Kept <code>override: false</code> so detection is additive only — it never clobbers the agent's own <code>host.os.*</code> / <code>host.architecture</code> / any agent-supplied <code>host.id</code>. The compose knob is exactly the task's form: <code>OTEL_RESOURCE_ATTRIBUTES=host.id=${AOL_ASSET_ID:-aol-demo-asset-0001}</code>, so Compose interpolates the host shell's <code>AOL_ASSET_ID</code> at <code>up</code> time and falls back to the demo default otherwise. No real judgement latitude on the mechanism; the choices were where to place things and how to word the docs.</li>
+      <li><strong>Placed the <code>environment:</code> block on the Collector service with a comment, and extended the existing <code>resourcedetection</code> comment block</strong> to explain the two complementary identities — <code>host.name</code> (machine's own, detected) vs <code>host.id</code> (organization's asset number, injected) — the <code>[env, system]</code> precedence, and why <code>host.id</code> (an ECS/APM-modeled field that lands top-level and aggregatable, not flattened into <code>labels.*</code>). Single source of truth for the rationale lives next to the config.</li>
+      <li><strong>README documentation placed in the host-identity narrative</strong> (right after the existing <code>host.name</code> container caveat), per "document in the otelcol stack README only, self-contained, no <code>SPEC/</code> links." Covers the env-var knob, the demo default, the MDM analogy, and that a real fleet could instead enable the <code>system</code> detector's intrinsic <code>host.id</code> (machine-id) — with <code>[env, system]</code> meaning the organizational ID wins when both exist. The smaller <code>claude-code-elastic</code> stack (no sidecar) is untouched.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Verification gotcha — the override env must be <em>exported</em>, not just prefixed.</strong> <code>smoke-test.sh</code> runs its own <code>docker compose up -d</code> in its Arrange step, which re-renders the Collector. So <code>AOL_ASSET_ID=test-override-42 docker compose up -d &amp;&amp; scripts/smoke-test.sh</code> silently reverts to the default — the smoke test's internal <code>up -d</code> doesn't see the un-exported var and recreates the Collector back to <code>aol-demo-asset-0001</code>. Re-ran with <code>export AOL_ASSET_ID=test-override-42</code> so the subprocess inherits it; the override then landed. Not a code issue (this is correct Compose behaviour), but a sharp edge for anyone testing the override — the README's example sets it inline on the <code>up</code> line, which is fine for a real session but not when a follow-up script also brings the stack up.</li>
+      <li><strong>"Real session" leg verified by proxy.</strong> Headless executor — can't drive an interactive <code>claude</code> session here. A real session traverses the identical receiver → <code>resourcedetection</code> → exporter path as the synthetic probe, so the deterministic smoke-test probe (which <em>did</em> gain <code>host.id</code>) is the sound stand-in — the same posture the Phase 3d <code>host.name</code> task used.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Surface <code>host.id</code> (and <code>host.name</code>) in the agent's Kibana views.</strong> Every relayed doc now carries both a device axis (<code>host.name</code>) and an asset/inventory axis (<code>host.id</code>). An event-saved-search column or a dashboard facet on these would make per-device / per-asset attribution visible next to <code>user_email</code> / <code>session.id</code>. (Echoes the same suggestion from the Phase 3d report, now stronger with two host fields.)</li>
+      <li><strong>Consider documenting the self-telemetry side effect</strong> (see Review highlights) in the stack README's self-telemetry paragraph if it matters to a reader auditing the sidecar — the sidecar's own metrics now carry the asset <code>host.id</code> too.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The local Collector now stamps an <strong>organization-assigned asset ID</strong> onto every signal it relays, as a top-level, aggregatable <code>host.id</code> — the join axis to an asset inventory, alongside the Phase 3d <code>host.name</code> (machine identity). The value comes from the <code>AOL_ASSET_ID</code> env var (demo default <code>aol-demo-asset-0001</code>), the lab analogue of an MDM writing a per-device asset number into the Collector at install time. Only the <code>claude-code-otelcol-elastic</code> stack is affected; the agent is untouched.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end on the live stack.</strong> After recreating the Collector, the smoke-test probes (<code>service.name: aol-smoke-test</code>) now carry top-level <code>host.id: aol-demo-asset-0001</code> (aggregates as a keyword — confirms it lands ECS-modeled, not in <code>labels.*</code>) alongside <code>host.name: otelcol-sidecar-demo</code>; <code>service.name</code> is preserved (agent attributes unclobbered). Re-running with <code>export AOL_ASSET_ID=test-override-42</code> landed <code>host.id: test-override-42</code>. <code>smoke-test.sh</code> and <code>resilience-test.sh</code> both still reach PASS. The running stack was left on the demo default (verified via <code>docker inspect otel-collector</code>).</li>
+      <li><strong>Side effect worth a look: the sidecar's <em>own</em> self-telemetry also gained <code>host.id</code>, but not <code>host.name</code>.</strong> <code>OTEL_RESOURCE_ATTRIBUTES</code> is a standard OTel env var the Collector's internal SDK honors, so <code>service.name: otelcol-sidecar</code> self-metrics now carry <code>host.id</code> (both demo + override values observed) — whereas <code>host.name</code> is added only by the <code>resourcedetection</code> processor on the data pipelines, which self-telemetry bypasses (consistent with the Phase 3d finding). Benign and arguably desirable (the sidecar's health is now attributable to the asset), and the task scoped verification to relayed telemetry only — but flagging it since it wasn't called out in the task.</li>
+      <li><code>docker compose config -q</code> passes for both stacks; shellcheck is not installed on this host so that lint gate is silently skipped per CONVENTIONS (no shell files changed anyway).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

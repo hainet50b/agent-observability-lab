@@ -14,7 +14,9 @@
 #
 # Phase 3d adds a resourcedetection processor to every pipeline (before batch):
 # Claude Code's native telemetry carries no host identity, so the local Collector
-# stamps host.name onto each relayed signal. See the processors: block.
+# stamps host.name (the machine's own name) and host.id (the organization's
+# asset ID, injected via the env detector) onto each relayed signal. See the
+# processors: block.
 
 extensions:
   # Persists the exporter sending_queue to disk so queued telemetry survives a
@@ -40,8 +42,27 @@ processors:
   # (labels.user_email) and a session (session.id) but not to a DEVICE. A local
   # Collector is the natural place to add device identity to everything it relays.
   #
-  #   override: false        — only ADD host.name where absent; never clobber the
-  #                            agent's existing host.os.* / host.architecture.
+  # Two complementary identities are added:
+  #   host.name — the machine's OWN name (intrinsic), from the `system` detector
+  #               (the OS hostname).
+  #   host.id   — the ORGANIZATION's asset number, INJECTED via the `env`
+  #               detector, which reads it from the Collector's
+  #               OTEL_RESOURCE_ATTRIBUTES env var (set in docker-compose.yml,
+  #               default aol-demo-asset-0001). This is the join axis to an asset
+  #               inventory — the lab analogue of an MDM writing the per-device
+  #               asset number into the Collector service definition at install
+  #               time. host.id is an ECS/APM-modeled field, so it lands as a
+  #               top-level, aggregatable host.id rather than flattening into
+  #               labels.* the way a custom attribute key would.
+  #
+  #   detectors: [env, system] — first-listed wins on conflict, so the injected
+  #                            organizational host.id beats the `system`
+  #                            detector's own machine-id host.id (which is
+  #                            default-off here — the *intrinsic* alternative a
+  #                            real fleet might enable instead).
+  #   override: false        — only ADD where absent; never clobber the agent's
+  #                            existing host.os.* / host.architecture (or any
+  #                            host.id / host.name the agent itself supplied).
   #   hostname_sources: [os] — use the OS hostname (no cloud-metadata lookups).
   #
   # Container caveat: running in a container, the `system` detector reports the
@@ -50,7 +71,7 @@ processors:
   # mechanism; a real fleet runs the Collector as a host service (systemd/launchd)
   # where it picks up the true machine name.
   resourcedetection:
-    detectors: [system]
+    detectors: [env, system]
     system:
       hostname_sources: [os]
     override: false

@@ -48,6 +48,38 @@ out, and host identity is a property of where the agent runs, not of the agent.
 > as a host service (systemd / launchd), where the same detector picks up the
 > true machine name. Don't mistake the demo value for real device attribution.
 
+Alongside the *detected* `host.name`, the Collector also **injects an
+organization-assigned asset ID** as a top-level `host.id`. Where `host.name` is
+the machine's *own* name (detected from the OS), `host.id` is the
+*organization's* identity — the asset-management number used to join a document
+back to an asset inventory. That is injected, not detected, so it is fed from the
+Collector's environment in `docker-compose.yml`:
+
+```yaml
+environment:
+  - OTEL_RESOURCE_ATTRIBUTES=host.id=${AOL_ASSET_ID:-aol-demo-asset-0001}
+```
+
+Compose interpolates `AOL_ASSET_ID` from your shell at `up` time, falling back to
+the demo default `aol-demo-asset-0001` — the lab analogue of an MDM writing the
+per-device asset number into the Collector service definition at install time;
+the agent is untouched. Set your own before bringing the stack up (recreate the
+Collector so the new env applies):
+
+```sh
+AOL_ASSET_ID=asset-12345 docker compose up -d
+```
+
+The attribute key is **`host.id`** deliberately: it is an ECS/APM-modeled field,
+so it lands as a **top-level, aggregatable `host.id`** (the join axis to the asset
+inventory) rather than flattening into `labels.*` the way a custom attribute key
+would. The Collector's `resourcedetection` runs `detectors: [env, system]`, and
+first-listed wins on conflict — so the injected organizational `host.id` beats the
+`system` detector's *intrinsic* `host.id` (the machine-id, which is **default-off**
+here). A real fleet that wanted the intrinsic machine identity instead would
+enable that `system` `host.id`; with `[env, system]`, the organizational ID wins
+whenever both exist.
+
 > ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
 > backend's fixed `aol-*` container names and host ports (`9200` / `5601` /
 > `8200`). Run only one of the two at a time — `docker compose down` the other
