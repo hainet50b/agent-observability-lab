@@ -1310,6 +1310,35 @@
     </ul>
   </section>
 
+  <section>
+    <h2>De-stack-ify the Elastic backend component's compose identity</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Two edits, both to the file header of <code>components/backends/elastic/docker-compose.yml</code>.</strong> Removed the top-level <code>name: claude-code-elastic</code> line and rewrote the leading comment. The only real choice was the comment wording: I led with what the file <em>is</em> now ("Elastic backend component — reusable, agent-agnostic") and added one sentence on <em>why</em> there is no <code>name:</code> — an <code>include:</code> ignores the included file's <code>name:</code>, so it was dead weight, and a bare <code>docker compose up</code> from the component dir would otherwise spin up a project masquerading as the stack. Kept the demo-posture and pinned-version lines verbatim, just moved below the new framing.</li>
+      <li><strong>No other files touched</strong>, as the task scoped — the stack <code>docker-compose.yml</code>s carry their own <code>name:</code> and were already authoritative.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new. The next queued task (<code>cce-*</code> → <code>aol-*</code> container rename) is the natural continuation of de-stack-ifying the backend's identity.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Elastic backend compose file no longer pretends to be the <code>claude-code-elastic</code> stack — it now reads as the shared, agent-agnostic backend that both stacks include via <code>include:</code>. Pure metadata/comment change; nothing about the running stacks changed.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified the dropped <code>name:</code> caused no regression.</strong> <code>docker compose config -q</code> passes for both stacks; each still resolves its own project name (<code>claude-code-elastic</code> / <code>claude-code-otelcol-elastic</code>) and the otelcol stack still pulls in all four services; <code>docker compose up -d</code> on the live otelcol stack was a clean no-op (all containers "Running", no recreation); its <code>scripts/smoke-test.sh</code> still reaches <strong>PASS</strong> through the Collector.</li>
+      <li><strong>Did not run the <code>claude-code-elastic</code> smoke-test</strong> — the two stacks share the fixed <code>cce-*</code> container names and can't both be up; the otelcol stack was live. shellcheck is not installed on this host, and no shell scripts changed, so that lint gate is skipped per CONVENTIONS. Worth a glance: the new header comment in <code>components/backends/elastic/docker-compose.yml</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

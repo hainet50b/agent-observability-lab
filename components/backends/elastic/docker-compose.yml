@@ -1,12 +1,12 @@
-# claude-code-elastic — Elastic Stack base
+# Elastic backend component — reusable, agent-agnostic.
+#
+# Brings up Elasticsearch, Kibana, and APM Server (the Elastic-native OTLP
+# receiver that agent telemetry is pointed at). Not a stack on its own: it is
+# composed into stacks via `docker compose include:`, so it carries no
+# top-level `name:` — the including stack owns the Compose project name.
 #
 # Single-node, security-disabled local demo. Do NOT expose publicly.
 # All services share one pinned Elastic Stack version (9.4.2).
-#
-# Brings up Elasticsearch, Kibana, and APM Server (the Elastic-native OTLP
-# receiver Claude Code's telemetry is pointed at).
-
-name: claude-code-elastic
 
 services:
   elasticsearch:
