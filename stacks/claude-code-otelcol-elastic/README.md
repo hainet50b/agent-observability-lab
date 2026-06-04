@@ -171,10 +171,11 @@ little work; telemetry flushes on the export interval, so data lands within
 
 ### 3. Import the Kibana saved objects
 
-Identical to `claude-code-elastic` — the saved objects belong to the Elastic
-backend and the Claude Code agent, which this stack reuses unchanged. The import
-helper runs the backend import then the agent import, each in dependency order
-(data views first); run from anywhere:
+The backend and agent saved objects are the same as `claude-code-elastic` (this
+stack reuses both components unchanged); this stack adds **one** more — a data
+view for the sidecar's own metrics. The import helper runs the backend import,
+the agent import, then the sidecar (path) import, each in dependency order (data
+views first); run from anywhere:
 
 ```sh
 scripts/import-kibana-objects.sh     # bash/zsh/sh
@@ -187,9 +188,10 @@ Override the Kibana base URL with `KIBANA_URL` (or `-KibanaUrl` for the `.ps1`);
 both default to `http://localhost:5601`. You can also import from the Kibana UI
 (Stack Management → Saved Objects → **Import**, data views first).
 
-This brings in the **Metrics**, **Events**, **Traces**, and **AI Agents — Traces**
-data views, the curated **saved searches** (Event Overview, API Requests, Tool
-Results, …, Interactions, Traces), and the **Claude Code — Overview** dashboard.
+This brings in the **Metrics**, **Events**, **Traces**, **AI Agents — Traces**,
+and **OTel Collector Sidecar — Metrics** data views, the curated **saved
+searches** (Event Overview, API Requests, Tool Results, …, Interactions, Traces),
+and the **Claude Code — Overview** dashboard.
 
 ### 4. See the telemetry in Kibana
 
@@ -248,16 +250,17 @@ claude-code-otelcol-elastic/
 └─ scripts/
    ├─ smoke-test.sh                       # end-to-end pipeline verification through the Collector (stack property)
    ├─ resilience-test.sh                  # durable-queue / backend-outage check (stack property)
-   ├─ import-kibana-objects.sh            # → orchestrates the backend + agent imports
+   ├─ import-kibana-objects.sh            # → orchestrates the backend + agent + path imports
    ├─ import-kibana-objects.ps1           # PowerShell mirror of the import orchestrator
    ├─ setup-trace-routing.sh             # → forwards to the backend component script
    └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
 ```
 
-The Collector service and its config live in
-`../../components/paths/otelcol-sidecar/`. The backend services, their config,
-the cross-agent data view, the `traces-apm@custom` pipeline body, and the Backend
-bootstrap scripts live in `../../components/backends/elastic/`; the Claude Code
-agent's data views, saved searches, and Overview dashboard — with their own
-import script — live in `../../components/agents/claude-code/`. The stack's
-`import-kibana-objects` shim runs both component imports in order.
+The Collector service, its config, and its self-telemetry data view — with their
+own import script — live in `../../components/paths/otelcol-sidecar/`. The backend
+services, their config, the cross-agent data view, the `traces-apm@custom`
+pipeline body, and the Backend bootstrap scripts live in
+`../../components/backends/elastic/`; the Claude Code agent's data views, saved
+searches, and Overview dashboard — with their own import script — live in
+`../../components/agents/claude-code/`. The stack's `import-kibana-objects` shim
+runs all three component imports in order.
