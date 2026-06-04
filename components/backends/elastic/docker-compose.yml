@@ -11,7 +11,7 @@
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
-    container_name: cce-elasticsearch
+    container_name: aol-elasticsearch
     environment:
       # Heap sizing is a process env read by the ES startup script, not a YAML
       # setting — kept here (rather than a jvm.options file) so it is visible
@@ -41,7 +41,7 @@ services:
 
   kibana:
     image: docker.elastic.co/kibana/kibana:9.4.2
-    container_name: cce-kibana
+    container_name: aol-kibana
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -63,7 +63,7 @@ services:
 
   apm-server:
     image: docker.elastic.co/apm/apm-server:9.4.2
-    container_name: cce-apm-server
+    container_name: aol-apm-server
     depends_on:
       elasticsearch:
         condition: service_healthy

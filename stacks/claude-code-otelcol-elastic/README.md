@@ -49,7 +49,7 @@ out, and host identity is a property of where the agent runs, not of the agent.
 > true machine name. Don't mistake the demo value for real device attribution.
 
 > ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
-> backend's fixed `cce-*` container names and host ports (`9200` / `5601` /
+> backend's fixed `aol-*` container names and host ports (`9200` / `5601` /
 > `8200`). Run only one of the two at a time — `docker compose down` the other
 > stack first. (The Collector adds `:4317` / `:4318`.)
 

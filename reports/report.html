@@ -1339,6 +1339,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Rename the backend container names <code>cce-*</code> → <code>aol-*</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Scoped strictly by grep, splitting container names from probe identities.</strong> A <code>grep cce-</code> over <code>components/</code> and <code>stacks/</code> turned up two classes of hit: the three <code>container_name</code> definitions (plus the scripts/comments that name those containers) — in scope — and the OTLP probe identities baked into the smoke/resilience payloads (<code>cce-smoke-test</code>, <code>cce-resilience-test</code>, <code>cce.resilience.event</code>) — explicitly out of scope, owned by the very next PRD task. I renamed only the former and left every probe-identity hit untouched.</li>
+      <li><strong>Six edit sites:</strong> the three <code>container_name</code>s in <code>components/backends/elastic/docker-compose.yml</code>; the <code>for c in …</code> wait-for-healthy loop in all three test scripts (<code>claude-code-elastic/scripts/smoke-test.sh</code>, <code>claude-code-otelcol-elastic/scripts/smoke-test.sh</code> and <code>resilience-test.sh</code>); the explicit <code>wait_healthy cce-apm-server</code> after the restart in <code>resilience-test.sh</code>; and the two container-name doc mentions (the otelcol stack's compose header comment and its README "cannot run alongside" warning).</li>
+      <li><strong>The PRD said "both stack READMEs" mention container names; the grep said otherwise.</strong> Only the otelcol README carries a <code>cce-*</code> container-name mention — the <code>claude-code-elastic</code> README's sole <code>cce-</code> hit is <code>cce-smoke-test</code> (a probe identity, out of scope). I trusted the grep (the task's own enumeration method) over the prose and left the direct stack's README alone.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The fixed container names were kept (not dropped) per the task — they don't over-constrain beyond what the fixed host ports already do, and they keep the <code>docker inspect &lt;name&gt;</code> health-waits simple.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new. The immediately-following PRD task (rename the <code>cce-*</code> probe identities inside the precomputed OTLP payloads) is the natural completion — after it, a <code>grep cce</code> over the working tree returns nothing but immutable history.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The three backend containers are now <code>aol-elasticsearch</code> / <code>aol-kibana</code> / <code>aol-apm-server</code> (repo-scoped "agent-observability-lab") instead of the stale stack-scoped <code>cce-*</code> prefix. Both stacks' health-waits and the otelcol docs follow the new names; the OTLP probe service-names stay <code>cce-*</code> for now (next task).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live end-to-end.</strong> <code>docker compose config -q</code> passes for both stacks. Recreated the running <code>claude-code-otelcol-elastic</code> stack (<code>down &amp;&amp; up -d</code>) so the new <code>aol-*</code> containers exist; <code>scripts/smoke-test.sh</code> reaches <strong>PASS</strong> (all three OTLP probes 200 and land via the Collector) and <code>scripts/resilience-test.sh</code> reaches <strong>PASS</strong> (probe sent during an <code>apm-server</code> outage drains into ES on recovery) — both exercising the renamed wait-for-healthy / <code>wait_healthy aol-apm-server</code> logic.</li>
+      <li><strong>Post-rename grep confirms the split held:</strong> <code>grep cce- components/ stacks/</code> now returns only the probe service-names in the smoke/resilience scripts and READMEs (the next task's scope); zero container-name hits remain. shellcheck is not installed on this host, so that lint gate is skipped per CONVENTIONS. Did not run the <code>claude-code-elastic</code> smoke-test — the two stacks share the (now <code>aol-*</code>) container names and host ports and can't both be up; the otelcol stack was the live one and shares the identical backend component.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

@@ -73,7 +73,7 @@ wait_healthy() {
   done
   return 1
 }
-for c in cce-elasticsearch cce-kibana cce-apm-server; do
+for c in aol-elasticsearch aol-kibana aol-apm-server; do
   wait_healthy "$c" 60 || { docker compose ps; fail "$c did not become healthy"; }
 done
 
@@ -135,7 +135,7 @@ echo "[act] confirmed: probe not in ES during the outage (count still $mid)"
 
 echo "[act] 4/4 starting apm-server and waiting for it to recover…"
 docker compose start apm-server
-wait_healthy cce-apm-server 60 || { docker compose ps; fail "apm-server did not become healthy after restart"; }
+wait_healthy aol-apm-server 60 || { docker compose ps; fail "apm-server did not become healthy after restart"; }
 
 # --- Assert ----------------------------------------------------------------
 echo "[assert] waiting for the queued probe to drain into Elasticsearch…"

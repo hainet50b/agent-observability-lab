@@ -75,7 +75,7 @@ wait_healthy() {
   done
   return 1
 }
-for c in cce-elasticsearch cce-kibana cce-apm-server; do
+for c in aol-elasticsearch aol-kibana aol-apm-server; do
   wait_healthy "$c" 60 || { docker compose ps; fail "$c did not become healthy"; }
 done
 
