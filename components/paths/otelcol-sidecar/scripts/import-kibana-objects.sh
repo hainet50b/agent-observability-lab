@@ -9,9 +9,9 @@
 # imports by running the backend's import, then the agent's, then this one.
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
-# `_import?overwrite=true` API. The data view has no cross-references, so a single
-# file is enough today; later assets (e.g. the Health dashboard) append to FILES
-# after the data view it references. Prints the per-file import result.
+# `_import?overwrite=true` API: the self-telemetry data view first, then the
+# Health dashboard that references it (a by-value Lens dashboard, id
+# otelcol-sidecar-health). Prints the per-file import result.
 #
 # Prerequisites: curl, jq. Override the Kibana base URL with KIBANA_URL if you
 # publish a different port than the default below.
@@ -36,10 +36,11 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq   >/dev/null 2>&1 || skip "jq not found"
 
-# Data views first — any later asset (Health dashboard) that references the
-# otelcol-sidecar-metrics data view must find it already imported.
+# Data view first — the Health dashboard references the otelcol-sidecar-metrics
+# data view, so it must be imported before the dashboard.
 FILES="
 kibana/data-views.ndjson
+kibana/dashboard.ndjson
 "
 
 import_file() {
@@ -63,5 +64,6 @@ for f in $FILES; do
 done
 
 echo
-echo "PASS: otelcol-sidecar Kibana saved objects imported. Open Discover and pick the"
-echo "OTel Collector Sidecar — Metrics data view to inspect the otelcol_* self-metrics."
+echo "PASS: otelcol-sidecar Kibana saved objects imported. Open the OTel Collector"
+echo "Sidecar — Health dashboard, or pick the OTel Collector Sidecar — Metrics data"
+echo "view in Discover to inspect the otelcol_* self-metrics."

@@ -10,9 +10,9 @@
 # this one.
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
-# `_import?overwrite=true` API. The data view has no cross-references, so a single
-# file is enough today; later assets (e.g. the Health dashboard) append to $Files
-# after the data view it references. Prints the per-file import result.
+# `_import?overwrite=true` API: the self-telemetry data view first, then the
+# Health dashboard that references it (a by-value Lens dashboard, id
+# otelcol-sidecar-health). Prints the per-file import result.
 #
 # Prerequisites: PowerShell 7+ (curl is not required — uses Invoke-RestMethod).
 # Override the Kibana base URL with -KibanaUrl or the KIBANA_URL env var
@@ -37,10 +37,11 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 
-# Data views first — any later asset (Health dashboard) that references the
-# otelcol-sidecar-metrics data view must find it already imported.
+# Data view first — the Health dashboard references the otelcol-sidecar-metrics
+# data view, so it must be imported before the dashboard.
 $Files = @(
     'kibana/data-views.ndjson'
+    'kibana/dashboard.ndjson'
 )
 
 function Import-File {
@@ -79,5 +80,6 @@ foreach ($f in $Files) {
 }
 
 Write-Host ""
-Write-Host "PASS: otelcol-sidecar Kibana saved objects imported. Open Discover and pick the"
-Write-Host "OTel Collector Sidecar — Metrics data view to inspect the otelcol_* self-metrics."
+Write-Host "PASS: otelcol-sidecar Kibana saved objects imported. Open the OTel Collector"
+Write-Host "Sidecar — Health dashboard, or pick the OTel Collector Sidecar — Metrics data"
+Write-Host "view in Discover to inspect the otelcol_* self-metrics."
