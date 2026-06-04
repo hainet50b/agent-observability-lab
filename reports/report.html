@@ -1280,6 +1280,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Rename sidecar Collector config <code>otel-collector.yaml</code> → <code>collector.yaml</code> (SchemaStore false positive)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Pure rename + 3 reference updates, exactly as specified.</strong> The task was prescriptive: <code>git mv</code> the config to a basename not starting with <code>otel</code> so yaml-language-server's greedy <code>otel*.yaml</code> SchemaStore glob (which applies the OpenTelemetry <em>SDK</em> Declarative-Config schema, demanding a top-level <code>file_format</code>) no longer matches. Picked <code>collector.yaml</code> as directed (not <code>otelcol.yaml</code>, which still matches the glob); the <code>otelcol-sidecar/config/</code> directory keeps the context unambiguous. No behaviour change — the file is and was a valid Collector config (the live stack proves it).</li>
+      <li><strong>Used <code>git mv</code> so history follows the file.</strong> Then updated the three references in <code>components/paths/otelcol-sidecar/docker-compose.yml</code>: the bind-mount source (<code>./config/collector.yaml:/etc/otelcol-contrib/config.yaml:ro</code>) and the two inline comments that name the file (the <code>host.name</code> caveat comment and the healthcheck/retry comment). The in-container target path and the <code>--config</code> flag are unchanged, as required.</li>
+      <li><strong>Confirmed no other file references the old name.</strong> A repo-wide grep for <code>otel-collector.yaml</code> returned only <code>PRD.md</code> (immutable history) besides the compose file — matching the task's claim that <code>SPEC/</code>, READMEs, and scripts never named it.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The SchemaStore-warning-gone gate can't be asserted from the CLI (it's an editor-side LSP behaviour), but the rename achieves it by construction: the new basename no longer matches the <code>otel*.yaml</code> glob, so the SDK schema is no longer auto-applied.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None specific to this change. (The remaining open tasks already cover the <code>cce-</code> → <code>aol-</code> renames and the sidecar Kibana data view / Health dashboard.)</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The sidecar Collector's config file is now <code>components/paths/otelcol-sidecar/config/collector.yaml</code> (was <code>otel-collector.yaml</code>). This stops editors with yaml-language-server + SchemaStore from showing a bogus <code>Missing property "file_format"</code> warning — they were mistaking the Collector config for an OpenTelemetry SDK declarative-config file purely because of the <code>otel</code>-prefixed name. The running stack is unaffected.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live end-to-end.</strong> <code>docker compose config -q</code> passes for both stacks; recreated the <code>otel-collector</code> container so it picks up the renamed bind-mount — it loaded the config cleanly ("Everything is ready. Begin running and processing data."); <code>stacks/claude-code-otelcol-elastic/scripts/smoke-test.sh</code> reaches <strong>PASS</strong> (all three OTLP probes return HTTP 200 and land in the APM data streams via the Collector).</li>
+      <li><strong>Did not run the <code>claude-code-elastic</code> smoke-test</strong> — the two stacks share the fixed <code>cce-*</code> container names and can't both be up; the otelcol stack was the one live, and this change touches only the otelcol-sidecar path component (the direct stack doesn't use the Collector at all). shellcheck is not installed on this host, so that lint gate is skipped per CONVENTIONS.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

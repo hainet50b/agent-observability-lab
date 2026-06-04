@@ -27,7 +27,7 @@ services:
     # Deterministic container hostname so the resourcedetection `system` detector
     # stamps a stable, recognizable host.name (otelcol-sidecar-demo) onto every
     # relayed signal instead of a random container ID. NOTE: this is the
-    # CONTAINER's hostname, not the laptop's — see config/otel-collector.yaml and
+    # CONTAINER's hostname, not the laptop's — see config/collector.yaml and
     # the stack README "host identity" caveat.
     hostname: otelcol-sidecar-demo
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -39,7 +39,7 @@ services:
     # the queue dir to the runtime uid instead.
     user: "0:0"
     volumes:
-      - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ./config/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       # Durable sending_queue backing store (file_storage extension). A named
       # volume so queued telemetry survives container restarts, not just the
       # process — the whole point of the on-disk queue.
@@ -50,7 +50,7 @@ services:
       - "127.0.0.1:4318:4318"
     # No healthcheck: the contrib image is distroless (no shell, no curl/wget) so
     # an in-container probe is impractical. Startup ordering is handled instead by
-    # the exporter's retry_on_failure (see config/otel-collector.yaml) — if the
+    # the exporter's retry_on_failure (see config/collector.yaml) — if the
     # APM Server is not up yet the Collector retries rather than depending on it.
     # The stack smoke-test waits for the Collector by polling its OTLP port from
     # the host (which does have curl).
