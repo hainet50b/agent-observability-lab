@@ -27,11 +27,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Resolve and enter the component root (parent of this scripts/ directory) so the
-# kibana/ NDJSON paths resolve regardless of the caller's cwd.
+# Resolve the component root (parent of this scripts/ directory). Paths into
+# kibana/ are built absolutely from it (see Import-File) so they resolve
+# regardless of the caller's cwd — without Set-Location, which runs in the
+# caller's PowerShell session and would leave their shell parked here.
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-Set-Location -LiteralPath $ComponentDir
 
 # The cross-agent data view this backend owns (AI Agents — Traces,
 # traces-apm-agents_*). Agent-specific data views / saved searches / dashboards
@@ -43,7 +44,8 @@ $Files = @(
 function Import-File {
     param([string]$File)
 
-    if (-not (Test-Path -LiteralPath $File)) {
+    $Path = Join-Path $ComponentDir $File
+    if (-not (Test-Path -LiteralPath $Path)) {
         Write-Error "FAIL: $File not found"
         exit 1
     }
@@ -53,7 +55,7 @@ function Import-File {
         $result = Invoke-RestMethod -Method Post `
             -Uri "$KibanaUrl/api/saved_objects/_import?overwrite=true" `
             -Headers @{ 'kbn-xsrf' = 'true' } `
-            -Form @{ file = Get-Item -LiteralPath $File }
+            -Form @{ file = Get-Item -LiteralPath $Path }
     }
     catch {
         Write-Error "FAIL: request to Kibana failed for $File ($_)"

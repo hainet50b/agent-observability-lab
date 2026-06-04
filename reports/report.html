@@ -1249,6 +1249,37 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Fix — component <code>.ps1</code> scripts no longer leak <code>Set-Location</code> into the caller's shell</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Removed <code>Set-Location</code>, referenced files absolutely — not <code>Push-Location</code>/<code>Pop-Location</code>.</strong> Exactly as the task specified, and for the stated reason: absolute paths via <code>Join-Path $ComponentDir …</code> have <em>zero</em> location side-effect on <em>every</em> exit path, including the <code>exit 1</code> / terminating-<code>Write-Error</code> failure paths. A <code>Pop-Location</code> would be skipped whenever the script throws or exits before reaching it — the precise failure mode that produced the leak.</li>
+      <li><strong>Kept relative display names, resolved absolute internally (the two import scripts).</strong> Left <code>$Files</code> as the short <code>kibana/…</code> names so the <code>[import] kibana/…</code> log lines stay readable, and resolved to absolute inside <code>Import-File</code> (<code>$Path = Join-Path $ComponentDir $File</code>, used by <code>Test-Path</code>/<code>Get-Item</code>). <code>Import-File</code> reads <code>$ComponentDir</code> from the enclosing script scope.</li>
+      <li><strong>Reordered the pipeline-path assignment (<code>setup-trace-routing.ps1</code>).</strong> Moved <code>$PipelineFile</code> below the <code>$ComponentDir</code> resolution and built it as <code>Join-Path $ComponentDir 'elasticsearch/trace-routing.pipeline.json'</code>; simplified the now-redundant not-found message from <code>$ComponentDir/$PipelineFile</code> to just <code>$PipelineFile</code> (now already absolute).</li>
+      <li><strong>Left the <code>.sh</code> scripts and the stack shims untouched.</strong> The <code>.sh</code> <code>cd</code> is confined to its own subprocess (no leak), and the shims only forward args — neither needed a change, per the task.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Pre-existing failure-path exit code is non-deterministic — left as-is.</strong> Under <code>$ErrorActionPreference = 'Stop'</code>, the <code>catch</code> block's <code>Write-Error</code> is itself terminating, so it propagates before the literal <code>exit 1</code> on the next line runs and <code>$LASTEXITCODE</code> isn't set to 1 on a dead-endpoint failure (the script still fails, just not via that exit code). This is unchanged by this task — I only touched path resolution — and is out of scope; flagged for awareness.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Make the <code>.ps1</code> failure exit code deterministic.</strong> The <code>Write-Error</code>-then-<code>exit 1</code> pattern in the <code>catch</code> blocks is partly dead code under <code>Stop</code>. A small follow-up could switch to an explicit <code>throw</code> / <code>$Host.SetShouldExit</code> or relax to <code>-ErrorAction Stop</code> on the call so a failed import/PUT returns a clean non-zero code to the shim. Cosmetic for the user, but it would let the orchestrator/shims reason about exit codes.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Running any of the three component PowerShell scripts — <code>import-kibana-objects.ps1</code> (backend + agent) and <code>setup-trace-routing.ps1</code> — directly or through either stack's <code>scripts/</code> shim no longer leaves your shell parked in the component directory. They now locate their <code>kibana/</code> / <code>elasticsearch/</code> files by absolute path (<code>Join-Path $ComponentDir …</code>) instead of <code>Set-Location</code>-ing into the component root, so <code>$PWD</code> is untouched on every exit path. The <code>.sh</code> mirrors and the shims were already correct and stay unchanged.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>All 14 combinations verified live.</strong> Each of the 3 component scripts run directly <em>and</em> via both stacks' shims (<code>claude-code-elastic</code>, <code>claude-code-otelcol-elastic</code>), on a success path (live Kibana/ES on the default ports) and a failure path (bogus <code>:59999</code> URL): <code>$PWD</code> was identical before/after in <strong>every</strong> case. Success cases exited 0 (imports returned <code>success: true</code>, the pipeline PUT was acknowledged); failure cases failed exactly as before.</li>
+      <li><strong>Did not separately re-run the <code>claude-code-elastic</code> smoke-test — by design.</strong> The two stacks share the fixed <code>cce-*</code> container names and can't both be up; the <code>otelcol</code> stack was the one live. <code>smoke-test.sh</code> is shell-only and never invokes the <code>.ps1</code> scripts, so that stack's gate is logically unaffected by a <code>.ps1</code>-only change. The live otelcol <code>smoke-test.sh</code> reaches <strong>PASS</strong> (all three OTLP probes land), and <code>docker compose config -q</code> passes for both stacks.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

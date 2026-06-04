@@ -44,19 +44,20 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Pipeline = 'traces-apm@custom'
-$PipelineFile = 'elasticsearch/trace-routing.pipeline.json'
 
-# Resolve and enter the component root (parent of this scripts/ directory),
-# matching the .sh version, so behaviour is consistent regardless of the caller's cwd.
+# Resolve the component root (parent of this scripts/ directory) and build the
+# pipeline-body path absolutely from it, so it resolves regardless of the caller's
+# cwd — without Set-Location, which runs in the caller's PowerShell session and
+# would leave their shell parked here.
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-Set-Location -LiteralPath $ComponentDir
+$PipelineFile = Join-Path $ComponentDir 'elasticsearch/trace-routing.pipeline.json'
 
 # The pipeline body (a reroute that fires only on Claude Code spans; other
 # producers fall through unchanged and stay in traces-apm-default) is the single
 # source of truth shared with setup-trace-routing.sh.
 if (-not (Test-Path -LiteralPath $PipelineFile -PathType Leaf)) {
-    Write-Error "FAIL: pipeline body not found: $ComponentDir/$PipelineFile"
+    Write-Error "FAIL: pipeline body not found: $PipelineFile"
     exit 1
 }
 $Body = Get-Content -Raw -LiteralPath $PipelineFile
