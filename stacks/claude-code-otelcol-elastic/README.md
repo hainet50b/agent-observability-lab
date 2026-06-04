@@ -212,7 +212,7 @@ docker compose down -v     # also wipe ingested telemetry
 Elasticsearch** path end to end, following the 3A pattern: **Arrange** brings the
 stack up, waits for the backend services to report healthy, then waits for the
 Collector to accept OTLP on `:4318`; **Act** POSTs a synthetic OTLP/protobuf
-metrics + logs + traces probe (tagged `service.name = cce-smoke-test`) to the
+metrics + logs + traces probe (tagged `service.name = aol-smoke-test`) to the
 **Collector**, which forwards it to the APM Server; **Assert** confirms the docs
 landed in the APM data streams in Elasticsearch — proving the telemetry traversed
 the Collector. A synthetic probe is used (not a real `claude` session) so the

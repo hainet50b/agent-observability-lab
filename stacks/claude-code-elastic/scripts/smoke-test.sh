@@ -11,7 +11,7 @@
 #             payload to the APM Server OTLP/HTTP endpoint, shaped like the three
 #             channels Claude Code emits (one metric data point + one log/event
 #             record + one trace span), tagged with service.name
-#             "cce-smoke-test". This stack's APM Server always protobuf-decodes
+#             "aol-smoke-test". This stack's APM Server always protobuf-decodes
 #             the request body (it ignores Content-Type and has no OTLP/JSON
 #             toggle), so the probe sends protobuf — matching real Claude Code,
 #             which exports http/protobuf.
@@ -42,7 +42,7 @@ set -euo pipefail
 
 ES_URL=${ES_URL:-http://localhost:9200}
 APM_OTLP_URL=${APM_OTLP_URL:-http://localhost:8200}
-SERVICE_NAME=cce-smoke-test
+SERVICE_NAME=aol-smoke-test
 
 # Resolve and enter the stack root (parent of this scripts/ directory) so
 # `docker compose` finds docker-compose.yml regardless of the caller's cwd.
@@ -84,15 +84,15 @@ echo "[act] sending synthetic OTLP/protobuf telemetry (service.name=$SERVICE_NAM
 # Content-Type and exposes no OTLP/JSON toggle), so the probe POSTs protobuf —
 # the same wire format real Claude Code uses (http/protobuf). The three payloads
 # are precomputed and embedded as base64 to avoid pulling in protobuf tooling:
-#   - metrics: ExportMetricsServiceRequest, one cce.smoke.counter sum point
-#   - logs:    ExportLogsServiceRequest,    one cce.smoke.event log record
-#   - traces:  ExportTraceServiceRequest,   one cce.smoke.span span
-# All three bake service.name=cce-smoke-test and a fixed timeUnixNano (≈2026-05-28);
+#   - metrics: ExportMetricsServiceRequest, one aol.smoke.counter sum point
+#   - logs:    ExportLogsServiceRequest,    one aol.smoke.event log record
+#   - traces:  ExportTraceServiceRequest,   one aol.smoke.span span
+# All three bake service.name=aol-smoke-test and a fixed timeUnixNano (≈2026-05-28);
 # the assertions below query _count by service.name with no time filter, so the
 # fixed timestamp does not affect them.
-metrics_payload="ClUKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSLxItChFjY2Uuc21va2UuY291bnRlcjoYChIZAAAytJHUsxgxAQAAAAAAAAAQAhgB"
-logs_payload="CmcKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSQRI/CQAAMrSR1LMYEAkqEQoPY2NlIHNtb2tlIGV2ZW50Mh8KCmV2ZW50Lm5hbWUSEQoPY2NlLnNtb2tlLmV2ZW50"
-traces_payload="CmgKIgogCgxzZXJ2aWNlLm5hbWUSEAoOY2NlLXNtb2tlLXRlc3QSQhJAChAREREREREREREREREREREREggiIiIiIiIiIioOY2NlLnNtb2tlLnNwYW4wATkAADK0kdSzGEFAQkG0kdSzGA=="
+metrics_payload="ClUKIgogCgxzZXJ2aWNlLm5hbWUSEAoOYW9sLXNtb2tlLXRlc3QSLxItChFhb2wuc21va2UuY291bnRlcjoYChIZAAAytJHUsxgxAQAAAAAAAAAQAhgB"
+logs_payload="CmcKIgogCgxzZXJ2aWNlLm5hbWUSEAoOYW9sLXNtb2tlLXRlc3QSQRI/CQAAMrSR1LMYEAkqEQoPYW9sIHNtb2tlIGV2ZW50Mh8KCmV2ZW50Lm5hbWUSEQoPYW9sLnNtb2tlLmV2ZW50"
+traces_payload="CmgKIgogCgxzZXJ2aWNlLm5hbWUSEAoOYW9sLXNtb2tlLXRlc3QSQhJAChAREREREREREREREREREREREggiIiIiIiIiIioOYW9sLnNtb2tlLnNwYW4wATkAADK0kdSzGEFAQkG0kdSzGA=="
 
 post_otlp() {
   path=$1 b64=$2

@@ -29,7 +29,7 @@
 #
 # Why synthetic telemetry: the Act step must be self-contained and deterministic
 # (no API key, no interactive session) so it can run as a gate. The probe carries
-# a unique service.name (cce-resilience-test) so it never collides with the
+# a unique service.name (aol-resilience-test) so it never collides with the
 # smoke-test probe or real Claude Code telemetry.
 #
 # Prerequisites: docker (+ a running daemon), curl, jq, base64 (coreutils). If
@@ -42,7 +42,7 @@ set -euo pipefail
 
 ES_URL=${ES_URL:-http://localhost:9200}
 OTEL_COLLECTOR_URL=${OTEL_COLLECTOR_URL:-http://localhost:4318}
-SERVICE_NAME=cce-resilience-test
+SERVICE_NAME=aol-resilience-test
 
 # Resolve and enter the stack root (parent of this scripts/ directory) so
 # `docker compose` finds docker-compose.yml regardless of the caller's cwd.
@@ -104,11 +104,11 @@ echo "[arrange] baseline: $baseline doc(s) in 'logs-apm*' for service.name=$SERV
 
 # --- Act -------------------------------------------------------------------
 # A single OTLP/protobuf logs probe (ExportLogsServiceRequest, one
-# cce.resilience.event record) tagged service.name=cce-resilience-test, with a
+# aol.resilience.event record) tagged service.name=aol-resilience-test, with a
 # fixed timeUnixNano (≈2026) — the assertion counts by service.name with no time
 # filter, so the fixed timestamp does not matter. Precomputed/base64-embedded to
 # avoid any protobuf tooling, exactly like smoke-test.sh.
-probe_payload="CnYKJwolCgxzZXJ2aWNlLm5hbWUSFQoTY2NlLXJlc2lsaWVuY2UtdGVzdBJLEkkJAAAytJHUsxgQCSoWChRjY2UgcmVzaWxpZW5jZSBldmVudDIkCgpldmVudC5uYW1lEhYKFGNjZS5yZXNpbGllbmNlLmV2ZW50"
+probe_payload="CnYKJwolCgxzZXJ2aWNlLm5hbWUSFQoTYW9sLXJlc2lsaWVuY2UtdGVzdBJLEkkJAAAytJHUsxgQCSoWChRhb2wgcmVzaWxpZW5jZSBldmVudDIkCgpldmVudC5uYW1lEhYKFGFvbC5yZXNpbGllbmNlLmV2ZW50"
 
 echo "[act] 1/4 stopping apm-server to simulate a central-backend outage…"
 docker compose stop apm-server

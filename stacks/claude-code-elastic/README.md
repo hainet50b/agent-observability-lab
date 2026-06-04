@@ -236,7 +236,7 @@ docker compose down -v     # also wipe ingested telemetry
 `scripts/smoke-test.sh` checks the full **OTLP → APM Server → Elasticsearch** path
 end to end, following the 3A pattern: **Arrange** brings the stack up and waits
 for health; **Act** POSTs a synthetic OTLP metrics + logs probe (tagged
-`service.name = cce-smoke-test`) to the OTLP/HTTP endpoint; **Assert** confirms
+`service.name = aol-smoke-test`) to the OTLP/HTTP endpoint; **Assert** confirms
 the docs landed in the APM data streams, then prints the `service.name` values
 present so real `claude-code` telemetry shows up alongside the probe. A synthetic
 probe is used (not a real `claude` session) so the check is deterministic and
