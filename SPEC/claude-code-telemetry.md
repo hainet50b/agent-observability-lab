@@ -318,6 +318,28 @@ each gate changes — by data stream, document, and field:
   from an error category to the full error message, and stops collapsing
   custom/plugin/MCP `command_name` values on `user_prompt` to `custom` / `mcp`.
 
+### `OTEL_LOG_TOOL_CONTENT`
+
+| Data stream | Documents | Field | `0` (default) | `1` |
+| --- | --- | --- | --- | --- |
+| `logs-apm.app.claude_code-default` | `message: tool.output` — a new document type | `labels.output` (Bash: command stdout) / `labels.content` (Read: file contents) | documents don't exist | verbatim tool output |
+
+- The upstream docs describe this as a `tool.output` *span event* on
+  `claude_code.tool.execution` (60 KB cap, requires tracing). **Physically it
+  lands as a document in the events data stream**, not in the traces stream —
+  the `tool.execution` span itself is unchanged. (`gen_ai.request.attempt`,
+  also documented as a span event, lands the same way: a bare-named `message`
+  in the events stream.)
+- Each doc carries top-level `span.id` (= the `claude_code.tool.execution`
+  span) and `trace.id`, which is how it joins back to its trace.
+- The content attribute varies by tool — `output` for Bash, `content` for
+  Read — and only output-side content appears (input capture belongs to
+  `OTEL_LOG_TOOL_DETAILS`' `tool_input`).
+- These docs carry **no `labels.user_*` / `prompt_id` envelope** — identity is
+  only top-level (`service.name`, `session.id`, host fields). They match no
+  `message: claude_code.*` filter, so they surface only in **Event Overview**
+  (no `message` pill) or a dedicated view.
+
 ## Generating events that don't occur in a normal session
 
 Some events only fire under specific conditions — handy when populating the demo:
