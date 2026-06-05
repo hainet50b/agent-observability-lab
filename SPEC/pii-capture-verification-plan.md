@@ -47,23 +47,40 @@ untouched; offline-tolerant (flush later).
 
 Verify:
 
-- [ ] `UserPromptSubmit` stdin payload shape — full prompt? `session_id`?
-- [ ] Identity resolution — `user_email` is not in the hook env; OS user +
-      hostname enough, or readable from the local `claude` auth config?
-- [ ] `PostToolUse` `tool_response` size limits / truncation (probe with a
-      huge `Read`)
-- [ ] MCP tools observed live through `PreToolUse`/`PostToolUse`
-- [ ] Subagent-internal tool calls — do hooks fire for them?
-- [ ] Headless (`claude -p`, the Ralph shape) — do hooks fire?
-- [ ] Transcript contents via `transcript_path` — assistant output? thinking
-      blocks (present or redacted)?
-- [ ] Per-tool-call hook overhead (latency measurement)
+- [x] `UserPromptSubmit` payload — full unredacted `prompt`, `session_id`
+      (**same value as the OTLP `session.id`**), `transcript_path`, `cwd`,
+      `permission_mode`. No `user_*` identity in any payload
+- [x] Identity resolution — locally resolvable:
+      `~/.claude.json` `.oauthAccount.emailAddress` (+ `organizationName`);
+      the hook script completes the envelope itself
+- [x] `tool_response` size — 150 KB stdout arrived truncated to ~23 KB, but
+      with `persistedOutputPath`/`persistedOutputSize` pointing at the full
+      output on disk (the pointer model again — full content recoverable)
+- [x] MCP tools — `PreToolUse`/`PostToolUse` fire for `mcp__<server>__<tool>`
+      with full input and response; the `tool.output` MCP gap is closed
+- [x] Subagent-internal tool calls — fire, **enriched with `agent_id` +
+      `agent_type`**; `SubagentStop` adds `agent_transcript_path`. Background
+      utility agents (prompt suggestion etc.) also fire `SubagentStop` with
+      `agent_type: ""` — noise to filter
+- [x] Headless (`claude -p`) — `UserPromptSubmit` + `Stop` fire (Ralph-shaped
+      sessions are auditable)
+- [x] Transcript via `transcript_path` — assistant text yes; thinking blocks
+      all **empty** (431/431) — thinking is not capturable, consistent with
+      the API-side `<REDACTED>`
+- [x] Overhead — dump script ~3 ms/invocation (plus Claude's spawn cost);
+      `PostToolUse` payloads carry their own `duration_ms`
+- [x] Bonus findings — `tool_use_id` is in the payloads (**direct join key to
+      the OTLP `tool_result` events**); `Stop` carries
+      `last_assistant_message` inline; failed tools fire `PreToolUse` only —
+      error capture needs an additional **`PostToolUseFailure`** hook; hook
+      definitions hot-reload if the settings file existed at startup
 - [ ] ES ingest of the sealed record; Kibana usability of
-      envelope-plaintext / content-cipher documents
+      envelope-plaintext / content-cipher documents (build phase)
 - [ ] Enforcement story: hook forced via managed settings
       (`hook_source: policySettings`) and *observed* through the existing
       `hook_registered` / `hook_execution_complete` events — the current
-      telemetry audits the audit
+      telemetry audits the audit (needs an org-controlled file; not testable
+      from this user account alone)
 
 ### P2 — OTel Collector gateway: fan-out, sanitize one branch, file the other
 
