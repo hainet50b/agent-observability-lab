@@ -299,6 +299,25 @@ each gate changes — by data stream, document, and field:
   root) are emitted regardless of the gate and match the (hidden or visible)
   text length.
 
+### `OTEL_LOG_TOOL_DETAILS`
+
+| Data stream | Documents | Field | `0` (default) | `1` |
+| --- | --- | --- | --- | --- |
+| `logs-apm.app.claude_code-default` | `message: claude_code.tool_result` | `labels.tool_input` | absent | JSON-serialized tool arguments, every tool incl. MCP (e.g. Bash `command`, Read `file_path`; values >512 chars truncated, payload capped ~4 KB) |
+| `logs-apm.app.claude_code-default` | `message: claude_code.tool_result` | `labels.tool_parameters` | absent | tool-specific JSON string — Bash: `bash_command` / `full_command` / `description`; MCP tools (`tool_name: mcp_tool`): `mcp_server_name` / `mcp_tool_name` |
+| `logs-apm.app.claude_code-default` | `message: claude_code.tool_decision` | `labels.tool_parameters` | absent | same shape — shows *what* the accept/reject decision was about |
+| `logs-apm.app.claude_code-default` | `message: claude_code.mcp_server_connection` | `labels.server_name` | absent | the configured MCP server name (e.g. `elasticsearch`) — this event otherwise has no server-name field at all |
+
+- The command / path detail lives **inside the `tool_input` / `tool_parameters`
+  JSON strings** — no flat `labels.full_command` / `labels.file_path` fields
+  materialize on events.
+- **Trace spans are unchanged** — span-side `tool_input` / `file_path` content
+  attributes belong to *detailed* beta tracing, not this gate; on the plain
+  enhanced beta the tool spans look identical either way.
+- Per the upstream docs, the gate also switches `labels.error` on failed tools
+  from an error category to the full error message, and stops collapsing
+  custom/plugin/MCP `command_name` values on `user_prompt` to `custom` / `mcp`.
+
 ## Generating events that don't occur in a normal session
 
 Some events only fire under specific conditions — handy when populating the demo:
