@@ -73,6 +73,9 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | --- | --- |
 | `claude_code.user_prompt` | `labels.prompt_id`, `prompt_length` (string), `prompt` (`<REDACTED>` unless `OTEL_LOG_USER_PROMPTS=1`) |
 | `claude_code.api_request` | `labels.model`, `request_id`, `query_source`, `speed`, `effort`; `numeric_labels.input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `cost_usd`, `cost_usd_micros`, `duration_ms` |
+| `claude_code.api_error` | the failure twin of `api_request`: the same context labels (`model`, `request_id`, `query_source`, `speed`, `effort`) plus `labels.error` (message string, e.g. `Overloaded` / `Internal server error`); `numeric_labels.status_code`, `attempt` (how many tries this request burned), `duration_ms` (total, retries included). One per failed request — intermediate retries don't emit it |
+| `claude_code.api_retries_exhausted` | `labels.error`; `numeric_labels.status_code`, `total_attempts`, `total_retry_duration_ms`. Fires ~1 ms after a terminal `api_error` when retries ran out, and only then — the content duplicates that `api_error` (`total_attempts` = its `attempt`, `total_retry_duration_ms` ≈ its `duration_ms`); its value is as a distinct alert signal, not extra data |
+| `claude_code.internal_error` | `labels.error_name` (just `Error` — no message, no stack); pairs with 500-class `api_error`s at the same instant. No standalone value |
 | `claude_code.tool_decision` | `labels.tool_name`, `decision`, `source`, `tool_use_id` |
 | `claude_code.tool_result` | `labels.tool_name`, `success` (string), `duration_ms` (string), `decision_type`, `decision_source`, `tool_use_id`, `tool_input_size_bytes`, `tool_result_size_bytes` |
 | `claude_code.hook_registered` | `labels.hook_event`, `hook_type`, `hook_source` (granular origin: `userSettings`/`projectSettings`/`localSettings`/`flagSettings`/`pluginHook`/`policySettings`), `plugin_name` (when `hook_source: pluginHook`); fires once per hook at session start, no `prompt_id` |
@@ -85,10 +88,27 @@ been created against this stack). Dashboards should tolerate it arriving later.
 | `claude_code.auth` | `labels.action` (`login`/`logout`), `success`, `auth_method` (`oauth`); failure-only `error_category`, `status_code`; has `prompt_id`. ⚠️ Also carries many PII labels (`user_email`, `user_id`, `organization_id`, …) |
 | `claude_code.feedback_survey` | `labels.survey_type`, `event_type`, `response`, `appearance_id` — UI survey, low signal |
 
-`claude_code.api_error` fires only when an API request fails, so it shows up
-only once an error has occurred. `claude_code.hook_registered` fires once per
+`claude_code.hook_registered` fires once per
 configured hook at session start and carries the granular `hook_source` origins
 (see below).
+
+**`gen_ai.request.attempt` (bare name, no `claude_code.` prefix)** — one
+document per HTTP attempt against the API, carrying only
+`labels.client_request_id` (a fresh UUID per attempt) and
+`numeric_labels.attempt`. Like `tool.output` it comes from the tracing
+framework and has **no `user_*` / `prompt_id` envelope**; it **exists only
+while tracing is on** (every document carries a `trace.id`, while `api_request`
+shows plenty of untraced documents from tracing-off windows). Its `span.id`
+points at the **`claude_code.llm_request` span** — unlike the `claude_code.*`
+events of the same turn, which stamp the active `interaction` span — making it
+the per-attempt timeline for that span. For *counting* retries it is redundant:
+the terminal attempt count also lands on the `llm_request` span itself
+(`numeric_labels.attempt`, with `event.outcome: failure`) and on `api_error`;
+what only this event has is the timestamp of each attempt (the backoff curve)
+and the per-attempt `client_request_id`. Quirks: each retry chain logs
+`attempt: 1` twice (`[1, 1, 2, …, N]`), and when `OTEL_LOG_RAW_API_BODIES` is
+on, every attempt pairs 1:1 with an `api_request_body` document at the same
+timestamp — the request body is re-sent (and re-logged) per retry.
 
 **`claude_code.auth` is logout-biased.** `/logout` runs while telemetry is still
 alive, so the `action: logout` event reliably lands — but `/logout` then *exits*
