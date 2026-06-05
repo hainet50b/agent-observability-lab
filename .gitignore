@@ -6,5 +6,9 @@
 # Captured telemetry must never be committed (events can contain prompt/tool content).
 *.ndjson.local
 
+# Runtime artifacts — agent-written capture output (e.g. OTEL_LOG_RAW_API_BODIES=file:).
+# Raw API bodies contain prompts, tool results, file contents: never committed.
+/var/
+
 # Note: reports/ is intentionally NOT ignored. Ralph's HTML reports
 # (including rotated archives) are kept as Git history.
