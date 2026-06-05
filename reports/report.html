@@ -1624,6 +1624,35 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Claude Code — API Errors saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modelled the new <code>search</code> object on the existing single-<code>message</code>-pill searches (API Requests pattern): one <code>phrase</code> filter <code>message: claude_code.api_error</code>, empty query bar, <code>@timestamp</code> desc, <code>user_email</code> lead, <code>trace.id</code> trailer, both <code>references[]</code> entries pointing at <code>claude-code-events</code>.</li>
+      <li>Used the exact columns the PRD specified and verified each is populated in live data before writing: <code>labels.model</code>, <code>labels.error</code>, <code>numeric_labels.status_code</code>, <code>numeric_labels.attempt</code>, <code>numeric_labels.duration_ms</code>. The 2026-06-05 03:01–03:32 window shows them filled (529 "Overloaded" up to attempt 11, 500 "Internal server error").</li>
+      <li>Bumped the export-summary <code>exportedCount</code> 16 → 17; left <code>missingRefCount</code>/<code>missingReferences</code> as-is (data-view refs resolve at import time, same as every other search in the file).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The companion <strong>API Retries Exhausted</strong> search (the file's last open task) was intentionally left for the next iteration per one-task-per-loop.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Both <code>numeric_labels.status_code</code> and <code>numeric_labels.attempt</code> are aggregatable — a small "API health" dashboard panel (error rate by status_code over time) would be a natural follow-on once both failure lenses exist.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a <strong>Claude Code — API Errors</strong> saved search — the API failure lens (one row per <code>claude_code.api_error</code> event, showing model / error / HTTP status / retry attempt / duration). Opens straight onto the real 529/500 incident in the live data and is the base signal future alerting will hang off.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: the full <code>saved-searches.ndjson</code> re-imported with <code>success: true</code> (17 objects, references resolved), and the underlying query returns the 7 <code>api_error</code> docs in the documented window with every specified column populated.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
