@@ -276,6 +276,29 @@ one `tool_result` event but several spans (`tool` + `blocked_on_user` +
   boolean form of `agent_source`. The `numeric_labels` (`duration_ms`,
   `total_tokens`, `total_tool_uses`) are true numbers.
 
+## Content-exposure gates
+
+The four `OTEL_LOG_*` gates ship as `0` in the telemetry config examples. What
+each gate changes — by data stream, document, and field:
+
+### `OTEL_LOG_USER_PROMPTS`
+
+| Data stream | Documents | Field | `0` (default) | `1` |
+| --- | --- | --- | --- | --- |
+| `logs-apm.app.claude_code-default` | `message: claude_code.user_prompt` | `labels.prompt` | `<REDACTED>` | verbatim prompt text |
+| `traces-apm-agents_claude_code` | `labels.span_type: interaction` (the `claude_code.interaction` root, `processor.event: transaction`) | `labels.user_prompt` | `<REDACTED>` | verbatim prompt text |
+
+- One flag governs both data streams — the event field and the trace-span field
+  flip together; nothing else changes.
+- No retroactivity — documents ingested while the gate was off stay
+  `<REDACTED>`; only new emissions carry text.
+- No side effects — no other `message` type gains content; `labels.tool_input` /
+  `labels.full_command` / `labels.file_path` remain entirely absent from the
+  mapping (those belong to the `OTEL_LOG_TOOL_DETAILS` gate).
+- `labels.prompt_length` (events) and `numeric_labels.user_prompt_length` (trace
+  root) are emitted regardless of the gate and match the (hidden or visible)
+  text length.
+
 ## Generating events that don't occur in a normal session
 
 Some events only fire under specific conditions — handy when populating the demo:
