@@ -1501,6 +1501,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add the Claude Code — Tool Output saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Data-view ID is <code>claude-code-events</code>, not the task's <code>cce-claude-code-events</code>.</strong> The task text (and several still-open sibling tasks) refer to the data view by its pre-Phase-2b id <code>cce-claude-code-events</code>, but Phase 2b stripped the <code>cce-</code> prefix from every saved-object id. The live <code>data-views.ndjson</code> defines it as <code>claude-code-events</code>, so I wired both references (the index ref and <code>filter[0].meta.index</code>) to <code>claude-code-events</code> — following the actual current state over the stale task wording. The displayed title is likewise un-suffixed (<code>Claude Code — Tool Output</code>, no <code>(claude-code-elastic)</code>), matching the 13 existing searches post-Phase-2b.</li>
+      <li><strong>Honoured the documented convention exception: no <code>labels.user_email</code> lead and no <code>labels.prompt_id</code> trailer.</strong> Every other saved search leads with <code>user_email</code>, but <code>tool.output</code> documents carry no <code>labels.user_*</code> / <code>prompt_id</code> envelope at all (verified live — see below), so the universal-who column would be permanently empty here. Columns are exactly the six the task specifies: <code>labels.output</code> (Bash stdout), <code>labels.content</code> (Read contents), <code>labels.diff</code> + <code>labels.file_path</code> (Edit), <code>span.id</code>, <code>trace.id</code>.</li>
+      <li><strong>Shape copied verbatim from the proven Tool Results object.</strong> Same compact JSON serialization, same single <code>phrase</code> filter pill in <code>searchSourceJSON.filter[]</code> (here <code>message: tool.output</code>), empty <code>kuery</code> query bar, <code>@timestamp</code> desc sort, and both references resolving the filter's <code>meta.index</code> through <code>references[]</code>. Appended as the 14th search (before the export-summary line); bumped <code>exportedCount</code> 13 → 14. <code>missingRefCount</code>/<code>missingReferences</code> are unchanged because <code>claude-code-events</code> was already in that list.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Live Kibana UI import could not be executed from the executor shell.</strong> The Docker daemon socket is permission-denied (<code>docker compose ps</code>/<code>docker info</code> both fail) and direct localhost HTTP to Kibana (<code>:5601</code>) is blocked by the command sandbox, so I could not run <code>scripts/import-kibana-objects.sh</code> nor open the search in Discover. I verified everything reachable instead: <strong>(1)</strong> every NDJSON line parses as JSON and each inner <code>searchSourceJSON</code> parses; <strong>(2)</strong> the new object's references resolve to <code>claude-code-events</code>, which is defined in <code>data-views.ndjson</code>; <strong>(3)</strong> via the Elasticsearch MCP, <code>message: tool.output</code> docs exist (11 in <code>logs-apm.app.claude_code*</code>) and carry exactly the chosen fields (<code>labels.output</code>/<code>content</code>/<code>diff</code>/<code>file_path</code>, <code>span.id</code>, <code>trace.id</code>) with no <code>user_email</code>/<code>prompt_id</code> — confirming both the column choice and the convention exception. The object is byte-shape-identical to the 13 already-working searches, so import risk is effectively nil — but a human should do the 30-second Discover open.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The three still-open Tool/API saved-search tasks (Tool I/O joined, API Bodies, the <code>OTEL_LOG_TOOL_DETAILS</code> columns task) all still say <code>cce-claude-code-events</code>. Worth a blanket note that the live id is <code>claude-code-events</code> so each is implemented against the real id, as this one was.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>A new <strong>Claude Code — Tool Output</strong> saved search gives the <code>OTEL_LOG_TOOL_CONTENT</code> documents (Bash output, Read file contents, Edit diffs) a dedicated Discover view — they match no <code>claude_code.*</code> message filter and were otherwise only visible buried in Event Overview. It is the standing audit lens for the tool-content gate; the view is empty unless that gate and tracing are both on.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>One 30-second human check is outstanding:</strong> import the NDJSON into the running Kibana and open <strong>Claude Code — Tool Output</strong> — it should show the single <code>message: tool.output</code> pill (empty query bar) over the live docs (the 2026-06-05 01:31–01:55 window has them). I could not run this from the executor shell (no Docker daemon / no localhost HTTP access); all other layers are verified.</li>
+      <li><strong>Deliberate convention break:</strong> this is the only saved search with no <code>user_email</code> lead and no <code>prompt_id</code> — correct here, because <code>tool.output</code> docs genuinely lack that envelope (confirmed against live data).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
