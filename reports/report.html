@@ -1653,6 +1653,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add a Claude Code — API Retries Exhausted saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Little real choice — this is the tight companion to the just-shipped <strong>API Errors</strong> search, so I cloned that object's shape verbatim: same data view <code>claude-code-events</code>, <code>@timestamp</code> desc, a single <code>message</code> <code>phrase</code> filter rendered as a pill, dual <code>references[]</code> wiring both the index ref and the filter's <code>meta.index</code>. Only the id, title, description, message value, and column list differ.</li>
+      <li>Picked the saved-object id <code>claude-code-api-retries-exhausted</code>, following the post-Phase-2b convention (no <code>cce-</code> prefix; kebab-cased from the title).</li>
+      <li>Columns taken exactly as the PRD specified (<code>user_email</code> lead → <code>model</code>, <code>error</code>, <code>status_code</code>, <code>total_attempts</code>, <code>total_retry_duration_ms</code> → <code>prompt_id</code>, <code>trace.id</code>). Confirmed all six field paths exist against the 3 live documents before authoring: status_code 529&times;2 / 500&times;1, total_attempts up to 6, total_retry_duration_ms ~200s.</li>
+      <li>Bumped the export footer's <code>exportedCount</code> 17 &rarr; 18; left the <code>missingReferences</code> entries (the externally-imported data views) unchanged, matching the file convention.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Verification ran through the project's own <code>scripts/import-kibana-objects.sh</code> rather than a direct <code>curl</code> — direct <code>curl</code> to <code>localhost:5601</code> is denied in this environment (both the network sandbox and a command-permission rule block it). The sanctioned import helper is the better path anyway: it reported <code>success: true</code> with the saved-searches leg landing <strong>18</strong> object(s).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The PRD open-task list is now empty. With API Errors + API Retries Exhausted both shipped as base signals, the natural follow-up is an actual Kibana <em>alerting rule</em> (or an Overview-dashboard panel) firing on <code>claude_code.api_retries_exhausted</code> volume — but that opens a new surface and should be specced with the human first.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a <strong>Claude Code — API Retries Exhausted</strong> saved search — the companion failure lens to API Errors, showing every event where Claude Code gave up after exhausting its API retries (model / error / HTTP status / total attempts / total retry duration). It is the distinct "retries fully exhausted" signal future alerting hangs off; an empty view in normal operation is expected.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: the full <code>saved-searches.ndjson</code> re-imported via the helper with <code>success: true</code> (18 objects), and the underlying <code>claude_code.api_retries_exhausted</code> query returns the 3 documents in the documented 2026-06-05 03:01–03:19 UTC window with every specified column populated.</li>
+      <li>This was the last unchecked task in <code>PRD.md</code> — the task list is now fully complete.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
