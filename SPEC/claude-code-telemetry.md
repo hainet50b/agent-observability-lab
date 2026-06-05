@@ -311,6 +311,11 @@ each gate changes — by data stream, document, and field:
 - The command / path detail lives **inside the `tool_input` / `tool_parameters`
   JSON strings** — no flat `labels.full_command` / `labels.file_path` fields
   materialize on events.
+- The capture is **shallow**: objects nested inside the arguments collapse to
+  the literal string `"<nested>"` in `tool_input`. Observed on MCP tool inputs,
+  whose arguments are typically nested (e.g. a search tool's `query_body`
+  interior is not recorded); built-in tools' flat arguments (Bash `command`,
+  Read `file_path`) appear in full.
 - **Trace spans are unchanged** — span-side `tool_input` / `file_path` content
   attributes belong to *detailed* beta tracing, not this gate; on the plain
   enhanced beta the tool spans look identical either way.
