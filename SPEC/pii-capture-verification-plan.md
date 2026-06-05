@@ -99,14 +99,21 @@ comparison axes, not disqualifiers, for the lab.
 
 Verify (the `file:<dir>` probe comes first — it gates the whole pattern):
 
-- [ ] `file:<dir>` behavior — file naming/format (JSONL?), `body_ref` linkage
-      from the `api_request_body` events, whether the 60 KB / truncation chain
-      is really lifted, thinking blocks (`<REDACTED>` or not)
-- [ ] Coverage — MCP traffic visible in bodies (closing the `tool.output`
-      gap); `file:<dir>` with response bodies; retry attempts as separate files?
+- [x] `file:<dir>` behavior — **verified, recorded in
+      `claude-code-telemetry.md` (`OTEL_LOG_RAW_API_BODIES` section)**: raw
+      verbatim bodies per file (`<uuid>.request.json` /
+      `req_<request_id>.response.json`), truncation chain fully lifted
+      (~400 KB request files, `body_length` == file size), events switch from
+      inline `body` to `body_ref` (pointer/cold-file model native), thinking
+      `<REDACTED>` even on disk
+- [x] Coverage — MCP traffic confirmed inside bodies (the `tool.output` gap
+      does not exist here); response bodies captured with full `usage`
+- [ ] Retry attempts as separate files? (needs a live failure window)
 - [ ] filelog receiver collection — parsing, multiline/size handling
 - [ ] Shipping destination trade-off — quarantined ES index vs central files
-- [ ] Volume measurement (bodies are big; what does a working day produce?)
+- [ ] Volume measurement (bodies are big; what does a working day produce?
+      first data point: ~400 KB per request in a long session, one file per
+      API call)
 
 ### P4 — LLM proxy / gateway (`ANTHROPIC_BASE_URL` → LiteLLM, mitmproxy, …)
 

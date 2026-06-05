@@ -409,9 +409,24 @@ each gate changes — by data stream, document, and field:
   would reveal" is real behaviour. The one exception: extended thinking arrives
   as `"thinking":"<REDACTED>"` (its `signature` blob is kept).
 - Net effect on this stack: inline mode (`=1`) stores ~1 KB of the oldest
-  content per API call — of little audit value. The untruncated `file:<dir>`
-  mode (`labels.body_ref` pointing at on-disk JSON) is the variant that could
-  carry real content (untested here).
+  content per API call — of little audit value.
+- **`file:<dir>` mode lifts the truncation chain entirely.** The same events
+  keep flowing, but the inline `labels.body` is replaced by
+  **`labels.body_ref`** (absolute path to an on-disk file),
+  `labels.body_length` matches the file size byte-for-byte, and
+  `body_truncated` disappears — the pointer/cold-file model, natively. The
+  files are the **raw Messages API bodies, verbatim, no wrapper**: requests as
+  `<uuid>.request.json` (~400 KB each in a long session — the full `system`
+  prompt, every `messages` entry, all `tools` definitions), responses as
+  `req_<request_id>.response.json` (the complete response incl. `usage`). The
+  request-file UUID is its own opaque ID — it does **not** match
+  `client_request_id`; `body_ref` is the only join key. MCP tool calls and
+  results appear inside the bodies (the `tool.output` MCP gap does not exist
+  here). Extended thinking stays `"thinking":"<REDACTED>"` **even on disk** —
+  the redaction happens at capture, not truncation; that is the one gap to
+  full fidelity. Untested: retry behavior (one file per attempt?), whether
+  the directory is auto-created (this repo pre-creates the gitignored
+  `var/api-bodies/`).
 
 ## Generating events that don't occur in a normal session
 
