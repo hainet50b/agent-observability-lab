@@ -1563,6 +1563,36 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Claude Code — API Bodies saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>First <code>phrases</code> filter in the repo.</strong> Every shipped saved search so far uses a single-value <code>phrase</code> filter pill. This search needed "<code>message</code> is one of two values", so I built a <code>phrases</code> filter: <code>meta.type: "phrases"</code>, <code>meta.params</code> as an <em>array</em> of the two message strings, and a <code>query.bool.should</code> with one <code>match_phrase</code> per value plus <code>minimum_should_match: 1</code>. The single <code>references[]</code> wiring (one <code>meta.index</code> ref at <code>filter[0]</code>) is unchanged from the single-pill pattern, since there is still only one filter.</li>
+      <li><strong>Data view id is <code>claude-code-events</code>, not <code>cce-claude-code-events</code>.</strong> The task text names the view by its old (pre-Phase-2b) id; the live NDJSON uses the renamed <code>claude-code-events</code>, so the references point there — matching every other shipped search.</li>
+      <li><strong>Excluded <code>labels.request_id</code> and <code>labels.body</code> as specified</strong> — the 1 KB body fragment is for row-expand, not a column; <code>request_id</code> is a high-cardinality correlation id. Kept the <code>labels.user_email</code> lead and <code>trace.id</code> trailer per the all-searches convention, with <code>message</code> as a visible column (the "what", since the pill spans two message types).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The localhost <code>curl</code> verification path is blocked by the command sandbox; I verified via the project's own <code>scripts/import-kibana-objects.sh</code> (run with the sandbox disabled), which reported all 16 saved-search objects imported with <code>success: true</code> and references resolved.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Now that one <code>phrases</code> pill exists, the <strong>Auth Events</strong> search's two single-value possibilities (<code>login</code>/<code>logout</code> on <code>labels.action</code>) and any other "one-of" constraints could be expressed the same way if a multi-value pill ever reads better than the current single-message slices — low priority, purely cosmetic.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>A new <strong>Claude Code — API Bodies</strong> saved search surfaces the <code>OTEL_LOG_RAW_API_BODIES</code>-gated request/response body events with a single multi-value filter pill (<code>message</code> is one of <code>claude_code.api_request_body</code> / <code>...response_body</code>) and columns for model, query source, body length, and the truncation flag. It is the lab's standing lens on that gate — useful for confirming the gate is on and seeing the body-head/truncation behaviour, not for reading full bodies (only a ~1 KB head is stored).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>The <code>phrases</code>-filter JSON shape</strong> is new to this repo — worth a glance to confirm it renders as a single removable pill labelled "message: is one of …" in Discover (the structure follows Kibana's standard <code>phrases</code> filter: array <code>params</code> + <code>bool.should</code> query).</li>
+      <li>Live data confirmed present (2026-06-05 06:00–06:06 window has request/response body docs with all eight columns populated; request bodies show <code>body_truncated: true</code> at ~170 KB <code>body_length</code>).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
