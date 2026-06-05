@@ -1531,6 +1531,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add the Claude Code — Tool I/O (joined) ES|QL saved Discover session</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Fixed a real join bug in the prototype query before shipping (the task asked me to "polish the multivalue handling — input dropped on some rows").</strong> Root cause, confirmed against live data: <code>tool_result</code> events do <em>not</em> all carry <code>span.id</code> — 38 of them have none. The prototype's first hop <code>STATS … BY span.id</code> therefore lumped every span-less <code>tool_result</code> into a single <code>span.id == null</code> bucket, then <code>MV_FIRST(tuid)</code> kept only one <code>tool_use_id</code> — smearing every input onto one arbitrary row and dropping it from the rest (and even collapsing distinct tools, e.g. a row tagged <code>["Bash","Edit"]</code>). Fix: add <code>EVAL gkey = CASE(message == "claude_code.tool_result", labels.tool_use_id, span.id)</code> and group the first hop <code>BY gkey</code>. Now <code>tool.output</code>+<code>claude_code.tool</code> span rows still group by <code>span.id</code>, but each <code>tool_result</code> groups by its <em>own</em> <code>tool_use_id</code>, so its <code>tool_input</code> never leaks into a foreign bucket. The second hop <code>BY tuid</code> then joins them. Verified live: the 2026-06-05 01:54/01:55 Bash commit row now shows the <code>git add</code> command (<code>input</code>) and the commit output (<code>content</code>) together, and no row mixes two tools.</li>
+      <li><strong>Remaining <code>input: null</code> rows are correct, not a bug.</strong> A handful of older rows (e.g. the 01:02 / 01:18 / 01:21 sessions) show <code>content</code> but no <code>input</code> — those predate the <code>OTEL_LOG_TOOL_DETAILS</code> gate being on, so their <code>tool_result</code> carries no <code>tool_input</code>. Input is genuinely gate-dependent; the join is sound.</li>
+      <li><strong>Authored as a text-based (ES|QL) <code>search</code> saved object, not a data-view+pills one.</strong> <code>attributes.isTextBasedQuery: true</code>, <code>searchSourceJSON</code> = <code>{"query":{"esql":"…"},"filter":[]}</code> (no <code>indexRefName</code>), empty <code>sort</code> (ordering lives in the query's <code>SORT ts DESC</code>), and <code>references: []</code> — an ES|QL session references no data view. Columns are the query's output names (<code>ts, user_email, tool, input, content, prompt_id, trace_id</code>), not dotted field paths. Generated the line via a small Python script so the double-escaped <code>searchSourceJSON</code> string is exact.</li>
+      <li><strong>IDs/titles follow the current post-Phase-2b convention</strong>, not the stale task wording: id <code>claude-code-tool-io</code> (no <code>cce-</code> prefix), title <code>Claude Code — Tool I/O (joined)</code> (no <code>(claude-code-elastic)</code> suffix). Appended as the 15th object; bumped <code>exportedCount</code> 14 → 15; <code>missingReferences</code> unchanged (this object adds none).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>I could verify the query against live ES (via the Elasticsearch MCP) and that the NDJSON <strong>imports cleanly</strong> into the running Kibana (re-ran the agent import: <code>saved-searches.ndjson → 15 object(s), success: true</code>, the new <code>claude-code-tool-io</code> among them with a <code>discoverApp</code> icon). I could <em>not</em> drive the Kibana browser UI to eyeball it rendering as an ES|QL grid — but a clean import of an <code>isTextBasedQuery</code> object plus a query that returns the expected live rows covers both halves of "imports cleanly and opens".</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The MCP-tool gap is now visible in this view: MCP tools and ToolSearch produce no <code>tool.output</code> document, so their calls never appear here even with both gates on. A short note or a sibling "tools with no captured output" view could make that absence explicit rather than silent.</li>
+      <li>If Kibana ever ships a stable <code>LOOKUP JOIN</code> for these data streams on this Stack version, the two-hop <code>STATS</code> reconstruction could be simplified — worth revisiting then.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>A new <strong>Claude Code — Tool I/O (joined)</strong> saved Discover session — the repo's first ES|QL-based one — reconstructs <strong>one row per tool call</strong> (tool · input · output) by unioning the events and traces streams and joining them in two hops. It restores the attribution (<code>user_email</code>, <code>prompt_id</code>) that raw <code>tool.output</code> documents lack, so a reviewer can read what a tool was asked to do and what it returned, side by side.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>The shipped query differs from the PRD prototype on purpose</strong> — it adds the <code>gkey</code> CASE to fix the input-dropping the task flagged. Worth a glance to confirm the fix matches intent (details under Judgement points).</li>
+      <li><strong>Optional 30-second human check:</strong> open <strong>Claude Code — Tool I/O (joined)</strong> in Discover (ES|QL mode) over the 2026-06-05 01:31–01:55 window — the 01:54/01:55 Bash commit row should show input and output together, and every row should name a single tool.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
