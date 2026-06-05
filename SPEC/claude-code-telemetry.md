@@ -365,6 +365,34 @@ each gate changes — by data stream, document, and field:
   `message: claude_code.*` filter, so they surface only in **Event Overview**
   (no `message` pill) or a dedicated view.
 
+### `OTEL_LOG_RAW_API_BODIES`
+
+| Data stream | Documents | Field | `0` (default) | `1` |
+| --- | --- | --- | --- | --- |
+| `logs-apm.app.claude_code-default` | `message: claude_code.api_request_body` (one per API attempt) / `claude_code.api_response_body` (one per response) | `labels.body` (+ `labels.body_length`, `labels.body_truncated`) | documents don't exist | Messages API request/response JSON — see the truncation chain |
+
+- Unlike `tool.output`, these documents carry the **full envelope** —
+  `labels.user_*`, `prompt_id`, `model`, `query_source` (plus `request_id` on
+  responses) — and `trace.id` / `span.id` when tracing is on.
+- **Three truncation stages** apply before anything is stored: the original
+  body (recorded in `labels.body_length`; ~2.9 MB for a long conversation) →
+  Claude Code's inline cap of **60 KB** (`labels.body_truncated: true`) →
+  **APM Server's label-value cap of 1,024 characters**. What is actually stored
+  in `labels.body` is the **first ~1 KB of JSON** — even a 2.7 KB response body
+  is cut at 1,024.
+- The surviving fragment is the **head** of the JSON — the **oldest**
+  conversation content (the first message). In a long session the recent turns
+  never reach the stored value at all.
+- Within that fragment, message text appears **unredacted regardless of the
+  other three gates** — the documented "implies consent to everything
+  `OTEL_LOG_USER_PROMPTS` / `OTEL_LOG_TOOL_DETAILS` / `OTEL_LOG_TOOL_CONTENT`
+  would reveal" is real behaviour. The one exception: extended thinking arrives
+  as `"thinking":"<REDACTED>"` (its `signature` blob is kept).
+- Net effect on this stack: inline mode (`=1`) stores ~1 KB of the oldest
+  content per API call — of little audit value. The untruncated `file:<dir>`
+  mode (`labels.body_ref` pointing at on-disk JSON) is the variant that could
+  carry real content (untested here).
+
 ## Generating events that don't occur in a normal session
 
 Some events only fire under specific conditions — handy when populating the demo:
