@@ -327,11 +327,24 @@ each gate changes — by data stream, document, and field:
 - The upstream docs describe this as a `tool.output` *span event* on
   `claude_code.tool.execution` (60 KB cap, requires tracing). **Physically it
   lands as a document in the events data stream**, not in the traces stream —
-  the `tool.execution` span itself is unchanged. (`gen_ai.request.attempt`,
+  the tool spans themselves are unchanged. (`gen_ai.request.attempt`,
   also documented as a span event, lands the same way: a bare-named `message`
   in the events stream.)
-- Each doc carries top-level `span.id` (= the `claude_code.tool.execution`
-  span) and `trace.id`, which is how it joins back to its trace.
+- **Coverage is partial** — only Bash (`labels.output`) and Read
+  (`labels.content`) produce `tool.output` documents; **MCP tools and
+  ToolSearch produce none**, so data returned through MCP integrations is
+  invisible to this gate.
+- Each doc carries top-level `span.id` and `trace.id`. The `span.id` points at
+  the **`claude_code.tool` span** (the parent — not `tool.execution`), which
+  carries `labels.tool_name` and `labels.tool_use_id`: the only attribution of
+  this content to a tool.
+- **Reconstructing one call's input + output takes both gates and a two-hop
+  join**: `tool.output.span.id` → the `claude_code.tool` span in the traces
+  stream (`tool_name`, `tool_use_id`) → `tool_use_id` → the
+  `claude_code.tool_result` event (`tool_input` from `OTEL_LOG_TOOL_DETAILS`).
+  A direct `span.id` join between `tool.output` and `tool_result` does **not**
+  work — `tool_result`'s `span.id` references a different span, shared across
+  the turn's tool calls.
 - The content attribute varies by tool — `output` for Bash, `content` for
   Read — and only output-side content appears (input capture belongs to
   `OTEL_LOG_TOOL_DETAILS`' `tool_input`).
