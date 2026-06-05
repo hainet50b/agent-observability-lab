@@ -327,7 +327,7 @@ each gate changes — by data stream, document, and field:
 
 | Data stream | Documents | Field | `0` (default) | `1` |
 | --- | --- | --- | --- | --- |
-| `logs-apm.app.claude_code-default` | `message: tool.output` — a new document type | `labels.output` (Bash: command stdout) / `labels.content` (Read: file contents) | documents don't exist | verbatim tool output |
+| `logs-apm.app.claude_code-default` | `message: tool.output` — a new document type | `labels.output` (Bash: command stdout) / `labels.content` (Read: file contents) / `labels.diff` + `labels.file_path` (Edit: structured diff) | documents don't exist | verbatim tool output |
 
 - The upstream docs describe this as a `tool.output` *span event* on
   `claude_code.tool.execution` (60 KB cap, requires tracing). **Physically it
@@ -335,10 +335,17 @@ each gate changes — by data stream, document, and field:
   the tool spans themselves are unchanged. (`gen_ai.request.attempt`,
   also documented as a span event, lands the same way: a bare-named `message`
   in the events stream.)
-- **Coverage is partial** — only Bash (`labels.output`) and Read
-  (`labels.content`) produce `tool.output` documents; **MCP tools and
-  ToolSearch produce none**, so data returned through MCP integrations is
-  invisible to this gate.
+- **Coverage is partial** — Bash (`labels.output`), Read (`labels.content`),
+  and Edit (`labels.diff`, a structured diff, plus `labels.file_path`) produce
+  `tool.output` documents (Write untested); **MCP tools and ToolSearch produce
+  none**, so data returned through MCP integrations is invisible to this gate.
+  Edit's variant is the only one carrying `file_path` — the attribution that
+  rides along is inconsistent across tools.
+- **With tracing disabled the gate emits nothing** — set
+  `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=0` and no `tool.output` documents
+  appear at all, while `tool_result` (and its `OTEL_LOG_TOOL_DETAILS` fields)
+  continues unaffected. The upstream "requires tracing" is real behaviour:
+  content capture depends on the beta tracing feature.
 - Each doc carries top-level `span.id` and `trace.id`. The `span.id` points at
   the **`claude_code.tool` span** (the parent — not `tool.execution`), which
   carries `labels.tool_name` and `labels.tool_use_id`: the only attribution of
@@ -351,8 +358,8 @@ each gate changes — by data stream, document, and field:
   work — `tool_result`'s `span.id` references a different span, shared across
   the turn's tool calls.
 - The content attribute varies by tool — `output` for Bash, `content` for
-  Read — and only output-side content appears (input capture belongs to
-  `OTEL_LOG_TOOL_DETAILS`' `tool_input`).
+  Read, `diff` for Edit — and only output-side content appears (input capture
+  belongs to `OTEL_LOG_TOOL_DETAILS`' `tool_input`).
 - These docs carry **no `labels.user_*` / `prompt_id` envelope** — identity is
   only top-level (`service.name`, `session.id`, host fields). They match no
   `message: claude_code.*` filter, so they surface only in **Event Overview**
