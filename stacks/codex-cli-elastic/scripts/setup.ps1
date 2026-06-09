@@ -1,0 +1,43 @@
+#!/usr/bin/env pwsh
+# setup.ps1 — one-shot bootstrap for the codex-cli-elastic stack.
+#
+# PowerShell mirror of setup.sh. Run once after `docker compose up -d` (healthy).
+# Steps: 1) trace-routing pipeline (isolates codex-cli spans into
+# traces-apm-agents_codex_cli)  2) render .codex/config.toml ([otel] telemetry
+# config) from the agent-owned template, so a Codex session launched with
+# CODEX_HOME=<stack>/.codex emits into the stack without touching the user's
+# ~/.codex (a repo-local .codex/config.toml is ignored for [otel]; CODEX_HOME is
+# the supported per-project mechanism). Step 1 idempotent; step 2 create-if-absent.
+# Override the ES endpoint with -EsUrl. Verification (smoke-test.sh) stays
+# separate.
+#
+# NOT done here (deferred): the prompts-audit index + capture hook are
+# Claude-Code-specific (Codex has no such hook), and the Codex Kibana saved
+# objects await a live characterization of Codex's telemetry.
+
+[CmdletBinding()]
+param(
+    [string]$EsUrl
+)
+
+$ErrorActionPreference = 'Stop'
+$OtlpEndpoint = 'http://localhost:8200'
+$StackDir = Split-Path -Parent $PSScriptRoot
+$C = Join-Path $PSScriptRoot '../../../components'
+
+$es = @{}; if ($EsUrl) { $es['EsUrl'] = $EsUrl }
+
+function Invoke-Step {
+    param([string]$Label, [string]$Path, [hashtable]$StepArgs)
+    Write-Host "[setup] $Label"
+    $global:LASTEXITCODE = 0
+    & $Path @StepArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+Invoke-Step '1/2 - trace-routing ingest pipeline' (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') $es
+Invoke-Step '2/2 - local Codex session config (.codex/config.toml, [otel] telemetry)' `
+    (Join-Path $C 'agents/codex-cli/scripts/render-config.ps1') `
+    @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
+
+Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

@@ -1752,6 +1752,44 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Wire a real Codex CLI session into <code>codex-cli-elastic</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The crux was Codex CLI's exact <code>[otel]</code> <code>config.toml</code> schema — I refused to guess it and researched it from the <code>openai/codex</code> Rust source. Findings that shaped the implementation: <code>exporter</code> is the <em>logs</em> exporter (the name doesn't say so), with separate <code>trace_exporter</code> and <code>metrics_exporter</code>; <code>metrics_exporter</code> defaults to <strong>Statsig</strong>, so it must be set explicitly to ship metrics via OTLP; each exporter is an inline table <code>{ otlp-http = { endpoint, protocol } }</code>; <code>protocol</code> is <strong>required</strong> (<code>"binary"</code> = protobuf); and each <code>endpoint</code> must carry its full <code>/v1/&lt;signal&gt;</code> path because Codex does not append it.</li>
+      <li><strong>Chose <code>CODEX_HOME</code> over a repo-local <code>.codex/config.toml</code>.</strong> The PRD offered "project precedence <em>or</em> <code>CODEX_HOME</code>", but the source confirms Codex <em>ignores</em> <code>[otel]</code> keys in a project-local config (telemetry is user-level only) and warns at startup. <code>CODEX_HOME=&lt;stack&gt;/.codex</code> relocates the whole Codex home so the rendered file <em>is</em> the user-level config — non-invasive (never touches <code>~/.codex</code>) and the supported per-project mechanism. Documented the one real cost: a fresh <code>CODEX_HOME</code> has no login, so the user authenticates once under it (or copies <code>auth.json</code>).</li>
+      <li>Mirrored the Claude Code agent/stack precedents: an agent-owned template (<code>config.template.toml</code> with a single <code>@@OTLP_ENDPOINT@@</code> token) plus <code>render-config.{sh,ps1}</code> (create-if-absent), and a stack <code>setup.{sh,ps1}</code> that runs trace-routing + render-config. Deliberately <em>omitted</em> the prompts-audit step (its capture hook is Claude-Code-specific — Codex has no such hook) and Kibana import (deferred until Codex's telemetry is characterized live).</li>
+      <li>The PowerShell renderer writes UTF-8 <strong>without a BOM</strong> (<code>[System.IO.File]::WriteAllText</code> with a no-BOM encoder) rather than <code>Set-Content -Encoding utf8</code> — a leading BOM is not stripped by Codex's Rust TOML parser and would corrupt the first key on stock Windows PowerShell 5.1.</li>
+      <li>Reworded the template's own prose comment so the <code>@@OTLP_ENDPOINT@@</code> placeholder appears only where it should be substituted — otherwise <code>sed</code> rewrote the comment too, yielding an awkward doubled URL in the rendered file.</li>
+      <li>Made a tightly-scoped prose fix to <code>smoke-test.sh</code> (comment block + PASS banner): it previously called pointing a Codex session "a later increment", which this task makes false. Behaviour unchanged; the wording now points at <code>setup.sh</code> + <code>CODEX_HOME</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Could not verify a real session end to end: no <code>codex</code> CLI on this host, and per the task that confirmation is explicitly a human step feeding later characterization. The config is verified <em>structurally</em> (parses as the verified <code>[otel]</code> schema) but not yet against a live Codex.</li>
+      <li>Version/runtime caveats surfaced by the research and recorded in the README: <code>metrics_exporter</code> is a recent Codex addition (older builds hardwire metrics to Statsig); <code>codex exec</code> emits no metrics and <code>codex mcp-server</code> emits none, so the interactive REPL is the entrypoint that produces signals.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Once a real Codex session has run, characterize its emitted metrics/events/spans and author <code>components/agents/codex-cli/kibana/</code> (data views + curated saved searches + dashboard scoped to <code>*-apm.app.codex_cli-default</code> / <code>traces-apm-agents_codex_cli</code>) with its own import script, and extend the stack <code>setup.{sh,ps1}</code> to import them.</li>
+      <li>Consider a small <code>codex login</code> convenience (or an <code>auth.json</code> copy step) in <code>setup.{sh,ps1}</code> to smooth the fresh-<code>CODEX_HOME</code> friction, if it proves annoying in practice.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <ul>
+      <li>A real Codex CLI session can now emit into the stack: <code>scripts/setup.sh</code> installs trace routing and renders a verified Codex <code>[otel]</code> config into a gitignored <code>.codex/</code>, and the README shows how to launch <code>codex</code> with <code>CODEX_HOME</code> pointed at it. Metrics/logs/traces flow to the APM Server (metrics redirected off Codex's Statsig default; prompt text not logged). Kibana views remain the next increment.</li>
+    </ul>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The <code>[otel]</code> schema was taken from the <code>openai/codex</code> Rust source, not memory — worth a sanity check against the Codex version you actually run, since <code>metrics_exporter</code> is a recent field.</li>
+      <li>Verified live: <code>setup.sh</code> PUT the trace-routing pipeline (<code>acknowledged: true</code>) and rendered <code>.codex/config.toml</code>; both the bash- and PowerShell-rendered configs parse as valid <code>[otel]</code> TOML (all three exporters <code>otlp-http</code>/<code>binary</code> with <code>/v1</code> paths, <code>log_user_prompt=false</code>), PowerShell output BOM-free; <code>docker compose config -q</code> passes for all three stacks; the codex-cli reroute resolves to <code>traces-apm-agents_codex_cli</code>; and <code>scripts/smoke-test.sh</code> reached <strong>PASS</strong>.</li>
+      <li>The <code>CODEX_HOME</code> decision (vs the repo-local <code>.codex/</code> the PRD also mentioned) is the one judgment call worth a glance — it is the only mechanism that actually works for <code>[otel]</code>, per the Codex source.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

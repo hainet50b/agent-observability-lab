@@ -24,11 +24,11 @@
 # alongside the probe.
 #
 # The probe is agent-INDEPENDENT — it proves the shared OTLP path that any agent
-# (Codex CLI here) will use, without requiring an agent to be configured. Pointing
-# a Codex CLI session at this stack (its OTEL_* config) and adding Codex-specific
-# Kibana views are later increments (see ../README.md); when that lands, real
-# Codex telemetry will arrive under its own service name (codex-cli) through this
-# identical pipeline.
+# (Codex CLI here) will use, without requiring a configured session. To point a
+# real Codex CLI session at this stack, run scripts/setup.sh and launch codex with
+# CODEX_HOME=<stack>/.codex (see ../README.md); its telemetry then lands under
+# service.name=codex-cli through this identical pipeline. Codex-specific Kibana
+# views remain a later increment.
 #
 # Why synthetic telemetry: the Act step must be self-contained and deterministic
 # (no API key, no interactive session) so it can run as a gate.
@@ -156,7 +156,7 @@ discover "traces-apm*"
 
 echo
 echo "PASS: OTLP -> APM Server -> Elasticsearch pipeline verified."
-echo "Pointing a Codex CLI session at this stack (its OTEL_* config) and the Codex-specific"
-echo "Kibana views are later increments (see ../README.md); real Codex telemetry will then"
-echo "land under service.name=codex-cli through this identical pipeline. Inspect what is here"
-echo "now in Kibana (http://localhost:5601)."
+echo "To point a real Codex CLI session here, run scripts/setup.sh and launch codex with"
+echo "CODEX_HOME=<stack>/.codex (see ../README.md); its telemetry lands under service.name="
+echo "codex-cli through this identical pipeline. Codex-specific Kibana views are a later"
+echo "increment. Inspect what is here now in Kibana (http://localhost:5601)."
