@@ -102,29 +102,29 @@ whenever both exist.
 The shortest path from clone to "I see Claude Code telemetry — sent through a
 local Collector — in Kibana."
 
-### 1. Bring the stack up
+### 1. Bring the stack up and bootstrap it
 
 ```sh
 cd stacks/claude-code-otelcol-elastic
 docker compose up -d
 docker compose ps        # wait until elasticsearch, kibana, apm-server report healthy
+scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
 The Collector (`otel-collector`) carries no healthcheck — its image is
 distroless — so it shows no health column; it accepts OTLP within a second or two
-of starting. Kibana is at <http://localhost:5601>. Optionally prove the whole
-path end to end with the smoke test (see [Verify the pipeline](#verify-the-pipeline)):
+of starting. Kibana is at <http://localhost:5601>. `scripts/setup.sh` runs every
+post-up bootstrap step in one shot — it installs the trace-routing ingest
+pipeline (isolates Claude Code's spans into `traces-apm-agents_claude_code`),
+creates the `prompts-audit` index, and imports the Kibana saved objects — and is
+idempotent, so re-run it any time. Override endpoints with `ES_URL` / `KIBANA_URL`
+(or `-EsUrl` / `-KibanaUrl` for the `.ps1`).
+
+Optionally prove the whole path end to end with the smoke test (see
+[Verify the pipeline](#verify-the-pipeline)):
 
 ```sh
 scripts/smoke-test.sh
-```
-
-If you will enable traces, install the trace-routing pipeline once (it isolates
-Claude Code's spans into the `traces-apm-agents_claude_code` data stream); run it
-any time after the stack is healthy:
-
-```sh
-scripts/setup-trace-routing.sh        # bash/zsh/sh  (or ./setup-trace-routing.ps1)
 ```
 
 ### 2. Point a Claude Code session at the Collector
@@ -208,20 +208,12 @@ little work; telemetry flushes on the export interval, so data lands within
 
 The backend and agent saved objects are the same as `claude-code-elastic` (this
 stack reuses both components unchanged); this stack adds **one** more — a data
-view for the sidecar's own metrics. The import helper runs the backend import,
-the agent import, then the sidecar (path) import, each in dependency order (data
-views first); run from anywhere:
-
-```sh
-scripts/import-kibana-objects.sh     # bash/zsh/sh
-```
-```pwsh
-./scripts/import-kibana-objects.ps1  # PowerShell 7+
-```
-
-Override the Kibana base URL with `KIBANA_URL` (or `-KibanaUrl` for the `.ps1`);
-both default to `http://localhost:5601`. You can also import from the Kibana UI
-(Stack Management → Saved Objects → **Import**, data views first).
+view for the sidecar's own metrics. These are **imported by `scripts/setup.sh`**
+(Quick Tour step 1), which runs the backend import, the agent import, then the
+sidecar (path) import, each in dependency order (data views first). To re-import
+after editing the NDJSON, just re-run `scripts/setup.sh` (idempotent). You can
+also import from the Kibana UI (Stack Management → Saved Objects → **Import**,
+data views first).
 
 This brings in the **Metrics**, **Events**, **Traces**, **AI Agents — Traces**,
 and **OTel Collector Sidecar — Metrics** data views, the curated **saved
@@ -261,19 +253,13 @@ fleet via [managed settings](https://code.claude.com/docs/en/monitoring-usage.md
 > investigator key) is a later phase. Until then, treat the store as sensitive
 > and don't audit real-secret sessions against a shared backend.
 
-**1. Create the store** (once, idempotent — leaves an existing index untouched):
-
-```sh
-scripts/setup-prompt-audit.sh        # bash/zsh/sh  (or ./setup-prompt-audit.ps1)
-```
-
-This creates `prompts-audit` with a `dynamic: strict` mapping: a searchable
-keyword **envelope** (`agent`, `user_email`, `organization`, `session_id`,
-`hostname`), the `prompt` text, and a reserved `prompt_cipher` field for the
-sealing phase. `cwd` is deliberately **not** stored — a working-directory path
-is PII (it leaks project / client / user names). `session_id` equals the OTLP
-`session.id`, so an audit document **joins back** to that session's analytics
-telemetry.
+**1. The store** is created by `scripts/setup.sh` (Quick Tour step 1) — the
+`prompts-audit` index, with a `dynamic: strict` mapping: a searchable keyword
+**envelope** (`agent`, `user_email`, `organization`, `session_id`, `hostname`),
+the `prompt` text, and a reserved `prompt_cipher` field for the sealing phase.
+`cwd` is deliberately **not** stored — a working-directory path is PII (it leaks
+project / client / user names). `session_id` equals the OTLP `session.id`, so an
+audit document **joins back** to that session's analytics telemetry.
 
 **2. Register the capture hook** in a Claude Code settings file's `hooks` block
 (the hook is agent config, like the `OTEL_*` env above). The capture script is
@@ -361,21 +347,17 @@ scripts/resilience-test.sh    # from anywhere — it locates its own stack direc
 claude-code-otelcol-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
 └─ scripts/
+   ├─ setup.sh                            # one-shot bootstrap: trace-routing + prompts-audit + Kibana import (3 components)
+   ├─ setup.ps1                           # PowerShell mirror of setup.sh
    ├─ smoke-test.sh                       # end-to-end pipeline verification through the Collector (stack property)
-   ├─ resilience-test.sh                  # durable-queue / backend-outage check (stack property)
-   ├─ import-kibana-objects.sh            # → orchestrates the backend + agent + path imports
-   ├─ import-kibana-objects.ps1           # PowerShell mirror of the import orchestrator
-   ├─ setup-trace-routing.sh             # → forwards to the backend component script
-   ├─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
-   ├─ setup-prompt-audit.sh              # → forwards to the backend component script
-   └─ setup-prompt-audit.ps1             # PowerShell mirror of the prompt-audit shim
+   └─ resilience-test.sh                  # durable-queue / backend-outage check (stack property)
 ```
 
-The Collector service, its config, and its self-telemetry data view — with their
-own import script — live in `../../components/paths/otelcol-sidecar/`. The backend
-services, their config, the cross-agent data view, the `traces-apm@custom`
-pipeline body, the `prompts-audit` index mapping, and the Backend bootstrap
-scripts live in `../../components/backends/elastic/`; the Claude Code agent's data views, saved
+`setup.{sh,ps1}` calls the component bootstrap scripts directly. The Collector
+service, its config, and its self-telemetry data view — with their own import
+script — live in `../../components/paths/otelcol-sidecar/`. The backend services,
+their config, the cross-agent data view, the `traces-apm@custom` pipeline body,
+the `prompts-audit` index mapping, and the Backend bootstrap scripts live in
+`../../components/backends/elastic/`; the Claude Code agent's data views, saved
 searches, Overview dashboard — with their own import script — and the
-prompt-capture **hooks** live in `../../components/agents/claude-code/`. The
-stack's `import-kibana-objects` shim runs all three component imports in order.
+prompt-capture **hooks** live in `../../components/agents/claude-code/`.
