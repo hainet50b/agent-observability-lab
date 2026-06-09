@@ -18,7 +18,8 @@ Five capture patterns under lab evaluation (full detail + verify checkboxes in
 
 - **P0** gates → Elastic (baseline; verified; fails encryption req by design)
 - **P1** agent hooks → seal locally → ship ← **current focus** (capture
-  characterized; build phase next)
+  characterized; **plaintext-ingest build done & verified live** — prompt path
+  end to end; CMS sealing + tool/LLM scope + Kibana asset next)
 - **P2** OTel Collector gateway fan-out (sanitize one branch, file the other)
 - **P3** `OTEL_LOG_RAW_API_BODIES=file:` + filelog collection (file-mode probe
   verified — truncation lifted, `body_ref` pointers, MCP covered, thinking
@@ -93,9 +94,10 @@ location TBD in the CMS phase (the public cert is a distributable artifact).
 ```json
 { "mappings": { "dynamic": "strict", "properties": {
   "@timestamp":    {"type":"date"},
+  "agent":         {"type":"keyword"},
   "user_email":    {"type":"keyword"},
+  "organization":  {"type":"keyword"},
   "session_id":    {"type":"keyword"},
-  "cwd":           {"type":"keyword"},
   "hostname":      {"type":"keyword"},
   "prompt":        {"type":"text"},
   "prompt_cipher": {"type":"keyword","index":false,"doc_values":false,"ignore_above":32766}
@@ -105,6 +107,10 @@ location TBD in the CMS phase (the public cert is a distributable artifact).
 - envelope = keyword (the searchable "who/when"); `prompt` = text (plaintext
   phase only); `prompt_cipher` defined up front (pure BLOB, index/doc_values
   off) so swapping to sealed storage needs no mapping change.
+- `agent` added (the store is agent-agnostic — codex/opencode land here too).
+- **`cwd` dropped** (decided with the human): a working-directory path is PII
+  (leaks project/client/user names); not worth a plaintext field. If location
+  context is ever wanted it joins the sealed content, never the envelope.
 - prototype is a plain index; production → data stream + ILM (retention =
   deletion requirement).
 
@@ -132,9 +138,35 @@ location TBD in the CMS phase (the public cert is a distributable artifact).
 
 P1 build phase, plaintext-ingest-first then CMS. Rough order, use judgement:
 
-- Stand up the `prompts-audit` index, then a capture script
-  (`UserPromptSubmit` → envelope from `~/.claude.json` → ES doc + local JSONL).
-- Layer CMS sealing on top (`prompt` → `prompt_cipher`); prove envelope stays
-  searchable while ciphertext opens only with the private key.
-- Once it works end-to-end, PRD-ify into the component layout above for Ralph.
+- ~~Stand up the `prompts-audit` index, then a capture script~~ **DONE & verified
+  live** (prompt-first vertical slice). Decisions locked with the human:
+  prompt-specific `prompts-audit` index (not a generalized `agent-audit`); ES
+  direct POST only (no local JSONL buffer this phase); prompt scope first; **no
+  server-side reshaping** (an ingest pipeline was rejected — it would mean the
+  plaintext prompt crosses the wire before any chance to seal it; the endpoint
+  must build *and eventually seal* the document); **zero-install hook** on
+  Windows + mac/Linux. Shipped to the component layout below:
+  - `backends/elastic/elasticsearch/prompts-audit.index.json` (mapping;
+    `dynamic: strict`, envelope + `prompt` text + reserved `prompt_cipher`) and
+    `backends/elastic/scripts/setup-prompt-audit.{sh,ps1}` (idempotent create).
+  - `agents/claude-code/hooks/capture-prompt.{sh,ps1}` (`UserPromptSubmit` →
+    envelope from `~/.claude.json` → POST to `prompts-audit`; silent stdout,
+    always exit 0, `--max-time` fail-fast). **No jq:** the `.sh` lifts JSON
+    string values with `awk` (POSIX base) and assembles the doc with `printf`
+    (sealed/encoded values are JSON-safe, so no escaper needed); the `.ps1` uses
+    built-in PowerShell and sends a UTF-8 byte body (Windows PowerShell 5.1
+    otherwise mangles Japanese). Verified live: arbitrary content (quotes /
+    backslash / newline / Japanese / braces) round-trips exactly (ES-side
+    `equals`), under stock PowerShell 5.1 too.
+  - Stack shims `setup-prompt-audit.{sh,ps1}` in both stacks; both stack READMEs
+    document the index-create step + hook registration. `agent` keyword added to
+    the mapping (agent-agnostic store). **`cwd` dropped** (PII — see mapping note).
+  - Verification gotcha noted: Windows `jq`/`curl` translate LF→CRLF on stdout at
+    read-back, so round-trip checks must compare ES-side (`length()`/`equals`),
+    not via piped client output. The stored bytes are clean LF.
+- **Next, layer CMS sealing on top** (`prompt` → `prompt_cipher`); prove envelope
+  stays searchable while ciphertext opens only with the private key.
+- Also next within P1: extend capture to **tool results** (`PostToolUse`) and
+  **LLM info** (`Stop` → transcript), and add a **Kibana data view + saved
+  search** for `prompts-audit`. PRD-ify these increments for Ralph.
 - Independently: the P4 OAuth feasibility check, and PRD-ing the P2 gateway.

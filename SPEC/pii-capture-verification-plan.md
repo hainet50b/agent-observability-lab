@@ -74,8 +74,15 @@ Verify:
       `last_assistant_message` inline; failed tools fire `PreToolUse` only —
       error capture needs an additional **`PostToolUseFailure`** hook; hook
       definitions hot-reload if the settings file existed at startup
-- [ ] ES ingest of the sealed record; Kibana usability of
-      envelope-plaintext / content-cipher documents (build phase)
+- [x] ES ingest of the **plaintext** record — built & verified live: the
+      `prompts-audit` index (`dynamic: strict`, keyword envelope + `prompt`
+      text + reserved `prompt_cipher`), `setup-prompt-audit.{sh,ps1}` (idempotent
+      create), and the `capture-prompt.{sh,ps1}` `UserPromptSubmit` hook
+      (envelope from `~/.claude.json`, POST straight to ES, silent stdout, always
+      exit 0). Both .sh and .ps1 paths land a document; strict mapping rejects
+      stray fields (HTTP 400)
+- [ ] ES ingest of the **sealed** record (CMS `prompt_cipher`); Kibana
+      usability of envelope-plaintext / content-cipher documents (build phase)
 - [ ] Enforcement story: hook forced via managed settings
       (`hook_source: policySettings`) and *observed* through the existing
       `hook_registered` / `hook_execution_complete` events — the current

@@ -1,0 +1,15 @@
+{
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "@timestamp":    { "type": "date" },
+      "agent":         { "type": "keyword" },
+      "user_email":    { "type": "keyword" },
+      "organization":  { "type": "keyword" },
+      "session_id":    { "type": "keyword" },
+      "hostname":      { "type": "keyword" },
+      "prompt":        { "type": "text" },
+      "prompt_cipher": { "type": "keyword", "index": false, "doc_values": false, "ignore_above": 32766 }
+    }
+  }
+}

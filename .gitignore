@@ -3,6 +3,10 @@
 *.swp
 *.swo
 
+# Personal, machine-specific Claude Code settings (e.g. the prompt-audit hook
+# registration with absolute paths). Never committed.
+.claude/settings.local.json
+
 # Captured telemetry must never be committed (events can contain prompt/tool content).
 *.ndjson.local
 

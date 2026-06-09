@@ -243,6 +243,84 @@ docker compose down        # keep the Elasticsearch volume
 docker compose down -v     # also wipe ingested telemetry
 ```
 
+## Prompt audit trail (independent of OTLP)
+
+A separate, opt-in capability that answers **"when / who / what prompt"** for
+compliance — on a path **completely independent of the OTLP analytics pipeline**
+above. A Claude Code `UserPromptSubmit` hook captures each prompt **at the
+source** (full text, before any `OTEL_LOG_USER_PROMPTS` redaction/truncation)
+and POSTs one document straight to a dedicated Elasticsearch index,
+`prompts-audit`. Note this path does **not** go through the Collector — the
+sidecar relays OTLP only; the audit hook talks directly to Elasticsearch
+(`:9200`), so the analytics relay (and its durable queue) is untouched. As a
+plain agent hook it carries zero extra infrastructure and can be pushed to a
+fleet via [managed settings](https://code.claude.com/docs/en/monitoring-usage.md).
+
+> ⚠️ **Plaintext phase.** Prompts are stored as-is for now; local public-key
+> sealing (`prompt` → `prompt_cipher`, openable only with the central
+> investigator key) is a later phase. Until then, treat the store as sensitive
+> and don't audit real-secret sessions against a shared backend.
+
+**1. Create the store** (once, idempotent — leaves an existing index untouched):
+
+```sh
+scripts/setup-prompt-audit.sh        # bash/zsh/sh  (or ./setup-prompt-audit.ps1)
+```
+
+This creates `prompts-audit` with a `dynamic: strict` mapping: a searchable
+keyword **envelope** (`agent`, `user_email`, `organization`, `session_id`,
+`hostname`), the `prompt` text, and a reserved `prompt_cipher` field for the
+sealing phase. `cwd` is deliberately **not** stored — a working-directory path
+is PII (it leaks project / client / user names). `session_id` equals the OTLP
+`session.id`, so an audit document **joins back** to that session's analytics
+telemetry.
+
+**2. Register the capture hook** in a Claude Code settings file's `hooks` block
+(the hook is agent config, like the `OTEL_*` env above). The capture script is
+`components/agents/claude-code/hooks/capture-prompt.sh` (PowerShell mirror:
+`capture-prompt.ps1`); point the command at its absolute path:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/abs/path/to/components/agents/claude-code/hooks/capture-prompt.sh",
+            "timeout": 6
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+On Windows, point the command at PowerShell instead:
+`powershell -NoProfile -ExecutionPolicy Bypass -File C:\abs\path\...\hooks\capture-prompt.ps1`
+(`powershell` is the stock Windows PowerShell 5.1, present on every machine;
+`pwsh`/PowerShell 7 also works). Put the block in `~/.claude/settings.json` (all
+your projects), a launch-dir `.claude/settings.local.json` (just here), or
+`managed-settings.json` (org-wide enforcement). The hook needs **nothing
+installed** beyond what ships with the OS — the `.sh` uses only `curl` + `awk`
+(POSIX base; no `jq`), the `.ps1` only built-in PowerShell — so it runs unchanged
+across a fleet. It is **best-effort and side-effect-only**: writes nothing to
+stdout (so it never injects into the prompt), always exits 0, and fails fast
+(`--max-time 5`), so if Elasticsearch is unreachable your prompt proceeds
+unaudited rather than blocked. Identity is resolved locally from `~/.claude.json`
+(`.oauthAccount`); override the endpoint with `PROMPTS_AUDIT_ES_URL` (default
+`http://localhost:9200`).
+
+**3. Submit a prompt, then look at the store** (no Kibana asset yet — a data
+view / saved search is a later increment):
+
+```sh
+curl -s 'http://localhost:9200/prompts-audit/_search?pretty' \
+  -H 'Content-Type: application/json' -d '{"sort":[{"@timestamp":"desc"}]}'
+```
+
 ## Verify the pipeline
 
 `scripts/smoke-test.sh` checks the full **Claude Code → Collector → APM Server →
@@ -288,14 +366,16 @@ claude-code-otelcol-elastic/
    ├─ import-kibana-objects.sh            # → orchestrates the backend + agent + path imports
    ├─ import-kibana-objects.ps1           # PowerShell mirror of the import orchestrator
    ├─ setup-trace-routing.sh             # → forwards to the backend component script
-   └─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
+   ├─ setup-trace-routing.ps1            # PowerShell mirror of the trace-routing shim
+   ├─ setup-prompt-audit.sh              # → forwards to the backend component script
+   └─ setup-prompt-audit.ps1             # PowerShell mirror of the prompt-audit shim
 ```
 
 The Collector service, its config, and its self-telemetry data view — with their
 own import script — live in `../../components/paths/otelcol-sidecar/`. The backend
 services, their config, the cross-agent data view, the `traces-apm@custom`
-pipeline body, and the Backend bootstrap scripts live in
-`../../components/backends/elastic/`; the Claude Code agent's data views, saved
-searches, and Overview dashboard — with their own import script — live in
-`../../components/agents/claude-code/`. The stack's `import-kibana-objects` shim
-runs all three component imports in order.
+pipeline body, the `prompts-audit` index mapping, and the Backend bootstrap
+scripts live in `../../components/backends/elastic/`; the Claude Code agent's data views, saved
+searches, Overview dashboard — with their own import script — and the
+prompt-capture **hooks** live in `../../components/agents/claude-code/`. The
+stack's `import-kibana-objects` shim runs all three component imports in order.
