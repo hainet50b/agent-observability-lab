@@ -1720,6 +1720,38 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add the Codex CLI trace-isolation reroute to the shared backend pipeline</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Added a second <code>reroute</code> processor to <code>components/backends/elastic/elasticsearch/trace-routing.pipeline.json</code> — <code>codex-cli → agents_codex_cli</code> — alongside the existing <code>claude-code → agents_claude_code</code> reroute, which is left byte-for-byte unchanged. Same per-agent <code>agents_&lt;agent&gt;</code> convention, same <code>ctx.service?.name</code> idiom.</li>
+      <li>Two sequential reroutes with mutually-exclusive conditions are correct here precisely because the Elasticsearch <code>reroute</code> processor short-circuits the pipeline once it fires: a <code>claude-code</code> span matches the first reroute and skips the second; a <code>codex-cli</code> span fails the first (skipped) and matches the second; any other producer matches neither and falls through to <code>traces-apm-default</code>. Neither reroute targets its own current namespace, so there is no loop.</li>
+      <li>Generalized the <code>description</code> from the old stack-specific string (<code>"claude-code-elastic: route service.name=claude-code …"</code>) to a backend-level one that names both agents and the fall-through behaviour — the file is owned by the backend component now, not by any one stack.</li>
+      <li>No script changes: <code>setup-trace-routing.{sh,ps1}</code> already PUT this file verbatim, so every stack that installs the pipeline picks up the Codex reroute for free.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The reroute is pure plumbing; <code>traces-apm-agents_codex_cli</code> will materialize as a data stream the first time a real <code>codex-cli</code> span lands (it matches the <code>traces-apm-*</code> index template, so it inherits the full APM trace mappings, exactly like the Claude Code stream).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>When the Codex agent component lands, its traces data view should point at <code>traces-apm-agents_codex_cli*</code> (per-agent) and it is already covered by the existing cross-agent <code>traces-apm-agents_*</code> "AI Agents — Traces" view — no new cross-agent asset needed.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <ul>
+      <li>Codex CLI trace spans now route to their own isolated data stream (<code>traces-apm-agents_codex_cli</code>) the moment a Codex session emits them — the same physical isolation Claude Code already has, installed by the unchanged trace-routing setup script.</li>
+    </ul>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running backend: the file is valid JSON; <code>setup-trace-routing.sh</code> PUT it with <code>acknowledged: true</code>; a <code>_simulate</code> over three docs routed <code>claude-code → traces-apm-agents_claude_code</code>, <code>codex-cli → traces-apm-agents_codex_cli</code>, and <code>aol-smoke-test → traces-apm-default</code>; and the existing Claude Code smoke test (otelcol stack) still reached <strong>PASS</strong> with the updated pipeline installed.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

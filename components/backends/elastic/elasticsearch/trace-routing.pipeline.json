@@ -1,6 +1,7 @@
 {
-  "description": "claude-code-elastic: route service.name=claude-code trace spans to traces-apm-agents_claude_code",
+  "description": "Elastic backend: route per-agent trace spans to dedicated traces-apm-agents_<agent> data streams (claude-code -> agents_claude_code, codex-cli -> agents_codex_cli); other producers fall through and stay in traces-apm-default",
   "processors": [
-    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "agents_claude_code" } }
+    { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "agents_claude_code" } },
+    { "reroute": { "if": "ctx.service?.name == 'codex-cli'", "namespace": "agents_codex_cli" } }
   ]
 }
