@@ -56,6 +56,15 @@ scripts/smoke-test.sh
 
 ### 2. Point a Claude Code session at the stack
 
+**Simplest path:** `scripts/setup.sh` (step 1) already generated
+`.claude/settings.local.json` in this stack directory with the telemetry `env`
+block (pointed at this stack's OTLP endpoint) **and** the prompt-audit hook — so
+just run **`claude` from `stacks/claude-code-elastic/`** and both telemetry and
+prompt auditing are on, with no manual export or hook registration. (Project
+settings load only from the launch directory, so launch `claude` here.) The
+options below are alternatives — for pointing a session you launch *elsewhere*,
+or enabling telemetry globally / org-wide.
+
 The telemetry vars configure **`claude`** itself, not the stack — supply them one
 of three ways. They enable `CLAUDE_CODE_ENABLE_TELEMETRY` and the `OTEL_*`
 exporters for **both** metrics and events at the APM Server OTLP endpoint on
@@ -255,10 +264,14 @@ the `prompt` text, and a reserved `prompt_cipher` field for the sealing phase.
 project / client / user names). `session_id` equals the OTLP `session.id`, so an
 audit document **joins back** to that session's analytics telemetry.
 
-**2. Register the capture hook** in a Claude Code settings file's `hooks` block
-(the hook is agent config, like the `OTEL_*` env above). The capture script is
+**2. The capture hook is already registered** by `scripts/setup.sh` (step 1) —
+it writes the `hooks` block into the generated `.claude/settings.local.json`
+alongside the telemetry `env`, so launching `claude` from this stack directory
+audits prompts automatically. To register it **manually elsewhere** (e.g. in
+`~/.claude/settings.json` for all your projects, or `managed-settings.json` for
+org-wide enforcement), add a `hooks` block pointing at the capture script
 `components/agents/claude-code/hooks/capture-prompt.sh` (PowerShell mirror:
-`capture-prompt.ps1`); point the command at its absolute path:
+`capture-prompt.ps1`) by its absolute path:
 
 ```json
 {
@@ -387,4 +400,5 @@ pipeline body, the `prompts-audit` index mapping, and the Backend bootstrap
 scripts (trace-routing, prompt-audit, Kibana import) live in
 `../../components/backends/elastic/`; the Claude Code agent's data views, saved
 searches, Overview dashboard — with their own import script — and the
-prompt-capture **hooks** live in `../../components/agents/claude-code/`.
+prompt-capture **hooks**, and the **settings template + render scripts** (the
+`.claude/settings.local.json` content) live in `../../components/agents/claude-code/`.

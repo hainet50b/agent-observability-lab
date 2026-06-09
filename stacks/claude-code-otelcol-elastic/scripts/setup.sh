@@ -2,42 +2,39 @@
 #
 # setup.sh — one-shot bootstrap for the claude-code-otelcol-elastic stack.
 #
-# Run this once after `docker compose up -d` (when the services are healthy).
-# It performs every post-up bootstrap step in order, so you don't have to find
-# and run them individually:
-#   1. backend — install the trace-routing ingest pipeline (isolates Claude Code
-#      spans into traces-apm-agents_claude_code)
-#   2. backend — create the prompts-audit index (the prompt-audit store)
-#   3. import the Kibana saved objects: the cross-agent backend data view, the
-#      Claude Code agent's data views / saved searches / dashboard, and the
-#      otelcol-sidecar path's self-telemetry data view + Health dashboard
+# Run once after `docker compose up -d` (when the services are healthy). Performs
+# every post-up bootstrap step so you don't run them individually:
+#   1. backend — trace-routing ingest pipeline
+#   2. backend — prompts-audit index
+#   3. Kibana saved objects (backend cross-agent view, agent assets, sidecar view)
+#   4. agent — render .claude/settings.local.json (telemetry env pointed at the
+#      Collector + audit hook) from the agent-owned template, so a `claude`
+#      launched from this directory auto-emits telemetry and audits prompts
 #
-# Idempotent: every step is safe to re-run (pipeline PUT replaces, index create
-# is skipped if present, saved-object import uses overwrite=true). It calls the
-# component scripts directly; override endpoints with ES_URL (default
-# http://localhost:9200) and KIBANA_URL (default http://localhost:5601), which
-# the sub-scripts read from the environment.
-#
-# Verification (smoke-test.sh, resilience-test.sh) stays separate — this script
-# only sets things up.
-#
-# Run from anywhere — it locates its own stack directory.
+# Steps 1–3 are idempotent. Step 4 is create-if-absent (your edits survive a
+# re-run; delete the file to regenerate). Override endpoints with ES_URL /
+# KIBANA_URL. Verification (smoke-test.sh, resilience-test.sh) stays separate.
+# Run from anywhere. On Windows use setup.ps1 instead.
 
 set -euo pipefail
 
+OTLP_ENDPOINT=http://localhost:4318
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 C="$SCRIPT_DIR/../../../components"
 
-echo "[setup] 1/3 — trace-routing ingest pipeline"
+echo "[setup] 1/4 — trace-routing ingest pipeline"
 "$C/backends/elastic/scripts/setup-trace-routing.sh" "$@"
 
-echo "[setup] 2/3 — prompts-audit index"
+echo "[setup] 2/4 — prompts-audit index"
 "$C/backends/elastic/scripts/setup-prompt-audit.sh" "$@"
 
-echo "[setup] 3/3 — Kibana saved objects"
+echo "[setup] 3/4 — Kibana saved objects"
 "$C/backends/elastic/scripts/import-kibana-objects.sh" "$@"
 "$C/agents/claude-code/scripts/import-kibana-objects.sh" "$@"
 "$C/paths/otelcol-sidecar/scripts/import-kibana-objects.sh" "$@"
 
-echo "[setup] done ✓ — stack bootstrapped. Verify with scripts/smoke-test.sh"
-echo "        (and scripts/resilience-test.sh for the durable-queue check)."
+echo "[setup] 4/4 — local Claude Code settings (telemetry env + audit hook)"
+"$C/agents/claude-code/scripts/render-settings.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
+
+echo "[setup] done ✓ — run 'claude' here; verify with smoke-test.sh (and resilience-test.sh)."

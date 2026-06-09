@@ -1,18 +1,13 @@
 #!/usr/bin/env pwsh
 # setup.ps1 — one-shot bootstrap for the claude-code-otelcol-elastic stack.
 #
-# PowerShell mirror of setup.sh. Run once after `docker compose up -d` (when the
-# services are healthy). Performs every post-up bootstrap step in order, so you
-# don't have to find and run them individually:
-#   1. backend — install the trace-routing ingest pipeline
-#   2. backend — create the prompts-audit index
-#   3. import the Kibana saved objects (backend cross-agent view, the Claude Code
-#      agent's data views / saved searches / dashboard, and the otelcol-sidecar
-#      path's self-telemetry data view + Health dashboard)
-#
-# Idempotent (safe to re-run). Override endpoints with -EsUrl / -KibanaUrl (or
-# the ES_URL / KIBANA_URL env vars the sub-scripts read). Verification
-# (smoke-test.sh, resilience-test.sh) stays separate. Run from anywhere.
+# PowerShell mirror of setup.sh. Run once after `docker compose up -d` (healthy).
+# Steps: 1) trace-routing pipeline  2) prompts-audit index  3) Kibana saved
+# objects (backend, agent, sidecar)  4) render .claude/settings.local.json
+# (telemetry env pointed at the Collector + audit hook) from the agent-owned
+# template, so a `claude` launched from this directory auto-emits telemetry and
+# audits prompts. Steps 1-3 idempotent; step 4 is create-if-absent. Override
+# endpoints with -EsUrl / -KibanaUrl. Verification stays separate.
 
 [CmdletBinding()]
 param(
@@ -21,25 +16,29 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$OtlpEndpoint = 'http://localhost:4318'
+$StackDir = Split-Path -Parent $PSScriptRoot
 $C = Join-Path $PSScriptRoot '../../../components'
 
 $es = @{}; if ($EsUrl)     { $es['EsUrl'] = $EsUrl }
 $kb = @{}; if ($KibanaUrl) { $kb['KibanaUrl'] = $KibanaUrl }
 
 function Invoke-Step {
-    param([string]$Label, [string]$Path, [hashtable]$Args)
+    param([string]$Label, [string]$Path, [hashtable]$StepArgs)
     Write-Host "[setup] $Label"
-    $global:LASTEXITCODE = 0          # so a success that doesn't `exit` reads as 0
-    & $Path @Args
+    $global:LASTEXITCODE = 0
+    & $Path @StepArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-Invoke-Step '1/3 - trace-routing ingest pipeline' (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') $es
-Invoke-Step '2/3 - prompts-audit index'           (Join-Path $C 'backends/elastic/scripts/setup-prompt-audit.ps1')  $es
-Write-Host '[setup] 3/3 - Kibana saved objects'
+Invoke-Step '1/4 - trace-routing ingest pipeline' (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') $es
+Invoke-Step '2/4 - prompts-audit index'           (Join-Path $C 'backends/elastic/scripts/setup-prompt-audit.ps1')  $es
+Write-Host '[setup] 3/4 - Kibana saved objects'
 Invoke-Step '  backend data views' (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') $kb
 Invoke-Step '  agent assets'       (Join-Path $C 'agents/claude-code/scripts/import-kibana-objects.ps1') $kb
 Invoke-Step '  sidecar path view'  (Join-Path $C 'paths/otelcol-sidecar/scripts/import-kibana-objects.ps1') $kb
+Invoke-Step '4/4 - local Claude Code settings (telemetry env + audit hook)' `
+    (Join-Path $C 'agents/claude-code/scripts/render-settings.ps1') `
+    @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
 
-Write-Host '[setup] done - stack bootstrapped. Verify with scripts/smoke-test.sh'
-Write-Host '        (and scripts/resilience-test.sh for the durable-queue check).'
+Write-Host "[setup] done - run 'claude' here; verify with smoke-test.sh (and resilience-test.sh)."
