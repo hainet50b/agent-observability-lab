@@ -1,0 +1,30 @@
+# codex-cli-elastic — direct path, Elastic backend (composition).
+#
+# This stack is the 1×1×1 composition of the Elastic backend with OpenAI Codex
+# CLI over the direct path (agent → APM Server, no Collector). It is the second
+# agent on the shared Elastic backend, modelled on claude-code-elastic (the
+# direct-path precedent). The backend services (Elasticsearch + Kibana + APM
+# Server), their config, the Kibana NDJSON, and the bootstrap scripts all live in
+# ../../components/backends/elastic/ and are pulled in via `include:` below.
+# Per-stack glue (the smoke test) lives alongside this file under scripts/.
+#
+# Skeleton scope: this composition stands up and the agent-independent OTLP path
+# (agent → APM Server → Elasticsearch) is proven by scripts/smoke-test.sh.
+# Pointing a Codex CLI session at the stack (its OTEL_* telemetry config) and the
+# Codex-specific Kibana assets are deliberately OUT of scope here — they depend on
+# a live characterization of Codex's telemetry and are authored in later
+# increments. That is why this stack ships no setup.{sh,ps1}, no config.toml, and
+# no Kibana NDJSON.
+#
+# ⚠️ This stack reuses the Elastic backend's fixed aol-* container names and host
+# ports (9200 / 5601 / 8200), so it CANNOT run at the same time as
+# claude-code-elastic or claude-code-otelcol-elastic — `docker compose down` the
+# other stack before bringing this one up.
+#
+# `name:` is set explicitly so the Compose project name is codex-cli-elastic
+# (and not derived from an included file's own `name:`).
+
+name: codex-cli-elastic
+
+include:
+  - ../../components/backends/elastic/docker-compose.yml

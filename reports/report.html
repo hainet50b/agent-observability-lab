@@ -1684,6 +1684,42 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Stand up the <code>codex-cli-elastic</code> stack skeleton</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modelled the new stack on <code>claude-code-elastic</code> (the direct-path precedent): a thin <code>docker-compose.yml</code> that sets <code>name: codex-cli-elastic</code> and <code>include:</code>s the Elastic backend component verbatim — no inline services. The backend is reused completely unchanged, as the task requires.</li>
+      <li>The <code>scripts/smoke-test.sh</code> is a faithful copy of <code>claude-code-elastic</code>'s: identical 3A structure, the same three precomputed <code>aol-smoke-test</code> OTLP/protobuf payloads, the same direct POST to the APM Server on <code>:8200</code> (<em>not</em> a Collector), the same <code>aol-elasticsearch</code>/<code>aol-kibana</code>/<code>aol-apm-server</code> health-wait list, and the same assert/discover logic. Only the header comments and the PASS banner were reworded — the probe is agent-independent, so it proves the shared OTLP path without a configured agent, and the prose says so rather than promising a Codex session step that does not exist yet.</li>
+      <li>Honoured the skeleton scope strictly: shipped only <code>docker-compose.yml</code>, <code>scripts/smoke-test.sh</code>, and a self-contained <code>README.md</code>. No <code>config.toml</code>, no <code>setup.{sh,ps1}</code>, no Kibana NDJSON — those depend on a live characterization of Codex's telemetry and are deferred. The README is self-contained (no links into <code>SPEC/</code>) and its Layout block lists only the files that actually exist.</li>
+      <li>Recorded the settled naming in the README's "Naming" section (<code>service.name: codex-cli</code>, trace namespace <code>agents_codex_cli</code>, data streams <code>*-apm.app.codex_cli-default</code>) and the collision caveat naming <em>both</em> other Elastic stacks, since all three reuse the fixed <code>aol-*</code> container names and host ports and so cannot run simultaneously.</li>
+      <li>An adversarial review pass caught that the new <code>smoke-test.sh</code> would be committed as mode <code>100644</code> — on this Windows checkout <code>core.fileMode</code> is false, so the local execute bit is not carried into the git index. On a fresh POSIX clone the CONVENTIONS lint loop's <code>[ -x "$f" ]</code> gate would then silently skip it. Fixed with <code>git update-index --chmod=+x</code> so it is <code>100755</code>, matching both precedent smoke tests.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Pointing a real Codex CLI session at the stack and the Codex-specific Kibana assets are explicitly out of scope for this skeleton — they are the next increments once Codex's emitted telemetry is characterized live.</li>
+      <li>Docker lifecycle ran with the sandbox relaxed, as for every Docker-driven task in this repo. To verify the codex stack I had to <code>docker compose down</code> the otelcol stack first (shared <code>aol-*</code> names); its data volume was preserved and the stack was restored afterward.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Author <code>components/agents/codex-cli/</code> — the telemetry-config template (Codex's <code>OTEL_*</code>/<code>config.toml</code> form) and the per-agent Kibana data views / saved searches / dashboard scoped to <code>*-apm.app.codex_cli-default</code> and <code>traces-apm-agents_codex_cli</code> — once a live Codex session's signals are known.</li>
+      <li>Consider a <code>codex-cli-otelcol-elastic</code> stack (Codex through the sidecar path) to mirror the Claude Code pair, for parity in the collision / resilience story.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <ul>
+      <li>Added a second agent stack, <code>codex-cli-elastic</code>: <code>docker compose up -d</code> brings the shared Elastic backend up and <code>scripts/smoke-test.sh</code> proves the OTLP → APM Server → Elasticsearch path. The Codex session config and Kibana views come later; everything needed to prove the pipeline works is here now.</li>
+    </ul>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live: <code>docker compose config -q</code> passes for all three stacks; with the other two down, <code>codex-cli-elastic</code> brought <code>aol-elasticsearch</code>/<code>aol-kibana</code>/<code>aol-apm-server</code> to healthy and <code>scripts/smoke-test.sh</code> reached <strong>PASS</strong> (all three probes returned HTTP 200 and landed in <code>metrics/logs/traces-apm*</code>).</li>
+      <li>The smoke-test executable-bit fix (<code>100644</code> → <code>100755</code>) is easy to lose on Windows — worth confirming on the next clone that the lint loop actually runs it rather than skipping.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
