@@ -1911,6 +1911,37 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex saved search — Event Overview</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modeled on the four shipped Codex searches, with the task's documented <strong>two-pill</strong> departure. <code>filter[0]</code> is a positive phrase on <code>service.framework.name: codex_cli_rs</code> — this scopes to the <em>trace_safe</em> doc family (the docs that carry <code>labels.event_name</code>; its log_only twin uses <code>codex_otel.log_only</code>), so it is the structural equivalent of Event Overview's "all events" scope without needing a <code>service.name</code> pill. <code>filter[1]</code> is the negated phrase <code>NOT labels.event_name: codex.websocket_event</code>.</li>
+      <li>The negated pill is the only novel piece. Authored it as the same shape as a positive phrase filter but with <code>meta.negate: true</code> — the inner <code>query</code> stays the positive <code>match_phrase</code>; Kibana renders the red NOT pill from the meta flag and applies it as a <code>must_not</code> at query time. Confirmed the stored shape round-trips: a GET of the imported object shows both pills exactly (negate false / true) and all three <code>references[]</code> (<code>index</code> + <code>filter[0/1].meta.index</code>) resolving to <code>codex-cli-events</code>.</li>
+      <li>Columns are exactly the task's seven (<code>labels.event_name</code>, <code>labels.model</code>, <code>labels.duration_ms</code>, <code>labels.success</code>, <code>labels.conversation_id</code>, <code>span.id</code>, <code>trace.id</code>), no <code>user_email</code> lead (Codex convention — identity rides the log_only twin), with <code>@timestamp</code> as Discover's implicit leftmost time column. Verified all seven are well-populated on the in-scope docs (span.id/trace.id 55/55, model 54, conversation_id 54, duration 53, success 49).</li>
+      <li>Export-summary line bumped <code>exportedCount</code> 4 → 5 (kept as the file's last line); <code>missingRefCount</code> stays 1 — the one referenced data view (<code>codex-cli-events</code>) lives in the sibling <code>data-views.ndjson</code>, imported first.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The GET of the imported object shows two extra self-referential <code>filter[N].meta.index</code> reference entries (id == the ref-name placeholder); confirmed benign — the already-shipped, verified <strong>Codex CLI — Tool Results</strong> exhibits the identical "+1 self-ref per filter" pattern, so it is a consistent Kibana reference-extraction artifact, not a defect in this object.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Nothing new. The two remaining open tasks are the ES|QL "joined" views (Tool I/O, User Prompts). Separately, <code>SPEC/codex-cli-telemetry.md</code> lists not-yet-observed events (<code>codex.tool_decision</code>, <code>codex.sse_event</code>, API-error events) — natural saved-search additions once a session actually exercises those code paths.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Adds the <strong>Codex CLI — Event Overview</strong> saved search: a single cross-event-type timeline showing every Codex event interleaved by time, with the high-volume per-streamed-event <code>websocket_event</code> wrappers filtered out so the meaningful events are readable. Open it from Discover's Open menu after running the import.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running 9.4.2 stack: the import reports <code>success: true</code> with <code>successCount: 5</code> and no errors; the exact <code>bool</code> query Discover executes (<code>must</code> match_phrase <code>service.framework.name=codex_cli_rs</code> + <code>must_not</code> match_phrase <code>labels.event_name=codex.websocket_event</code>) returns <strong>8 event types interleaved</strong> with <code>codex.websocket_event</code> absent (<code>sum_other_doc_count: 0</code>) — exactly the acceptance criterion; <code>docker compose config -q</code> passes for all three stacks; every NDJSON line is valid JSON.</li>
+      <li>Smoke-tests were not re-run: a Kibana saved-object NDJSON change is orthogonal to the OTLP ingestion path the smoke-tests probe, and re-running one would require bringing up a stack that collides with the live stack's fixed <code>aol-*</code> container names. The live import + exact-query verification above is the integration evidence for this change.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
