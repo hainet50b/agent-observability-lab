@@ -1790,6 +1790,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Fix the Codex trace-isolation reroute predicate (<code>codex-cli</code> → <code>codex_cli_rs</code>)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Edited <strong>only</strong> <code>components/backends/elastic/elasticsearch/trace-routing.pipeline.json</code>, as the task scoped. That file is the single source of truth both <code>setup-trace-routing.sh</code> and <code>.ps1</code> PUT verbatim, so no script change was needed — I confirmed by grep that neither script hard-codes the predicate (they only name the pipeline file).</li>
+      <li>Carried the <code>rs</code> token into <em>both</em> the predicate and the namespace: <code>ctx.service?.name == 'codex_cli_rs'</code> → <code>agents_codex_cli_rs</code>. The namespace deliberately matches the APM-assigned <code>codex_cli_rs</code> logs/metrics datasets, while the <code>agents_</code> prefix keeps it inside the cross-agent glob <code>traces-apm-agents_*</code>. Human-facing agent/stack names stay <code>codex-cli</code>.</li>
+      <li>Updated the pipeline <code>description</code> to name <code>codex_cli_rs -&gt; agents_codex_cli_rs</code>; the <code>claude-code</code> reroute is untouched.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The other two stacks' smoke tests were <em>not</em> re-run. They share the backend's fixed <code>aol-*</code> container names and host ports (so only one stack can be up at a time) and they don't exercise the changed Codex branch. The <code>claude-code</code> reroute being unchanged was instead proven directly via <code>_simulate</code>, and the relevant stack — <code>codex-cli-elastic</code> — reached smoke PASS.</li>
+      <li>~3,486 pre-fix Codex trace docs remain in <code>traces-apm-default</code> as demo residue until a <code>docker compose down -v</code> — exactly as the task anticipates; new sessions now route to <code>traces-apm-agents_codex_cli_rs</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Stale stream-name references after this fix.</strong> <code>stacks/codex-cli-elastic/README.md</code> (3 places) and the header comments of <code>stacks/codex-cli-elastic/scripts/setup.sh</code> / <code>setup.ps1</code> still say the old <code>traces-apm-agents_codex_cli</code> (no <code>_rs</code>). They're now wrong. Out of scope for this JSON-only task (and the stack README is human/conversational-LLM territory), but worth a follow-up task to update them to <code>traces-apm-agents_codex_cli_rs</code>.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex trace-isolation reroute now matches the real service name Codex emits (<code>codex_cli_rs</code>, not the assumed <code>codex-cli</code>), so a Codex session's trace spans land in their own <code>traces-apm-agents_codex_cli_rs</code> data stream instead of leaking unisolated into the shared <code>traces-apm-default</code>.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on a running 9.4.2 stack: <code>_simulate</code> routes <code>codex_cli_rs</code> → <code>traces-apm-agents_codex_cli_rs</code>, <code>claude-code</code> → <code>traces-apm-agents_claude_code</code> (unchanged), and <code>aol-smoke-test</code> → <code>traces-apm-default</code> (fallthrough). The pipeline PUT returned <code>acknowledged: true</code> and <code>scripts/smoke-test.sh</code> reached PASS.</li>
+      <li><strong>The <code>codex-cli-elastic</code> stack is left running</strong> (ES + Kibana + APM healthy, reroute pipeline installed) so you can do the human verification step: point a fresh Codex session at it and confirm its spans land in <code>traces-apm-agents_codex_cli_rs</code>. Run <code>docker compose down</code> when done (<code>down -v</code> also clears the pre-fix residue).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
