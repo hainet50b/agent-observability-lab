@@ -1974,6 +1974,40 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex saved search — User Prompts (joined)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Companion ES|QL Discover session to Tool I/O (joined), same saved-object shape (<code>isTextBasedQuery: true</code>, <code>sort: []</code>, no references). New id <code>codex-cli-user-prompts-joined</code> — deliberately distinct from the filter-pill <code>codex-cli-user-prompts</code> so both ship side by side (one shows lengths/counts, this one restores who + prompt text).</li>
+      <li>The PRD left the join key open ("likely span.id, else conversation_id"). The workflow <strong>confirmed span.id live and 1:1</strong>: the trace_safe <code>codex.user_prompt</code> doc and its log_only twin both carry <code>span.id = fbdd7549ce6d19a5</code>. One designer claimed the twins did <em>not</em> share span.id; the adjudicator disproved it against live data (the span.id it cited was a websocket span). <code>conversation_id</code> was explicitly rejected as the join key — it would collapse multiple turns in one conversation into a single row.</li>
+      <li>The join is a <code>STATS … BY span.id</code> over both families, with a <code>MAX(labels.event_name) == "codex.user_prompt"</code> guard that keeps only prompt-turn spans. This correctly drops the ~1724 unrelated log_only docs (their null-span groups and websocket spans fail the guard). <code>MAX()</code> is used (not <code>VALUES()</code>) precisely because the guard needs a <em>scalar</em> for the <code>==</code> comparison; using it for the other fields too yields clean single values since each is single-valued per span.</li>
+      <li>Normalized the verifier's <code>SORT ts ASC</code> to <code>SORT ts DESC</code> for consistency with every other view in the repo (newest-first); re-ran the DESC variant live to confirm it still returns the one correct row before shipping.</li>
+      <li>Line rebuilt with <code>python json.dumps</code> for correct nested ES|QL escaping (the query contains <code>"codex.user_prompt"</code> string literals); round-tripped through Kibana byte-for-byte.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The <code>prompt</code> column is <code>"[REDACTED]"</code> for every row because the <code>otel.log_user_prompt</code> gate is off (lab default) — this is the whole point of the view (the standing lens on that gate), not a defect; the real text flows when the gate is enabled. Data volume is tiny (exactly one prompt turn in the characterized session); correctness is structural (GROUP BY span.id + guard) so it generalizes, but it hasn't been stress-tested against a multi-turn dataset because none exists yet.</li>
+      <li>Latent fragility (acknowledged, not currently triggered): <code>span.id</code> is not globally unique (websocket spans reuse one across 100+ docs), but the user_prompt span.id is private to its twin pair. If a future Codex reused the user_prompt span.id for a higher-sorting <code>event_name</code>, the <code>MAX</code> guard would need revisiting.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — this was the last open task. Future Codex saved-search work (when sessions exercise them) is already noted in <code>SPEC/codex-cli-telemetry.md</code>: <code>codex.tool_decision</code>, <code>codex.sse_event</code>, and API-error events.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Adds <strong>Codex CLI — User Prompts (joined)</strong>, an ES|QL saved search giving one row per prompt turn with the prompt text and submitter reunited by joining Codex's split log families on <code>span.id</code>. The prompt shows <code>[REDACTED]</code> until the <code>log_user_prompt</code> gate is enabled. Open it from Discover's Open menu.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running 9.4.2 stack: the query returns exactly one row with <code>user_email</code> (from the log_only twin), <code>prompt_length</code>, <code>conversation_id</code>, and <code>trace_id</code> populated and <code>prompt = "[REDACTED]"</code> (gate off, expected). The throwaway import round-tripped and was deleted; the in-place re-import reports <code>successCount: 7</code> for the saved-searches file; <code>docker compose config -q</code> passes for all three stacks; every NDJSON line is valid JSON.</li>
+      <li>Designed via the same judge-panel + adversarial-verify workflow. The adjudicator's break-tests (zero/duplicate rows, user_email failing to cross, the post-filter guard hijack) all passed; the join key was decided by live evidence, not assumption.</li>
+      <li><strong>All PRD tasks are now complete</strong> — no <code>- [ ]</code> remain.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
