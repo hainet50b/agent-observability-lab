@@ -1942,6 +1942,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex saved search — Tool I/O (joined), first Codex ES|QL view</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>This is an <strong>ES|QL Discover session</strong>, a different saved-object shape from the filter-pill searches: <code>isTextBasedQuery: true</code>, <code>sort: []</code>, <code>references: []</code> (no data view — the <code>FROM</code> names the streams), and <code>searchSourceJSON</code> = <code>{"query":{"esql":"…"},"filter":[]}</code>. I learned the exact shape from the shipped claude <code>claude-code-tool-io</code> and mirrored it.</li>
+      <li>The codex join is <em>simpler</em> than claude's two-hop: both Codex log families carry <code>labels.call_id</code> and <code>span.id</code> directly, so a single <code>STATS … BY labels.call_id</code> over <code>logs-apm.app.codex_cli_rs*</code> merges the trace_safe <code>codex.tool_result</code> doc (tool_name / success / duration_ms / trace.id) with its log_only twin (user_email + arguments command + output stdout). No traces-stream union needed (claude needed it because <code>tool.output</code> was a separate doc; on Codex the content already lives in the logs stream's log_only twin).</li>
+      <li>The PRD-flagged <strong>multivalue hazard</strong> is real and handled: the log_only family emits a null-content start doc <em>and</em> a populated completion doc per call (2 docs), plus the trace_safe doc — 3 docs per call_id. <code>VALUES()</code> drops nulls so the group collapses to one clean row. Adversarial verification proved <code>MAX(MV_COUNT(...)) = 1</code> across all 35 calls for <em>every</em> column — zero multivalued cells anywhere, not just in the sample.</li>
+      <li>Design was run as a judge-panel workflow: 3 independent ES|QL designers → 1 adversarial adjudicator. The adjudicator improved my inline baseline in two principled ways — <code>ts = MAX(@timestamp)</code> (the tool-<em>finished</em> stamp, shared by the completion + trace_safe docs; proved equal across all 35 calls) instead of <code>MIN</code>, and it <em>dropped</em> a defensive trailing <code>WHERE</code> that would have risked dropping a legitimately empty-output call. A <code>KEEP</code> drops the <code>BY</code> grouping column from the displayed set.</li>
+      <li>I rebuilt the final NDJSON line myself with <code>python json.dumps</code> (rather than trusting hand-escaping or the agent's bytes) so the ES|QL — which embeds as a JSON string inside a JSON string — is escaped correctly. The line round-tripped through Kibana byte-for-byte.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The dataset is 100% builtin <code>shell_command</code> with <code>mcp_tool=false</code>, so MCP tool calls were not exercised — but the <code>labels.call_id</code> scope captures them with no query change (MCP tool events also carry <code>call_id</code>). One row (a README read) has a genuinely empty <code>output</code>; it is kept (single-valued null, not a defect), so the row count stays a faithful 35 = one per call.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new. The query relies on the verified invariant that no field has &gt;1 distinct value per <code>call_id</code>; if a future Codex ever emitted two differing completion docs for one call_id, <code>VALUES()</code> would multivalue that cell — worth a glance if Codex's tool-event shape changes.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Adds <strong>Codex CLI — Tool I/O (joined)</strong>, the repo's first Codex ES|QL saved search: one row per tool call showing the command, its stdout, who ran it, success, and duration — reconstructed by joining Codex's split trace_safe/log_only log families. Open it from Discover's Open menu.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running 9.4.2 stack: against the 2026-06-09 12:53 window the shell_command rows show command + stdout + <code>user_email</code> together, one row per <code>call_id</code>, every cell single-valued (35 rows = 35 distinct calls, sorted <code>ts</code> DESC). The throwaway import round-tripped (<code>isTextBasedQuery: true</code>, ES|QL byte-identical) and was deleted; the in-place re-import reports <code>successCount: 6</code>; <code>docker compose config -q</code> passes for all three stacks; every NDJSON line is valid JSON.</li>
+      <li>Produced via a judge-panel + adversarial-verify workflow (3 designers + 1 adjudicator). The adjudicator's break-tests — spurious call_id docs, MCP calls, duplicate rows, multivalue cells, sort order — all failed to break the query; evidence pasted from real result rows.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
