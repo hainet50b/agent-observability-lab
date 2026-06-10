@@ -14,14 +14,15 @@ to ingest OpenTelemetry straight into Elasticsearch. Codex CLI points at it
 directly rather than through an OpenTelemetry Collector (a Collector-based
 variant would be a separate stack, mirroring `claude-code-otelcol-elastic`).
 
-> 🚧 **Session wired; data views in, saved searches still deferred.** This stack
-> stands up the composition, proves the OTLP path with the synthetic smoke test,
-> points a real Codex CLI session at it, **and** ships the three Codex data views:
-> `scripts/setup.sh` installs trace routing, renders a Codex `[otel]` telemetry
-> config (see [Point a Codex session](#2-point-a-codex-session-at-the-stack)), and
-> imports the Kibana data views (Metrics / Events / Traces). The **curated saved
-> searches and dashboard** are still deferred — they depend on a live
-> characterization of what Codex CLI actually emits. See
+> 🚧 **Session wired; data views + first saved search in.** This stack stands up
+> the composition, proves the OTLP path with the synthetic smoke test, points a
+> real Codex CLI session at it, **and** ships the three Codex data views plus the
+> first curated saved search (Tool Results): `scripts/setup.sh` installs trace
+> routing, renders a Codex `[otel]` telemetry config (see
+> [Point a Codex session](#2-point-a-codex-session-at-the-stack)), and imports the
+> Kibana data views (Metrics / Events / Traces) and saved searches. The
+> **remaining saved searches and a dashboard** are still deferred — they depend on
+> a live characterization of what Codex CLI actually emits. See
 > [What's deferred](#whats-deferred).
 
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
@@ -74,10 +75,10 @@ in one shot — it installs the trace-routing ingest pipeline (isolates Codex's
 spans into a dedicated per-agent trace stream), renders a Codex `[otel]` config
 to `.codex/config.toml` in this directory (pointed at the APM Server OTLP
 endpoint on `:8200`), and imports the Codex Kibana **data views** (Metrics /
-Events / Traces) plus the shared cross-agent **AI Agents — Traces** view. Steps
-are idempotent / create-if-absent, so re-run it any time. Override the ES
-endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the Kibana URL with
-`KIBANA_URL`.
+Events / Traces) and **saved searches**, plus the shared cross-agent **AI Agents —
+Traces** view. Steps are idempotent / create-if-absent, so re-run it any time.
+Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the Kibana
+URL with `KIBANA_URL`.
 
 ### 2. Point a Codex session at the stack
 
@@ -144,11 +145,12 @@ Codex session. It needs `docker` (running daemon), `curl`, `jq`, `base64`; it
 ### 4. See the telemetry
 
 The three Codex **data views** — **Codex CLI — Metrics**, **Codex CLI — Events**,
-and **Codex CLI — Traces** — are imported by `scripts/setup.sh` (Quick Tour step
-1). Open Discover, pick one from the data-view selector, and browse the raw
-documents. (Curated saved searches and a dashboard are still deferred — see
-[What's deferred](#whats-deferred); the Traces view stays empty until a Codex
-session emits spans after trace routing is installed.)
+and **Codex CLI — Traces** — and the first curated **saved search** (**Codex CLI —
+Tool Results**, on the Events view) are imported by `scripts/setup.sh` (Quick Tour
+step 1). Open Discover, pick a data view from the selector or open the saved
+search from the Open menu. (The remaining saved searches and a dashboard are still
+deferred — see [What's deferred](#whats-deferred); the Traces view stays empty
+until a Codex session emits spans after trace routing is installed.)
 
 You can also look directly with a query:
 
@@ -172,15 +174,17 @@ docker compose down -v     # also wipe ingested telemetry
 ## What's deferred
 
 Wired now: the composition, the OTLP-path smoke test, trace isolation, a real
-Codex session's `[otel]` telemetry config, and the three Codex **data views**
-(Metrics / Events / Traces) with their own import script — modelled on
+Codex session's `[otel]` telemetry config, the three Codex **data views**
+(Metrics / Events / Traces), and the first curated **saved search** (Tool
+Results), all with their own import script — modelled on
 `components/agents/claude-code/kibana/`. (The shared cross-agent **AI Agents —
 Traces** view, `traces-apm-agents_*`, already includes Codex's spans.) Authored
 later, with the human, once Codex's emitted telemetry is characterized live:
 
-- **Codex-specific saved searches and a dashboard** — curated Discover saved
-  searches per Codex event type and an overview dashboard, building on the data
-  views above.
+- **The remaining Codex saved searches and a dashboard** — curated Discover saved
+  searches for the other Codex event types (API requests, conversation starts,
+  user prompts, an event overview, and joined tool-I/O views) and an overview
+  dashboard, building on the Tool Results search and the data views above.
 - **Prompt-audit hook** — the `prompts-audit` index + capture hook are
   Claude-Code-specific (a `UserPromptSubmit` hook). A Codex equivalent, if Codex
   exposes a comparable hook, is a later increment; `setup.sh` deliberately does
@@ -201,8 +205,9 @@ codex-cli-elastic/
 services, their config, the cross-agent data view, the `traces-apm@custom`
 pipeline body, and the Backend bootstrap scripts live in
 `../../components/backends/elastic/`; the Codex CLI agent's `[otel]` config
-template, its render scripts, its Kibana data views (`kibana/data-views.ndjson`),
-and its Kibana import script (`scripts/import-kibana-objects.{sh,ps1}`) live in
+template, its render scripts, its Kibana data views and saved searches
+(`kibana/data-views.ndjson`, `kibana/saved-searches.ndjson`), and its Kibana
+import script (`scripts/import-kibana-objects.{sh,ps1}`) live in
 `../../components/agents/codex-cli/`. `scripts/setup.sh` renders that template
-into this directory's gitignored `.codex/config.toml` and imports those data
-views.
+into this directory's gitignored `.codex/config.toml` and imports those Kibana
+objects.

@@ -3,10 +3,11 @@
 #
 # PowerShell mirror of import-kibana-objects.sh (same pairing as ralph.sh /
 # ralph.ps1). Scope: the Codex CLI **agent** assets — its per-agent data views
-# (Metrics / Events / Traces). Saved searches and a dashboard are added as later
-# increments. The cross-agent backend data view (AI Agents — Traces) is imported
-# separately by the Elastic backend's own import script; a stack composes the two
-# by running the backend's import first, then this one.
+# (Metrics / Events / Traces) and its curated saved searches (growing per Codex
+# event type). A dashboard is added as a later increment. The cross-agent backend
+# data view (AI Agents — Traces) is imported separately by the Elastic backend's
+# own import script; a stack composes the two by running the backend's import
+# first, then this one.
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
 # `_import?overwrite=true` API, **data views first** so that later saved searches
@@ -36,11 +37,12 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 
-# Data views FIRST — later saved searches / dashboards reference the data views
-# (codex-cli-events / codex-cli-metrics / codex-cli-traces), and those references
-# must already exist when those files are added.
+# Data views FIRST, then the saved searches — the saved searches reference the
+# data views (codex-cli-events / codex-cli-metrics / codex-cli-traces), so those
+# references must already exist when the saved searches import.
 $Files = @(
     'kibana/data-views.ndjson'
+    'kibana/saved-searches.ndjson'
 )
 
 function Import-File {

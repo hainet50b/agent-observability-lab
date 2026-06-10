@@ -9,15 +9,15 @@
 # ~/.codex (a repo-local .codex/config.toml is ignored for [otel]; CODEX_HOME is
 # the supported per-project mechanism)  3) import the Kibana saved objects: the
 # Elastic backend's cross-agent AI Agents — Traces data view, then the Codex CLI
-# agent's per-agent data views (Metrics / Events / Traces). Step 1 idempotent;
-# step 2 create-if-absent; step 3 imports with overwrite=true. Override the ES
-# endpoint with -EsUrl, the Kibana URL with the KIBANA_URL env var. Verification
-# (smoke-test.sh) stays separate.
+# agent's per-agent data views (Metrics / Events / Traces) and saved searches.
+# Step 1 idempotent; step 2 create-if-absent; step 3 imports with overwrite=true.
+# Override the ES endpoint with -EsUrl, the Kibana URL with the KIBANA_URL env
+# var. Verification (smoke-test.sh) stays separate.
 #
 # NOT done here (deferred): the prompts-audit index + capture hook are
-# Claude-Code-specific (Codex has no such hook), and the Codex saved searches +
-# dashboard await further characterization of Codex's telemetry (the data views
-# import in step 3).
+# Claude-Code-specific (Codex has no such hook), and the remaining Codex saved
+# searches + dashboard await further characterization of Codex's telemetry (the
+# data views and the first saved search, Tool Results, import in step 3).
 
 [CmdletBinding()]
 param(
@@ -45,7 +45,7 @@ Invoke-Step '2/3 - local Codex session config (.codex/config.toml, [otel] teleme
     @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
 Invoke-Step '3/3 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
     (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') @{}
-Invoke-Step '3/3 - Kibana saved objects (2/2): Codex agent data views' `
+Invoke-Step '3/3 - Kibana saved objects (2/2): Codex agent data views + saved searches' `
     (Join-Path $C 'agents/codex-cli/scripts/import-kibana-objects.ps1') @{}
 
 Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

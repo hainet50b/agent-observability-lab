@@ -1852,6 +1852,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex saved search — Tool Results (first Codex saved search)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Mirrored the claude per-message saved-search shape exactly, with the two <strong>documented Codex departures</strong>: the single filter pill keys on <code>labels.event_name</code> (Codex's event-type field) instead of claude's <code>message</code>, and there is <strong>no <code>labels.user_email</code> lead</strong> — the <code>codex.tool_result</code> docs are the <code>codex_otel.trace_safe</code> family, which carry no identity envelope (verified live on a sample doc: tool fields present, no <code>labels.user_*</code>). Columns are exactly the ten specified, in order, ending <code>labels.call_id</code>, <code>trace.id</code>.</li>
+      <li>Shipped in a new <code>components/agents/codex-cli/kibana/saved-searches.ndjson</code> (one <code>search</code> object + the trailing export-summary line) and appended <code>kibana/saved-searches.ndjson</code> to the codex agent import <code>FILES</code> <em>after</em> <code>data-views.ndjson</code>, so the <code>codex-cli-events</code> reference resolves at import time (matching claude's data-views-first ordering).</li>
+      <li><strong>Doc-accuracy follow-through (slightly beyond task 294's literal scope, flagged here).</strong> Shipping the first saved search made the "saved searches deferred" wording I had written in the previous increment (iteration 1) stale, so I corrected the lines I authored: the README status badge, Quick Tour steps 1 &amp; 4, the "What's deferred" section, the Layout, both <code>setup.{sh,ps1}</code> headers, and the step-3 import labels — all now read "data views + the first saved search (Tool Results) ship; the remaining searches + a dashboard are deferred." Three independent reviewers flagged the un-corrected state as a real user-facing contradiction.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Kibana's saved-object import migration adds a third, harmless <code>reference</code> to the search (name = the filter placeholder, <code>id</code> = the placeholder string itself). I confirmed this is <strong>identical</strong> to claude's verified-good saved searches by importing them side-by-side into the same Kibana and diffing — so it is a platform artifact, not a file bug. On load, <code>injectReferences</code> resolves the pill via the first matching reference (→ <code>codex-cli-events</code>). The comparison objects were deleted afterward to restore the setup-produced state.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>(Reiterated from the previous increment.)</strong> The codex stack README "Naming" section and the <code>setup.{sh,ps1}</code> step-1 header still say <code>codex_cli</code> / <code>traces-apm-agents_codex_cli</code>, stale since the reroute fix made the real names <code>codex_cli_rs</code> / <code>traces-apm-agents_codex_cli_rs</code>. A dedicated cleanup task would align the human-owned prose.</li>
+      <li>Tasks for the next Codex searches (API Requests, Conversation Starts, User Prompts, Event Overview, the joined ES|QL views) append to this same <code>saved-searches.ndjson</code>: keep the export-summary as the <strong>last</strong> line and bump its <code>exportedCount</code>.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <code>codex-cli-elastic</code> stack's Kibana import now ships the first curated Codex saved search — <strong>Codex CLI — Tool Results</strong> — a one-row-per-tool-call view (tool name / origin / mcp flag / success / duration plus argument &amp; output sizes) filtered to <code>codex.tool_result</code>. Open it from Discover's Open menu after running <code>scripts/setup.sh</code>.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running 9.4.2 stack: the saved search imports <code>success: true</code>; its stored filter pill is <code>labels.event_name: codex.tool_result</code> with an empty query bar; columns and <code>references</code> (→ <code>codex-cli-events</code>) are correct; and the filter matches the <strong>35</strong> live <code>codex.tool_result</code> docs in the 2026-06-09 window. Both <code>setup.{sh,ps1}</code> run the full bootstrap end-to-end and the <code>.ps1</code> leaves <code>$PWD</code> unchanged.</li>
+      <li>An adversarial three-reviewer workflow (PRD-conformance, claude-convention parity, cross-file consistency) gated this change; its confirmed findings (the doc-accuracy items above) were folded in, and its false alarms (the benign <code>missingRefCount: 1</code>, the known <code>codex_cli</code> staleness) were dismissed with evidence.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
