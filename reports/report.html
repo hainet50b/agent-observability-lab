@@ -1883,6 +1883,34 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex saved searches — API Requests, Conversation Starts, User Prompts</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Each of the three new <code>search</code> objects was modeled byte-for-byte on the shipped <strong>Codex CLI — Tool Results</strong> line: single <code>labels.event_name</code> phrase filter pill, empty query bar, no <code>user_email</code> lead, <code>@timestamp</code> desc, and the two <code>references[]</code> entries (the index ref + <code>filter[0].meta.index</code>) both pointing at <code>codex-cli-events</code>. Columns are exactly the sets the task enumerated — no additions, no reordering.</li>
+      <li>I verified every column field path against live <code>codex_cli_rs</code> data before authoring, one ES|QL probe per event type. All requested fields exist and resolve: API Requests (<code>/models</code> GET, status 200, auth_mode <code>Chatgpt</code>), Conversation Starts (model <code>gpt-5.5</code>, on-request approval, read-only sandbox, mcp_server_count 1), User Prompts (prompt_length, text/image input counts).</li>
+      <li>Export-summary line: bumped <code>exportedCount</code> 1 → 4 (it must remain the file's last line). <code>missingRefCount</code> stays <strong>1</strong> — all four searches share the single unresolved <code>codex-cli-events</code> data-view reference, which Kibana dedupes; it resolves at import time because the import script loads <code>data-views.ndjson</code> first.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <p>None.</p>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Remaining open Codex search tasks (Event Overview, Tool I/O joined, User Prompts joined) append to this same <code>saved-searches.ndjson</code>; keep the export-summary as the last line and bump <code>exportedCount</code> to 5, 6, 7 in turn.</li>
+      <li><strong>(Still open from prior increments.)</strong> The codex stack README "Naming" section / <code>setup.{sh,ps1}</code> step-1 header still say <code>codex_cli</code> rather than the real <code>codex_cli_rs</code> — a human-owned prose cleanup.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex Kibana import now ships three more curated saved searches — <strong>Codex CLI — API Requests</strong> (HTTP-REST lens), <strong>Conversation Starts</strong> (one-per-conversation session-config audit line), and <strong>User Prompts</strong> (one-per-turn, with prompt text deferred to the joined view). Open them from Discover's Open menu after running <code>scripts/setup.sh</code>.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running 9.4.2 stack: the full file imports <code>success: true</code> with <code>successCount: 4</code> and no errors; <code>docker compose config -q</code> passes for all three stacks; every line is valid JSON. Each new search's columns were confirmed against live <code>codex_cli_rs</code> docs (the 2026-06-09 window).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
