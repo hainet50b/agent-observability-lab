@@ -78,10 +78,30 @@ log_only only (verified: of 949 trace_safe docs, 0 have `user_email`; of 1724
 log_only docs, 1723 do).
 
 **Joining the twins:** they share **`labels.call_id`** (tool events),
-**`span.id`**, and **`labels.event_timestamp`**. Reconstructing "who + event +
-content" in one row therefore requires a twin join (the lab's ES|QL "joined"
-saved searches do this) — a single filter-pill view can show structured fields
-*or* identity+content, never both.
+**`span.id`**, and **`labels.event_timestamp`**. A join is needed only to combine
+fields that are split across the two families in one row — `event_name`
+(trace_safe) with raw content/identity (log_only), or the trace_safe size counts
+with the log_only body. Many structured fields (`tool_name`, `success`,
+`duration_ms`, `call_id`) appear on **both** twins, so a per-purpose view often
+needs only one family: a tool-I/O audit (who + command + output + success +
+duration) is fully served by the **`log_only` tool twin alone** (filter
+`service.framework.name: codex_otel.log_only` + `labels.tool_name` exists, no
+join).
+
+**Why two families.** The names are Codex's own privacy classification (Rust
+`tracing` *targets*): **`trace_safe`** = events scrubbed of content and identity,
+deemed **safe to export** to an observability/trace backend; **`log_only`** =
+full-fidelity records (command, output, prompt, `user_email`, `host`) intended to
+stay in the **local** log. The design intent is to export the safe set and keep
+the full set local. But Codex's **OTLP logs exporter emits both targets**, so the
+`log_only` (content + identity) family reaches the backend too — the default-on
+tool-payload exposure tracked in openai/codex
+[#17909](https://github.com/openai/codex/issues/17909). The boundary holds on the
+**traces** path (only trace_safe-shaped data becomes spans) but is defeated on the
+**logs** path. So the principled redaction is to **drop the whole
+`codex_otel.log_only` family** (at a Collector or the `logs-apm.app@custom` ingest
+pipeline) — that keeps exactly Codex's own "safe to export" set; surgically
+removing `labels.arguments` / `labels.output` is the finer-grained alternative.
 
 ## Metrics (`metrics-apm.app.codex_cli_rs-default`)
 
