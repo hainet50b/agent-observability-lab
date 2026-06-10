@@ -1821,6 +1821,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add the Codex CLI Kibana data views + import wiring</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Scoped the three data views to the <strong>real</strong> <code>codex_cli_rs</code> datasets, not the human-facing <code>codex-cli</code> name. Live data confirms <code>service.name: codex_cli_rs</code> / dataset <code>apm.app.codex_cli_rs</code>, so the titles are <code>metrics-apm.app.codex_cli_rs*</code>, <code>logs-apm.app.codex_cli_rs*</code>, and <code>traces-apm-agents_codex_cli_rs*</code>. Mirrored the claude <code>data-views.ndjson</code> shape exactly (ids <code>codex-cli-*</code>, names <code>Codex CLI — …</code>, the <code>trace.id</code> URL field formatter on Events + Traces, none on Metrics).</li>
+      <li>Folded the Kibana import into the stack's existing <code>setup.{sh,ps1}</code> as a third step (trace-routing → render-config → kibana-import) rather than adding a standalone <code>import-kibana-objects</code> stack script. The codex stack already uses <code>setup</code> as its single post-up orchestrator (unlike <code>claude-code-elastic</code>, which has a separate import script), so this preserves the one-command UX. The import runs the backend leg (cross-agent <em>AI Agents — Traces</em>) <strong>before</strong> the agent leg so the agent's later references resolve, and fails fast via <code>set -e</code> (.sh) / the <code>Invoke-Step</code> <code>$LASTEXITCODE</code> check (.ps1).</li>
+      <li>The agent import script's <code>FILES</code> is <code>kibana/data-views.ndjson</code> only for now; its header notes data views import first so the saved-searches / dashboard added in later increments resolve their references.</li>
+      <li>The <code>.ps1</code> uses absolute <code>Join-Path $ComponentDir …</code> with no <code>Set-Location</code> (the established leak-fix convention) — verified <code>$PWD</code> is identical before and after a run.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The <code>codex-cli-traces</code> view (<code>traces-apm-agents_codex_cli_rs*</code>) is empty today — only pre-reroute-fix residue exists, in the shared <code>traces-apm-default</code>. It populates once a Codex session emits spans after the trace-routing fix is installed. Expected and documented in the task.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>README / script-comment staleness (<code>codex_cli</code> → <code>codex_cli_rs</code>).</strong> Post the reroute-fix, several human-owned references are now wrong: the stack <code>README.md</code> "Naming" section says traces route to <code>traces-apm-agents_codex_cli</code> and metrics/events land in <code>*-apm.app.codex_cli-default</code>; the "See the telemetry" / APM-UI line says the service shows as <code>codex-cli</code> (ES <code>service.name</code> is actually <code>codex_cli_rs</code>); and the <code>setup.{sh,ps1}</code> header comments still name <code>traces-apm-agents_codex_cli</code>. I deliberately kept my Quick-Tour edits free of the stale stream names rather than silently rewrite human-owned prose. Worth a dedicated cleanup task.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Running <code>scripts/setup.sh</code> (or <code>setup.ps1</code>) in the <code>codex-cli-elastic</code> stack now also imports three Codex data views — <strong>Codex CLI — Metrics / Events / Traces</strong> — into Kibana, alongside the shared <em>AI Agents — Traces</em> view. Open Discover, pick one from the data-view selector, and browse Codex telemetry directly. Curated saved searches and a dashboard are still to come.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running 9.4.2 stack: both import legs returned <code>success: true</code> (1 backend object + 3 agent objects); all four views resolve via Kibana's <code>/api/data_views</code>; the <code>trace.id</code> URL formatter survived import on Events/Traces; and the <code>.ps1</code> path left <code>$PWD</code> unchanged. <code>docker compose config -q</code> passes for all three stacks.</li>
+      <li>The <code>codex-cli-elastic</code> stack is left running with the four data views imported, so you can point a fresh Codex session at it and watch the Events view fill (and Traces once spans land post-fix).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

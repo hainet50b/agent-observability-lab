@@ -11,15 +11,19 @@
 #      CODEX_HOME=<stack>/.codex emits into the stack without touching the user's
 #      ~/.codex (a repo-local .codex/config.toml is ignored for [otel] — CODEX_HOME
 #      is the supported per-project mechanism; see ../README.md)
+#   3. kibana — import the saved objects: the Elastic backend's cross-agent
+#      AI Agents — Traces data view, then the Codex CLI agent's per-agent data
+#      views (Metrics / Events / Traces). Override the Kibana URL with KIBANA_URL.
 #
-# Step 1 is idempotent. Step 2 is create-if-absent (your edits survive a re-run;
-# delete the file to regenerate). Override the ES endpoint with ES_URL.
-# Verification (smoke-test.sh) stays separate. Run from anywhere.
+# Step 1 is idempotent, step 2 is create-if-absent (your edits survive a re-run;
+# delete the file to regenerate), and step 3 imports with overwrite=true (also
+# idempotent). Override the ES endpoint with ES_URL, the Kibana URL with
+# KIBANA_URL. Verification (smoke-test.sh) stays separate. Run from anywhere.
 #
 # NOT done here (deferred — see ../README.md): the prompts-audit index + capture
-# hook are Claude-Code-specific (Codex has no such hook), and the Codex Kibana
-# saved objects await a live characterization of Codex's telemetry. On Windows
-# use setup.ps1 instead.
+# hook are Claude-Code-specific (Codex has no such hook), and the Codex saved
+# searches + dashboard await further characterization of Codex's telemetry (the
+# data views import in step 3). On Windows use setup.ps1 instead.
 
 set -euo pipefail
 
@@ -28,10 +32,14 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 C="$SCRIPT_DIR/../../../components"
 
-echo "[setup] 1/2 — trace-routing ingest pipeline"
+echo "[setup] 1/3 — trace-routing ingest pipeline"
 "$C/backends/elastic/scripts/setup-trace-routing.sh" "$@"
 
-echo "[setup] 2/2 — local Codex session config (.codex/config.toml, [otel] telemetry)"
+echo "[setup] 2/3 — local Codex session config (.codex/config.toml, [otel] telemetry)"
 "$C/agents/codex-cli/scripts/render-config.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
+
+echo "[setup] 3/3 — Kibana saved objects (backend cross-agent view, then Codex agent data views)"
+"$C/backends/elastic/scripts/import-kibana-objects.sh" "$@"
+"$C/agents/codex-cli/scripts/import-kibana-objects.sh" "$@"
 
 echo "[setup] done ✓ — point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."
