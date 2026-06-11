@@ -380,3 +380,35 @@ Each task is one concern. Tasks are processed in order subject to their dependen
 - [ ] **Refine the Codex Turn Timeline (Events) Classic Discover view.** Update the shipped Classic Discover saved search **Codex CLI — Turn Timeline (Events) (Deprecated)** in `components/agents/codex-cli/kibana/saved-searches.ndjson` to add `labels.model` as a visible column immediately after `labels.prompt_length` and before `labels.tool_name`. Keep the rest of the saved search, data-view references, title, stable id, and deprecated/lab-reference positioning unchanged.
 
   **Acceptance criteria:** the timeline imports as a Classic Discover saved search; visible columns include `labels.prompt_length`, then `labels.model`, then `labels.tool_name`; `trace.id` remains clickable to the APM trace view.
+- [ ] **Finalize the Codex Turns aggregate columns for execution-shape analysis.** Update **Codex CLI — Turns** to count `try_run_sampling_request` as `llm_requests`, expose `built_tools` as `tool_catalogues`, and collapse local shell plus MCP executions into one `tool_calls` column. Use this ES|QL:
+
+  ```esql
+  FROM traces-apm-agents_codex_cli_rs*
+  | WHERE transaction.name == "turn/start" OR span.name IN ("session_task.turn", "op.dispatch.user_input", "try_run_sampling_request", "built_tools", "shell_command", "mcp.tools.call")
+  | EVAL is_session_turn = span.name == "session_task.turn"
+  | EVAL is_user_prompt = span.name == "op.dispatch.user_input"
+  | EVAL is_llm_request = span.name == "try_run_sampling_request"
+  | EVAL is_tool_catalogue = span.name == "built_tools"
+  | EVAL is_shell_command = span.name == "shell_command"
+  | EVAL is_mcp_call = span.name == "mcp.tools.call"
+  | EVAL is_tool_call = is_shell_command OR is_mcp_call
+  | EVAL is_error = event.outcome == "failure"
+  | STATS
+      first_seen = MIN(@timestamp),
+      last_seen = MAX(@timestamp),
+      duration_sec = MAX(CASE(is_session_turn, span.duration.us / 1000000, null)),
+      docs = COUNT(*),
+      user_prompts = COUNT_DISTINCT(CASE(is_user_prompt, span.id, null)),
+      llm_requests = COUNT_DISTINCT(CASE(is_llm_request, span.id, null)),
+      tool_catalogues = COUNT_DISTINCT(CASE(is_tool_catalogue, span.id, null)),
+      tool_calls = COUNT_DISTINCT(CASE(is_tool_call, span.id, null)),
+      cached_input_tokens = SUM(numeric_labels.codex_turn_token_usage_cached_input_tokens),
+      non_cached_input_tokens = SUM(numeric_labels.codex_turn_token_usage_non_cached_input_tokens),
+      output_tokens = SUM(numeric_labels.codex_turn_token_usage_output_tokens),
+      errors = SUM(CASE(is_error, 1, 0)),
+      conversation_id = VALUES(labels.thread_id)
+    BY trace_id = trace.id
+  | SORT last_seen DESC
+  ```
+
+  **Acceptance criteria:** Turns imports as an ES|QL saved search; output columns include `tool_catalogues` and `tool_calls`; `llm_requests` is based on `try_run_sampling_request`; separate `shell_commands` and `mcp_calls` columns are not shown; the saved search opens successfully after setup.
