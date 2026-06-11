@@ -2108,6 +2108,36 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex Turns aggregate: group <code>BY trace.id</code>, add <code>user_prompts</code> / <code>shell_commands</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Used the ES|QL supplied in the PRD task verbatim in semantics, only reformatting line prefixes to the file's existing style (leading-space pipes, 5-space STATS indent) so the two ES|QL views stay visually consistent. Re-grouping <code>BY trace_id = trace.id</code> (instead of <code>labels.turn_id</code>) keeps traces visible even when child spans like <code>op.dispatch.user_input</code> and <code>shell_command</code> carry no <code>turn_id</code> — the root cause the task flags.</li>
+      <li>Ran the new query against the live <code>_query</code> endpoint before saving: 30 rows, each keyed by <code>trace_id</code>, with the new <code>user_prompts</code> and <code>shell_commands</code> counts populated. Confirms it parses and the field references resolve on real data.</li>
+      <li>Token totals stay sourced from the turn-level <code>numeric_labels.codex_turn_token_usage_*</code> fields. These live only on the <code>session_task.turn</code> span, so summing across a trace's spans does not double count in the normal one-turn-per-trace shape — accepted explicitly by the task.</li>
+      <li>Set the Discover <code>columns</code> array to match ES|QL's output order (aggregations, then the <code>BY</code> key last): dropped <code>turn_id</code>, inserted <code>user_prompts</code> and <code>shell_commands</code>, kept <code>trace_id</code> as the trailing key. Rewrote the description to state the <code>BY trace.id</code> grouping and the new child-span counts.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. ES|QL executed live (30 trace rows) and the object re-imported with <code>success: true</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>No open tasks remain. If multi-turn traces ever appear (more than one <code>session_task.turn</code> per <code>trace.id</code>), revisit the token <code>SUM</code> — it would then aggregate multiple turns' usage into one row, which may or may not be desired; a <code>COUNT_DISTINCT</code> guard or a per-turn breakout could be a future refinement.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Turns</strong> summary is now grouped by <code>trace.id</code> instead of <code>labels.turn_id</code>, so turns whose child spans lack a <code>turn_id</code> (local <code>shell_command</code>, <code>op.dispatch.user_input</code>) no longer drop out of the view. Each row gains <code>user_prompts</code> and <code>shell_commands</code> counts alongside the existing LLM-request, MCP-call, token, and error totals. Verified live (30 trace rows) and re-imported cleanly.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>This was the last open PRD task — the Codex CLI saved-search set is now at its intended four-view shape (Conversations, Turns, and the two Classic Discover Turn Timelines).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
