@@ -14,16 +14,16 @@ to ingest OpenTelemetry straight into Elasticsearch. Codex CLI points at it
 directly rather than through an OpenTelemetry Collector (a Collector-based
 variant would be a separate stack, mirroring `claude-code-otelcol-elastic`).
 
-> 🚧 **Session wired; data views + first saved search in.** This stack stands up
-> the composition, proves the OTLP path with the synthetic smoke test, points a
-> real Codex CLI session at it, **and** ships the three Codex data views plus the
-> first curated saved search (Tool Results): `scripts/setup.sh` installs trace
+> 🚧 **Session wired; data views + curated saved searches in.** This stack stands
+> up the composition, proves the OTLP path with the synthetic smoke test, points a
+> real Codex CLI session at it, **and** ships the three Codex data views plus four
+> curated ES|QL saved searches (Conversations, Turns, Turn Timeline (Traces), and
+> the deprecated Turn Timeline (Events)): `scripts/setup.sh` installs trace
 > routing, renders a Codex `[otel]` telemetry config (see
 > [Point a Codex session](#2-point-a-codex-session-at-the-stack)), and imports the
-> Kibana data views (Metrics / Events / Traces) and saved searches. The
-> **remaining saved searches and a dashboard** are still deferred — they depend on
-> a live characterization of what Codex CLI actually emits. See
-> [What's deferred](#whats-deferred).
+> Kibana data views (Metrics / Events / Traces) and saved searches. A **dashboard,
+> ingest filtering, TTFT integration, and normalized summary indices** remain
+> deferred. See [What's deferred](#whats-deferred).
 
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
 > `127.0.0.1`. Never expose this publicly. The events/traces channels can capture
@@ -145,12 +145,15 @@ Codex session. It needs `docker` (running daemon), `curl`, `jq`, `base64`; it
 ### 4. See the telemetry
 
 The three Codex **data views** — **Codex CLI — Metrics**, **Codex CLI — Events**,
-and **Codex CLI — Traces** — and the first curated **saved search** (**Codex CLI —
-Tool Results**, on the Events view) are imported by `scripts/setup.sh` (Quick Tour
-step 1). Open Discover, pick a data view from the selector or open the saved
-search from the Open menu. (The remaining saved searches and a dashboard are still
-deferred — see [What's deferred](#whats-deferred); the Traces view stays empty
-until a Codex session emits spans after trace routing is installed.)
+and **Codex CLI — Traces** — and four curated ES|QL **saved searches** — **Codex
+CLI — Conversations** (logs-based usage summary), **Codex CLI — Turns**
+(traces-based turn summary), **Codex CLI — Turn Timeline (Traces)** (the primary
+execution timeline), and **Codex CLI — Turn Timeline (Events) (Deprecated)** (its
+logs-stream predecessor, kept for reference) — are imported by `scripts/setup.sh`
+(Quick Tour step 1). Open Discover, pick a data view from the selector or open a
+saved search from the Open menu. (A dashboard is still deferred — see
+[What's deferred](#whats-deferred); the Traces view and the traces-based searches
+stay empty until a Codex session emits spans after trace routing is installed.)
 
 You can also look directly with a query:
 
@@ -175,16 +178,23 @@ docker compose down -v     # also wipe ingested telemetry
 
 Wired now: the composition, the OTLP-path smoke test, trace isolation, a real
 Codex session's `[otel]` telemetry config, the three Codex **data views**
-(Metrics / Events / Traces), and the first curated **saved search** (Tool
-Results), all with their own import script — modelled on
+(Metrics / Events / Traces), and four curated ES|QL **saved searches**
+(Conversations, Turns, Turn Timeline (Traces), and the deprecated Turn Timeline
+(Events)), all with their own import script — modelled on
 `components/agents/claude-code/kibana/`. (The shared cross-agent **AI Agents —
 Traces** view, `traces-apm-agents_*`, already includes Codex's spans.) Authored
-later, with the human, once Codex's emitted telemetry is characterized live:
+later, with the human:
 
-- **The remaining Codex saved searches and a dashboard** — curated Discover saved
-  searches for the other Codex event types (API requests, conversation starts,
-  user prompts, an event overview, and joined tool-I/O views) and an overview
-  dashboard, building on the Tool Results search and the data views above.
+- **An overview dashboard** — a Lens dashboard over the Codex data views, the way
+  Claude Code's Overview dashboard sits on its views.
+- **Ingest filtering** — drop rules for the high-volume per-delta
+  `codex.websocket_event` wrappers (the saved searches exclude them at query time)
+  so they don't bloat the events stream.
+- **TTFT integration** — surfacing time-to-first-token alongside the turn / LLM
+  metrics once that signal is characterized.
+- **Normalized summary indices** — pre-aggregated per-turn / per-conversation
+  rollups so the Conversations and Turns ES|QL views can be served from a compact
+  index rather than recomputed over the raw streams.
 - **Prompt-audit hook** — the `prompts-audit` index + capture hook are
   Claude-Code-specific (a `UserPromptSubmit` hook). A Codex equivalent, if Codex
   exposes a comparable hook, is a later increment; `setup.sh` deliberately does

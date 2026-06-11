@@ -22,10 +22,10 @@
 # KIBANA_URL. Verification (smoke-test.sh) stays separate. Run from anywhere.
 #
 # NOT done here (deferred — see ../README.md): the prompts-audit index + capture
-# hook are Claude-Code-specific (Codex has no such hook), and the remaining Codex
-# saved searches + dashboard await further characterization of Codex's telemetry
-# (the data views and the first saved search, Tool Results, import in step 3). On
-# Windows use setup.ps1 instead.
+# hook are Claude-Code-specific (Codex has no such hook), and a dashboard, ingest
+# filtering, TTFT integration, and normalized summary indices remain deferred (the
+# data views and the four curated saved searches import in step 3). On Windows use
+# setup.ps1 instead.
 
 set -euo pipefail
 

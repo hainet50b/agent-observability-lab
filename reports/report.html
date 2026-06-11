@@ -2008,6 +2008,43 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Replace Codex CLI saved searches with the characterized four-view set</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The source artifact <code>SPEC/kibana-codex-saved-searches.ndjson</code> is a raw Kibana <em>export</em> (UUID ids, <code>tabs[]</code>, <code>usesAdHocDataView:true</code>, an ad-hoc <code>index</code> block with a hash id, <code>coreMigrationVersion:8.8.0</code>, CRLF). I normalized each search to the repo's hand-authored component convention — the exact shape of the prior-generation ES|QL searches (<code>codex-cli-tool-io</code> / <code>-user-prompts-joined</code>): <code>isTextBasedQuery:true</code>, <code>searchSourceJSON = {"query":{"esql":…},"filter":[]}</code> with <strong>no</strong> index block, <code>references:[]</code>, <code>coreMigrationVersion:"9.4.2"</code>, <code>managed:false</code>, <code>hits:0</code>, <code>sort:[]</code>, stable id. All export cruft was stripped.</li>
+      <li>Authored via a small <code>node</code> generator (held the four ES|QL bodies as template literals, emitted via <code>JSON.stringify</code>) so the nested-string escaping of the multi-line queries is byte-perfect rather than hand-escaped. The generator was deleted after producing the file — it is not a shipped artifact.</li>
+      <li><strong>Exactly three sanctioned normalizations</strong>, no more: (a) CRLF → LF line endings throughout; (b) Turn Timeline (Events): <code>FROM logs-apm.app.codex_cli_rs-default*</code> → <code>…codex_cli_rs*</code> (the required index broadening); (c) Turn Timeline (Traces): the mixed <code>WHERE</code> made explicit — <code>(labels.turn_id IS NOT NULL AND labels.turn_id != "") OR labels.submission_id IS NOT NULL</code>. Conversations and Turns are byte-identical to source. Confirmed by a per-query <code>diff</code> (CR-stripped) of source vs output: only (b) and (c) appear.</li>
+      <li>Index patterns were <em>not</em> over-normalized: Conversations was already <code>logs-apm.app.codex_cli_rs*</code> and the two traces views use <code>traces-apm-agents_codex_cli_rs*</code> — left unchanged. Only the one Events-timeline <code>-default*</code> needed broadening.</li>
+      <li>Wrote new non-empty descriptions leading with the required source attribution (Conversations = logs-based usage summary; Turns = traces-based turn summary; Turn Timeline (Events) = deprecated/lab-reference logs timeline; Turn Timeline (Traces) = primary execution timeline) plus the column intent. Columns preserved exactly from the export (no additions, removals, or reordering).</li>
+      <li>Order in the file follows the PRD's listing (Conversations, Turns, Events-Deprecated, Traces). The trailing summary line is <code>{"exportedCount":4,"missingRefCount":0,"missingReferences":[]}</code> — authored fresh (<code>missingRefCount:0</code> because the ES|QL searches carry no references), not the SPEC artifact's verbatim line.</li>
+      <li>No import-script change was needed: both <code>import-kibana-objects.{sh,ps1}</code> already list <code>kibana/data-views.ndjson</code> before <code>kibana/saved-searches.ndjson</code>, and the stack <code>setup.{sh,ps1}</code> already run that agent import. Replacing the file contents in place is sufficient.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Live Kibana now holds the seven prior-generation Codex saved objects (<code>codex-cli-tool-results</code>, <code>-api-requests</code>, <code>-conversation-starts</code>, <code>-user-prompts</code>, <code>-event-overview</code>, <code>-tool-io</code>, <code>-user-prompts-joined</code>) as <strong>orphans</strong> — Kibana imports by id, and the four new ids differ, so the old objects are not overwritten. This is the project's standard demo residue: a <code>docker compose down -v &amp;&amp; up -d</code> + re-import yields the clean four-only state the file now represents. I did not delete them from the running instance (no unrequested stateful side effects on the user's live stack).</li>
+      <li>The component import-script <em>header comments</em> (<code>import-kibana-objects.{sh,ps1}</code>) still say the saved searches "reference the data views … so those references must already exist." For these four ES|QL searches that premise is now narrower than reality (they use <code>references:[]</code> / in-query <code>FROM</code>). The data-views-first <em>order</em> is still correct and PRD-required, so I left the comment as-is rather than expand scope into the component file — see Next PRD suggestions.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>A tiny follow-up could soften the <code>components/agents/codex-cli/scripts/import-kibana-objects.{sh,ps1}</code> header comment so it no longer asserts that the current saved searches reference the data views (they don't — the order is kept as future-proofing for any view-referencing search). Purely cosmetic.</li>
+      <li>The deferred set is now explicit in the stack README: an <strong>overview dashboard</strong>, <strong>ingest filtering</strong> (drop the high-volume <code>codex.websocket_event</code> per-delta wrappers), <strong>TTFT integration</strong>, and <strong>normalized summary indices</strong> (pre-aggregated per-turn/per-conversation rollups behind the Conversations/Turns ES|QL views).</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Replaces the seven earlier per-event Codex CLI saved searches with the four curated ES|QL views captured during live characterization: <strong>Conversations</strong> (per-conversation usage summary, logs), <strong>Turns</strong> (per-turn summary, traces), <strong>Turn Timeline (Traces)</strong> (the primary execution timeline), and <strong>Turn Timeline (Events) (Deprecated)</strong> (its logs-stream predecessor, kept for reference). The stack README now says these four ship and names dashboards / ingest filtering / TTFT / normalized summary indices as still deferred.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live on the running 9.4.2 stack</strong> (codex-cli-elastic, ~58k <code>codex_cli_rs</code> log docs / ~76k trace docs): all four ES|QL queries execute against the ES <code>_query</code> API with <code>HTTP 200</code> and zero errors (Conversations and Turns return real rows); the agent import reports <code>success:true</code> with <code>successCount:4</code> and the four expected stable ids; the three Codex data views still import (<code>successCount:3</code>); <code>docker compose config -q</code> passes for all three stacks; the codex-cli-elastic smoke test reaches PASS.</li>
+      <li>Cross-checked by a three-lens adversarial verification workflow (NDJSON shape, ES|QL semantic fidelity, requirements/README coverage) — all three returned PASS with no blocking issues. The fidelity lens independently re-confirmed via <code>difflib</code> that only the two sanctioned query edits differ from source.</li>
+      <li>Scope discipline: only four files changed — the saved-searches NDJSON, the stack README, and the two stack <code>setup.{sh,ps1}</code> comment fixes (which had named the now-removed "Tool Results" search). The top-level <code>README.md</code> and <code>SPEC/</code> were not touched. <strong>This was the last open PRD task.</strong></li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
