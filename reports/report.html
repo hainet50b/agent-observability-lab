@@ -2138,6 +2138,35 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex Turn Timeline (Traces): add <code>labels.model</code> column, select <code>try_run_sampling_request</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Scoped every edit to line 4 (the <strong>Turn Timeline (Traces)</strong> object) and deliberately avoided <code>replace_all</code> on the bare token <code>run_sampling_request</code>, because the <strong>Codex CLI — Turns</strong> ES|QL search on line 2 also contains that string and is owned by a different (later) PRD task. Matched on substrings unique to line 4: the phrases-array fragment <code>"op.dispatch.user_input","run_sampling_request","built_tools"</code> (line 2 has no <code>built_tools</code>) and the Classic-Discover-only <code>match_phrase</code> form — so line 2 stayed byte-identical (grep confirms <code>run_sampling_request</code> still present there, only as the substring of <code>try_run_sampling_request</code> on line 4).</li>
+      <li>A Classic Discover saved search stores its <code>columns</code> and <code>filter</code> twice — once at the top-level attributes and once inside the single <code>tabs[]</code> entry. Applied each change with <code>replace_all</code> so both copies stay in sync (column insertion hit 2 sites; the phrases/match_phrase swaps hit the params+value arrays and the should-clause across both copies).</li>
+      <li>Inserted <code>labels.model</code> immediately after <code>span.duration.us</code> and before <code>labels.tool_name</code> exactly as specified; left the data-view <code>references[]</code>, title, and stable id <code>codex-cli-turn-timeline-traces</code> untouched so the <code>trace.id</code> URL formatter (on the <code>agents-traces</code> data view) still renders the APM click-through.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None for the runnable gates. All five NDJSON lines re-validate as JSON and <code>docker compose config -q</code> passes for all three stacks. The live-Kibana confirmation (re-import <code>success: true</code>, the timeline opening with the new column order, and <code>trace.id</code> click-through) is the standard human/live-stack step — the change is a pure presentation edit to an already-shipped, already-verified object shape.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The companion <strong>Turn Timeline (Events)</strong> view still selects on the events stream and the next open task adds <code>labels.model</code> there too — after both land, the two timelines will be column-aligned. No new observations beyond the already-queued tasks.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Turn Timeline (Traces)</strong> Discover view now shows <code>labels.model</code> between span duration and tool name, and its span filter selects <code>try_run_sampling_request</code> (the actual LLM-call span name in current traces) instead of the stale <code>run_sampling_request</code>. The <strong>Turns</strong> aggregate on the same file was left untouched.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Confirm the line-2 <strong>Turns</strong> search is unchanged in the diff — the shared <code>run_sampling_request</code> token made an over-broad replace the main risk here; the edit was kept surgical, but it is worth a glance.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
