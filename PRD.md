@@ -374,3 +374,6 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   ```
 
   **Acceptance criteria:** Turns still imports as an ES|QL saved search; each row is keyed by `trace_id`; the view includes `user_prompts` and `shell_commands`; token totals remain sourced from the turn-level token fields without double counting; the saved search opens successfully after setup.
+- [ ] **Refine the Codex Turn Timeline (Traces) Classic Discover view.** Update the shipped Classic Discover saved search **Codex CLI — Turn Timeline (Traces)** in `components/agents/codex-cli/kibana/saved-searches.ndjson` with two small presentation fixes from live trace review: add `labels.model` as a visible column immediately after `span.duration.us` and before `labels.tool_name`, and replace the selected LLM span from `run_sampling_request` to `try_run_sampling_request` in the `span.name` phrases filter. Keep the rest of the saved search, data-view references, title, and stable id unchanged.
+
+  **Acceptance criteria:** the timeline imports as a Classic Discover saved search; visible columns include `span.duration.us`, then `labels.model`, then `labels.tool_name`; the span filter includes `try_run_sampling_request` and no longer includes `run_sampling_request`; `trace.id` remains clickable to the APM trace view.
