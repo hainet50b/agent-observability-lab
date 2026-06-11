@@ -2224,6 +2224,34 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex Conversations: rename <code>tool_results</code> → <code>tool_calls</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Pure terminology change so Conversations reads the same as Turns: renamed the output alias and column from <code>tool_results</code> to <code>tool_calls</code> while leaving the count source untouched — still <code>COUNT_DISTINCT(CASE(is_tool_result, labels.call_id, null))</code> over trace_safe <code>codex.tool_result</code> docs. The <code>is_tool_result</code> EVAL keeps its name (it describes the source event, not the output), so only two literal <code>tool_results</code> tokens existed to rename (grep confirmed both on line 1: the column entry and the STATS alias).</li>
+      <li>Updated the description to "tool calls (distinct codex.tool_result call ids)" so the prose states both the new name and that the value is still a distinct-call-id count, matching the "number of tool executions" intent in the task.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. All five NDJSON lines validate; the Conversations <code>columns</code> array now carries <code>tool_calls</code> and no <code>tool_results</code> remains anywhere in the file.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Conversations counts tool calls from the logs stream (<code>codex.tool_result</code> call ids) while Turns counts them from the traces stream (<code>shell_command</code> + <code>mcp.tools.call</code> spans). The two <code>tool_calls</code> columns now share a name but a different source; if they ever disagree noticeably on live data, a short note reconciling logs-vs-traces tool counting could be worth adding to the views' descriptions.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Conversations</strong> aggregate's tool column is now named <code>tool_calls</code> (was <code>tool_results</code>), matching the Turns view's terminology and reading as "number of tool executions"; the underlying distinct-call-id count is unchanged.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>This was the last open PRD task — the Codex CLI saved-search set (Conversations, Turns, and the two Classic Discover Turn Timelines) is now at its intended shape with aligned <code>tool_calls</code> terminology and the <code>labels.model</code> / <code>try_run_sampling_request</code> refinements landed.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

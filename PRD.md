@@ -412,6 +412,6 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   ```
 
   **Acceptance criteria:** Turns imports as an ES|QL saved search; output columns include `tool_catalogues` and `tool_calls`; `llm_requests` is based on `try_run_sampling_request`; separate `shell_commands` and `mcp_calls` columns are not shown; the saved search opens successfully after setup.
-- [ ] **Rename the Codex Conversations tool count from `tool_results` to `tool_calls`.** In **Codex CLI — Conversations**, keep the existing count source (`codex.tool_result` / call id) but rename the output column to `tool_calls` so the aggregate terminology matches Turns and reads as "number of tool executions" rather than "number of result documents." Update the saved-search description and visible column list accordingly.
+- [x] **Rename the Codex Conversations tool count from `tool_results` to `tool_calls`.** In **Codex CLI — Conversations**, keep the existing count source (`codex.tool_result` / call id) but rename the output column to `tool_calls` so the aggregate terminology matches Turns and reads as "number of tool executions" rather than "number of result documents." Update the saved-search description and visible column list accordingly.
 
   **Acceptance criteria:** Conversations imports as an ES|QL saved search; the output columns include `tool_calls` and no longer include `tool_results`; the count value remains based on distinct tool call ids; the saved search opens successfully after setup.
