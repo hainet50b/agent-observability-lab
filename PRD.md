@@ -337,3 +337,40 @@ Each task is one concern. Tasks are processed in order subject to their dependen
 - [ ] **Tighten the Codex Conversations aggregate to the current LLM request signal.** Live data now shows normal Codex LLM calls as `labels.event_name: codex.api_request` with `labels.endpoint: /responses`, not `codex.websocket_request`; `/models` requests should not count as LLM requests. Update **Codex CLI — Conversations** so `llm_requests` counts trace-safe `codex.api_request` documents scoped to `/responses`. Also rename the distinct-trace count from `traces` to **`turns`** and place it before `user_prompts`, reflecting the normal Codex session shape where one turn maps to one trace for this aggregate.
 
   **Acceptance criteria:** Conversations still imports as an ES|QL saved search; the output columns include `turns` before `user_prompts` and no longer include `traces`; `llm_requests` excludes `/models` and counts `/responses` API requests; the saved search opens successfully after setup.
+- [ ] **Update the Codex Turns aggregate to group by trace and include local tool/user-prompt spans.** Live traces showed that useful turn children such as `op.dispatch.user_input` and `shell_command` do not reliably carry `labels.turn_id`, so the current `BY labels.turn_id` aggregate drops them. Update **Codex CLI — Turns** to use this ES|QL, allowing currently incomplete traces to remain visible:
+
+  ```esql
+  FROM traces-apm-agents_codex_cli_rs*
+  | WHERE transaction.name == "turn/start"
+    OR span.name IN (
+      "session_task.turn",
+      "op.dispatch.user_input",
+      "run_sampling_request",
+      "shell_command",
+      "mcp.tools.call"
+    )
+  | EVAL is_session_turn = span.name == "session_task.turn"
+  | EVAL is_user_prompt = span.name == "op.dispatch.user_input"
+  | EVAL is_llm_request = span.name == "run_sampling_request"
+  | EVAL is_shell_command = span.name == "shell_command"
+  | EVAL is_mcp_call = span.name == "mcp.tools.call"
+  | EVAL is_error = event.outcome == "failure"
+  | STATS
+      first_seen = MIN(@timestamp),
+      last_seen = MAX(@timestamp),
+      duration_sec = MAX(CASE(is_session_turn, span.duration.us / 1000000, null)),
+      docs = COUNT(*),
+      user_prompts = COUNT_DISTINCT(CASE(is_user_prompt, span.id, null)),
+      llm_requests = COUNT_DISTINCT(CASE(is_llm_request, span.id, null)),
+      shell_commands = COUNT_DISTINCT(CASE(is_shell_command, span.id, null)),
+      mcp_calls = COUNT_DISTINCT(CASE(is_mcp_call, span.id, null)),
+      cached_input_tokens = SUM(numeric_labels.codex_turn_token_usage_cached_input_tokens),
+      non_cached_input_tokens = SUM(numeric_labels.codex_turn_token_usage_non_cached_input_tokens),
+      output_tokens = SUM(numeric_labels.codex_turn_token_usage_output_tokens),
+      errors = SUM(CASE(is_error, 1, 0)),
+      conversation_id = VALUES(labels.thread_id)
+    BY trace_id = trace.id
+  | SORT last_seen DESC
+  ```
+
+  **Acceptance criteria:** Turns still imports as an ES|QL saved search; each row is keyed by `trace_id`; the view includes `user_prompts` and `shell_commands`; token totals remain sourced from the turn-level token fields without double counting; the saved search opens successfully after setup.
