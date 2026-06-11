@@ -380,7 +380,7 @@ Each task is one concern. Tasks are processed in order subject to their dependen
 - [x] **Refine the Codex Turn Timeline (Events) Classic Discover view.** Update the shipped Classic Discover saved search **Codex CLI — Turn Timeline (Events) (Deprecated)** in `components/agents/codex-cli/kibana/saved-searches.ndjson` to add `labels.model` as a visible column immediately after `labels.prompt_length` and before `labels.tool_name`. Keep the rest of the saved search, data-view references, title, stable id, and deprecated/lab-reference positioning unchanged.
 
   **Acceptance criteria:** the timeline imports as a Classic Discover saved search; visible columns include `labels.prompt_length`, then `labels.model`, then `labels.tool_name`; `trace.id` remains clickable to the APM trace view.
-- [ ] **Finalize the Codex Turns aggregate columns for execution-shape analysis.** Update **Codex CLI — Turns** to count `try_run_sampling_request` as `llm_requests`, expose `built_tools` as `tool_catalogues`, and collapse local shell plus MCP executions into one `tool_calls` column. Use this ES|QL:
+- [x] **Finalize the Codex Turns aggregate columns for execution-shape analysis.** Update **Codex CLI — Turns** to count `try_run_sampling_request` as `llm_requests`, expose `built_tools` as `tool_catalogues`, and collapse local shell plus MCP executions into one `tool_calls` column. Use this ES|QL:
 
   ```esql
   FROM traces-apm-agents_codex_cli_rs*

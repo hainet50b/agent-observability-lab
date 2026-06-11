@@ -2195,6 +2195,35 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex Turns aggregate: <code>try_run_sampling_request</code>, <code>tool_catalogues</code>, collapsed <code>tool_calls</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Made the change as five surgical edits to the line-2 ES|QL string rather than re-serializing the whole saved object, to keep the diff readable. The ES|QL lives at three escaping levels (esql text → esql JSON string → searchSourceJSON string), so its quotes appear triple-escaped (<code>\\\"</code>) in the file — distinct from the single-escaped filter strings on the Classic Discover timelines, which made each <code>old_string</code> naturally unique to line 2.</li>
+      <li>Followed the task's supplied ES|QL exactly in semantics: <code>is_llm_request</code> now keys on <code>try_run_sampling_request</code>; added <code>is_tool_catalogue</code> (<code>built_tools</code>) and a derived <code>is_tool_call = is_shell_command OR is_mcp_call</code>; the STATS now emit <code>tool_catalogues</code> and a single collapsed <code>tool_calls</code> in place of the separate <code>shell_commands</code> / <code>mcp_calls</code>. Token sums, <code>BY trace_id = trace.id</code>, and <code>SORT last_seen DESC</code> are unchanged.</li>
+      <li>Verified the edit by round-tripping the stored string through <code>jq … | fromjson | .query.esql</code> — it reconstructs to clean, valid ES|QL identical to the task block, proving the hand-authored escaping is correct. Updated the <code>columns</code> array (drop <code>shell_commands</code>/<code>mcp_calls</code>, insert <code>tool_catalogues</code>/<code>tool_calls</code> after <code>llm_requests</code>) and the description prose to match.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None for the structural gates (all five NDJSON lines valid JSON; the ES|QL reconstructs correctly). Executing the query against live traces and confirming the new <code>tool_calls</code> / <code>tool_catalogues</code> values is the usual live-stack human step.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>If <code>built_tools</code> fires more than once per turn (catalogue rebuilds), <code>tool_catalogues</code> would count each — likely the intended meaning, but worth confirming against live data; no change made.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Turns</strong> aggregate now counts the real LLM span (<code>try_run_sampling_request</code>), surfaces how many tool catalogues were built (<code>built_tools</code>), and reports a single <code>tool_calls</code> total that combines local shell and MCP executions — replacing the separate <code>shell_commands</code> and <code>mcp_calls</code> columns.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The <code>try_run_sampling_request</code> span name now appears in three views (both timelines and Turns); if a future Codex release renames it again, all three need the same swap.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
