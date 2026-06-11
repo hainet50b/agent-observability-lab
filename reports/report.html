@@ -2167,6 +2167,34 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex Turn Timeline (Events): add <code>labels.model</code> column</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Single presentation change: inserted <code>labels.model</code> between <code>labels.prompt_length</code> and <code>labels.tool_name</code> on the deprecated <strong>Turn Timeline (Events)</strong> view (line 3). Matched on the column pair <code>"labels.prompt_length","labels.tool_name"</code>, which is unique to this object (the traces timeline and the two ES|QL aggregates have no such pair), so a <code>replace_all</code> safely updated both the top-level and <code>tabs[]</code> copies and nothing else.</li>
+      <li>Left the filter (trace_safe family: user prompts, tool results, <code>/responses</code> API requests), the title, the stable id <code>codex-cli-turn-timeline-events-deprecated</code>, the data-view references, and the deprecated/lab-reference description untouched — the task asked for the column only. The <code>trace.id</code> formatter from the <code>codex-cli-events</code> data view continues to provide APM click-through.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. All five NDJSON lines re-validate as JSON. Live-Kibana re-import / open is the usual human step; this is a column-list edit to an already-shipped object.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — the two timeline views are now column-aligned on <code>labels.model</code>.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The deprecated <strong>Codex CLI — Turn Timeline (Events)</strong> Discover view now shows <code>labels.model</code> between prompt length and tool name, matching the column added to the traces timeline in the previous task.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Nothing notable — a one-column addition.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
