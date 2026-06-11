@@ -296,4 +296,30 @@ Each task is one concern. Tasks are processed in order subject to their dependen
 - [x] **Codex saved search — Event Overview (cross-event timeline, stream noise excluded):** a `search` object appended to `saved-searches.ndjson` on `codex-cli-events`, `@timestamp` desc, scoping to the trace_safe family with noise removed via two pills — `service.framework.name: codex_cli_rs` (docs carrying `labels.event_name`) AND negated `NOT labels.event_name: codex.websocket_event` (drops the ~894 per-delta wrappers); cols (`@timestamp` leftmost) `labels.event_name`, `labels.model`, `labels.duration_ms`, `labels.success`, `labels.conversation_id`, `span.id`, `trace.id`, no `user_email` lead; verify it opens with both pills, all event types interleaved and `codex.websocket_event` absent.
 - [x] **Codex saved search — Tool I/O (joined), first Codex ES|QL view:** an ES|QL saved Discover session (no data view/pills) appended to `saved-searches.ndjson`, mirroring claude's "Tool I/O (joined)", reconstructing one row per tool call by merging the `trace_safe` `codex.tool_result` (tool_name/success/duration/sizes) with its `log_only` twin (`user_email` + `arguments` command + `output` stdout) on their shared `labels.call_id`/`span.id` — final columns ≈ `ts`, `user_email`, `tool`, `input`, `output`, `success`, `duration_ms`, `trace_id` (exact ES|QL is Ralph's to write/polish, incl. multivalue handling); verify against the 2026-06-09 12:53 window (shell_command rows show command + stdout + `user_email` together).
 - [x] **Codex saved search — User Prompts (joined):** companion ES|QL saved Discover session appended to `saved-searches.ndjson`, merging the `trace_safe` `codex.user_prompt` (prompt_length/input counts) with its `log_only` twin (`user_email` + prompt text when `log_user_prompt=true`) on their shared join key (Ralph confirms it live — likely `span.id`, else `conversation_id`+`@timestamp`) — final columns ≈ `ts`, `user_email`, `prompt`, `prompt_length`, `conversation_id`, `trace_id`; `prompt` is empty unless `log_user_prompt=true` (lab default false), the standing lens on that gate; verify it imports and opens (populated-text check is a gated human step).
-- [ ] **Codex saved search — Tool I/O (filter-pill on the `log_only` family).** Make `Codex CLI — Tool I/O` a plain filter-pill `search` in `components/agents/codex-cli/kibana/saved-searches.ndjson` on the `codex-cli-events` data view, `@timestamp` desc (replacing any ES|QL form). Two pills — `service.framework.name: codex_otel.log_only` AND `labels.tool_name` **exists** — empty query bar, each pill's `meta.index`→`codex-cli-events` via `references[]`. Columns: `labels.user_email`, `host.name`, `labels.tool_name`, `labels.arguments`, `labels.output`, `labels.success`, `labels.duration_ms`, `labels.call_id`, `trace.id`. Verify it imports `success:true` and opens with the two pills over live tool docs (the 2026-06-09 12:53 window: shell_command rows showing command + stdout + `user_email`).
+- [ ] **Replace Codex CLI saved searches with the characterized four-view set.** Live characterization of Codex CLI telemetry showed that the earlier per-event saved-search set is less useful than the four curated ES|QL views now captured in `SPEC/kibana-codex-saved-searches.ndjson`. Replace the existing Codex CLI saved searches with only these four saved searches:
+
+  1. **Codex CLI — Conversations**
+  2. **Codex CLI — Turns**
+  3. **Codex CLI — Turn Timeline (Events) (Deprecated)**
+  4. **Codex CLI — Turn Timeline (Traces)**
+
+  Use `SPEC/kibana-codex-saved-searches.ndjson` as the source artifact. Preserve the four views' ES|QL semantics, columns, sort order, and display intent, but normalize the implementation to match the existing `components/agents/codex-cli/kibana/` conventions.
+
+  **Requirements:**
+  - Replace the current `components/agents/codex-cli/kibana/saved-searches.ndjson` contents with these four searches only. Remove the earlier Codex saved searches from that file rather than keeping both generations.
+  - Keep the existing Codex data views and import scripts, but ensure setup still imports data views before saved searches.
+  - Use stable, human-readable saved object IDs, for example: `codex-cli-conversations`, `codex-cli-turns`, `codex-cli-turn-timeline-events-deprecated`, `codex-cli-turn-timeline-traces`.
+  - Add useful non-empty descriptions explaining each view's purpose and source: Conversations is a logs-based usage summary; Turns is a traces-based turn summary; Turn Timeline Events is a deprecated/lab-reference logs timeline; Turn Timeline Traces is the primary execution timeline.
+  - In `Codex CLI — Turn Timeline (Traces)`, make the mixed `WHERE` condition explicit with parentheses: `(labels.turn_id IS NOT NULL AND labels.turn_id != "") OR labels.submission_id IS NOT NULL`.
+  - Normalize log index patterns to the broader `logs-apm.app.codex_cli_rs*` unless there is a concrete reason to keep `logs-apm.app.codex_cli_rs-default*`.
+  - Do not add extra columns beyond the exported view intent for this task.
+  - Do not add a dashboard.
+  - Do not add ingest pipelines, filtering/drop rules, or normalized summary indices in this task.
+  - Ignore the Kibana export summary line from the SPEC artifact when producing the final saved-searches NDJSON.
+
+  **Acceptance criteria:**
+  - `scripts/setup.sh` and `scripts/setup.ps1` import the Codex data views and exactly these four Codex saved searches.
+  - The saved objects import with `success:true` on a fresh stack.
+  - All four saved searches open in Kibana Discover.
+  - Existing Codex data views remain available.
+  - README deferred/saved-search wording is updated to say these four curated searches now ship, while dashboards, ingest filtering, TTFT integration, and normalized summary indices remain deferred.
