@@ -2078,6 +2078,36 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Tighten Codex Conversations: <code>llm_requests</code> = <code>/responses</code>, <code>traces</code> → <code>turns</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Verified the new signal against live data before editing the query: of 104 trace_safe <code>codex.api_request</code> docs, 99 are <code>/responses</code> and 5 are <code>/models</code>, and all 104 carry <code>span.id</code>. So scoping <code>is_llm_request</code> to <code>labels.event_name == "codex.api_request" AND labels.endpoint == "/responses"</code> and counting <code>COUNT_DISTINCT(span.id)</code> correctly excludes the <code>/models</code> calls — matching the acceptance criterion.</li>
+      <li>Replaced the whole ES|QL string rather than doing fragile in-place substring surgery: regenerated the query from a clean here-doc (preserving the file's leading-space-before-pipe / 5-space STATS indent) and assigned it through <code>jq</code> (<code>searchSourceJSON | fromjson | .query.esql = … | tojson</code>), so the surrounding <code>searchSourceJSON</code> structure is untouched and only the ES|QL changes.</li>
+      <li>Put <code>turns = COUNT_DISTINCT(trace.id)</code> immediately after <code>docs</code> in the STATS (so it lands before <code>user_prompts</code> in ES|QL's column order) and mirrored that in the Discover <code>columns</code> array; dropped the old <code>traces</code> name entirely. Ran the query live to confirm column order and that it executes (1 conversation row: turns=33, user_prompts=33, llm_requests=85).</li>
+      <li>Refreshed the saved-search <code>description</code> to state the <code>/responses</code> scoping and the turns rename, keeping it an accurate single source of truth for what the view shows.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The ES|QL was executed against the live <code>_query</code> endpoint and the object re-imported with <code>success: true</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The Turns aggregate (next task) similarly counts <code>run_sampling_request</code> spans for <code>llm_requests</code>; once both land, a quick cross-check that Conversations' <code>llm_requests</code> (now <code>/responses</code> logs) and Turns' summed <code>llm_requests</code> (traces) agree on a known session would validate the two signals against each other.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Conversations</strong> usage summary now counts <code>llm_requests</code> as the real model calls — trace_safe <code>codex.api_request</code> on the <code>/responses</code> endpoint — instead of the stale <code>codex.websocket_request</code>, and no longer miscounts <code>/models</code> probes. The per-conversation distinct-trace count is renamed <code>traces</code> → <code>turns</code> and moved to sit right after <code>docs</code>, reflecting the one-turn-per-trace shape of a normal Codex session.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><code>llm_requests</code> counts distinct <code>span.id</code> of <code>/responses</code> requests; if you ever want raw call count instead of distinct, switch to a plain <code>COUNT</code> — distinct was kept for parity with the prior definition.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
