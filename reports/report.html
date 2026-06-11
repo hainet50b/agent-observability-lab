@@ -2045,6 +2045,39 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Codex Turn Timeline searches → Classic Discover (clickable <code>trace.id</code>)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Took the two Classic Discover objects from <code>SPEC/kibana-codex-saved-searches.ndjson</code> as the source of truth for the timeline searches and transformed them with <code>jq</code> rather than hand-typing — this guarantees the (large, escaped) <code>searchSourceJSON</code> filter blobs and <code>tabs[]</code> structure are reproduced byte-exact. Only three things were changed per object: the saved-object <code>id</code> (back to the stable component ids <code>codex-cli-turn-timeline-events-deprecated</code> / <code>codex-cli-turn-timeline-traces</code>), the <code>title</code> (stripped the working-copy " new" suffix the export carried), and a meaningful <code>description</code> (the export had empty strings).</li>
+      <li>Kept the export's <code>tabs</code>-based shape and its <code>coreMigrationVersion</code> (<code>8.8.0</code>) / <code>typeMigrationVersion</code> (<code>10.12.0</code>) verbatim — those reflect the schema the Classic object was exported at, so leaving them lets Kibana's import migrations run correctly. Stripped only the volatile <code>created_at</code> / <code>updated_at</code> / <code>version</code> fields, matching the component file's existing convention of omitting them.</li>
+      <li>Left <strong>Conversations</strong> and <strong>Turns</strong> exactly as-is (the two ES|QL aggregates) by copying lines 1–2 of the existing file verbatim with <code>head -n 2</code>; only the two timeline lines were regenerated.</li>
+      <li>Preserved the existing data-view references rather than importing the duplicate data views the export bundled: the Events timeline references <code>codex-cli-events</code> (agent-owned), the Traces timeline references the cross-agent <code>agents-traces</code> (backend-owned). Both data views carry the <code>trace.id</code> URL field formatter, which is what makes <code>trace.id</code> click through to the APM trace view — the whole point of moving off ES|QL (ES|QL results ignore the data-view formatter).</li>
+      <li>The Traces timeline's span set (<code>session_task.turn</code>, <code>op.dispatch.user_input</code>, <code>run_sampling_request</code>, <code>built_tools</code>, <code>mcp.tools.call</code>, <code>shell_command</code>) is kept broad per the task — it deliberately includes local <code>shell_command</code> / <code>op.dispatch.user_input</code> spans that don't reliably carry <code>labels.turn_id</code>, with <code>trace.id</code> as the drilldown key.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Verified live against the already-running shared Elastic backend (Kibana on <code>127.0.0.1:5601</code>): both data-view-backed timeline searches and the two ES|QL aggregates import with <code>success: true</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The two remaining open tasks (tighten Conversations <code>llm_requests</code> to <code>/responses</code>; group Turns by <code>trace.id</code>) edit these same two ES|QL aggregates — natural next iterations.</li>
+      <li>Consider whether the deprecated Events timeline still earns its place once the Traces timeline is the documented primary; a future task could retire it rather than carry a "(Deprecated)" search indefinitely.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The two Codex "Turn Timeline" saved searches are now Classic Discover searches backed by data views instead of ES|QL, so their <code>trace.id</code> column is clickable straight through to the Elastic APM trace view. Conversations and Turns are unchanged ES|QL aggregates. The Codex stack still ships exactly four saved searches, all importing cleanly. The temporary <code>SPEC/kibana-codex-saved-searches.ndjson</code> export artifact has been deleted.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Open <strong>Codex CLI — Turn Timeline (Traces)</strong> and <strong>(Events)</strong> in Discover and click a <code>trace.id</code> — confirm it lands on the right trace in the APM UI on your Stack version.</li>
+      <li>The two timeline objects are in Kibana's newer <code>tabs[]</code> Classic format while Conversations/Turns are the flatter ES|QL form — both valid in one NDJSON, but worth a glance if you regenerate the file later.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

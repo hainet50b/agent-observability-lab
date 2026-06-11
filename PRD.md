@@ -323,7 +323,7 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   - All four saved searches open in Kibana Discover.
   - Existing Codex data views remain available.
   - README deferred/saved-search wording is updated to say these four curated searches now ship, while dashboards, ingest filtering, TTFT integration, and normalized summary indices remain deferred.
-- [ ] **Replace the Codex Turn Timeline saved searches with Classic Discover versions.** The shipped Turn Timeline searches are ES|QL-based, but ES|QL results do not use the Codex data-view `trace.id` URL formatter, so users cannot click through to the Elastic APM trace view. The timeline searches are investigation entry points, so preserving that drilldown is more important than ES|QL-derived convenience columns.
+- [x] **Replace the Codex Turn Timeline saved searches with Classic Discover versions.** The shipped Turn Timeline searches are ES|QL-based, but ES|QL results do not use the Codex data-view `trace.id` URL formatter, so users cannot click through to the Elastic APM trace view. The timeline searches are investigation entry points, so preserving that drilldown is more important than ES|QL-derived convenience columns.
 
   Use the newly exported Classic Discover objects in `SPEC/kibana-codex-saved-searches.ndjson` as the source for the two timeline searches only:
   - **Codex CLI — Turn Timeline (Events) (Deprecated)**
