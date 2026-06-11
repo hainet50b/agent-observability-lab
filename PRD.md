@@ -323,3 +323,14 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   - All four saved searches open in Kibana Discover.
   - Existing Codex data views remain available.
   - README deferred/saved-search wording is updated to say these four curated searches now ship, while dashboards, ingest filtering, TTFT integration, and normalized summary indices remain deferred.
+- [ ] **Replace the Codex Turn Timeline saved searches with Classic Discover versions.** The shipped Turn Timeline searches are ES|QL-based, but ES|QL results do not use the Codex data-view `trace.id` URL formatter, so users cannot click through to the Elastic APM trace view. The timeline searches are investigation entry points, so preserving that drilldown is more important than ES|QL-derived convenience columns.
+
+  Use the newly exported Classic Discover objects in `SPEC/kibana-codex-saved-searches.ndjson` as the source for the two timeline searches only:
+  - **Codex CLI — Turn Timeline (Events) (Deprecated)**
+  - **Codex CLI — Turn Timeline (Traces)**
+
+  Keep **Codex CLI — Conversations** and **Codex CLI — Turns** as the existing ES|QL aggregate searches. Keep the stable saved-object IDs already used by the component NDJSON, and keep the existing Codex / cross-agent data-view references rather than importing duplicate data views from the export. The traces timeline should stay broad enough to show the useful turn spans, including local `shell_command` spans and `op.dispatch.user_input`, which do not reliably carry `labels.turn_id`; the intended drilldown key is `trace.id`.
+
+  After the component saved-searches NDJSON is updated, delete the temporary export file `SPEC/kibana-codex-saved-searches.ndjson`.
+
+  **Acceptance criteria:** the Codex setup imports exactly four saved searches; the two timeline searches are Classic Discover searches backed by data views; `trace.id` is clickable to the APM trace view in those timeline searches; Conversations and Turns still open as ES|QL aggregates; the temporary SPEC NDJSON is gone.
