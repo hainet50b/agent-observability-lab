@@ -2375,6 +2375,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add Codex Tool Calls saved searches (traces / log_only / trace_safe)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Built all three as <strong>Classic Discover</strong> saved searches (not ES|QL) so <code>trace.id</code> keeps the data view's APM URL field formatter and stays clickable — the same reason the existing timeline/LLM-request views are Classic. Each reuses an existing object in the file as its structural template: <strong>Tool Calls (Traces / Execution)</strong> mirrors <em>Turn Timeline (Traces)</em> (a <code>phrases</code> filter on <code>span.name</code> over the <code>agents-traces</code> view); <strong>Log Only / I/O</strong> mirrors <em>User Prompts (Log Only)</em> (phrase on <code>service.framework.name</code> + an <code>exists</code> filter); <strong>Trace Safe / Metadata</strong> mirrors <em>User Prompts (Trace Safe)</em> (two phrase filters).</li>
+      <li>Generated the saved objects with a throwaway Python script rather than hand-editing the doubly-stringified <code>searchSourceJSON</code> — the nested-JSON-as-string structure (top-level attributes mirrored into a single <code>tabs[0]</code> entry, every filter's <code>meta.indexRefName</code> wired to a <code>references[]</code> entry) is too error-prone to hand-author. The script emitted the three NDJSON lines, spliced them before the export-summary line, and bumped <code>exportedCount</code> 9 → 12. The script was deleted after running; only the NDJSON is committed.</li>
+      <li>The Traces filter lists exactly the three concrete tool spans (<code>shell_command</code>, <code>apply_patch</code>, <code>mcp.tools.call</code>) — this is what excludes the <code>mcp__…</code> wrapper spans the acceptance criteria call out, without needing a negation filter.</li>
+      <li>Did not touch the stack README (out of scope for this task — the README's saved-search count is independently stale and flagged below) and did not merge the three views, per the explicit "keep them separate" instruction.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Verified live against the running otelcol stack: the agent NDJSON re-imported with <code>success:true</code> (3 data views + 12 saved searches, no errors), and the full stack <code>setup.sh</code> orchestration (backend → agent imports) also reported <code>success:true</code> end to end. Fetching each new object from the Kibana saved-objects API confirms <code>isTextBasedQuery:false</code> (Classic), correct titles, resolved data-view references (<code>agents-traces</code> / <code>codex-cli-events</code>), and 8 / 9 / 10 columns respectively. Live data backs every filter: 204 trace docs for the three tool spans, 203 trace_safe <code>codex.tool_result</code> docs, 338 log_only docs carrying <code>labels.tool_name</code>. <code>docker compose config -q</code> passes for all three stacks; shellcheck is absent on this host (gate skipped per CONVENTIONS).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>This was the last open task — the PRD task list is now fully checked.</li>
+      <li>Still worth a future pass (flagged across several prior entries): the Codex stack <code>README.md</code> still says "four curated saved searches" but the component now ships twelve; a single reconciliation of the README's saved-search count/listing is overdue. (Spec-layer/README edits are the human's beat, not Ralph's — noting it here rather than acting.)</li>
+      <li>The hosted/platform tool events (<code>response.web_search_call.*</code>) were explicitly excluded here as a separate event-kind family — a candidate for its own saved search later.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Three new Codex CLI saved searches surface tool calls from three angles: <strong>Tool Calls (Traces / Execution)</strong> shows execution spans and durations, <strong>(Log Only / I/O)</strong> shows the actual command arguments and output, and <strong>(Trace Safe / Metadata)</strong> shows PII-free result metadata (success, sizes, origin). All three are clickable through to the APM trace view.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The three saved-object IDs are <code>codex-cli-tool-calls-traces-execution</code>, <code>-log-only-io</code>, and <code>-trace-safe-metadata</code>. Worth a glance in Discover to confirm the filter pills render (empty query bar) and that the Traces view shows only concrete tool spans, no <code>mcp__…</code> wrappers.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

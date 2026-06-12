@@ -487,7 +487,7 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   ```
 
   **Acceptance criteria:** Conversations imports as an ES|QL saved search; `duration_sec` can display fractional seconds; the rest of the Conversations query, columns, and counts remain unchanged.
-- [ ] **Add Codex Tool Calls saved searches across traces, log_only, and trace_safe.** Add three Classic Discover saved searches that expose the same broad Tool Calls concept from three physical telemetry sources. These are intentionally overlapping lab views: traces show execution shape, log_only shows I/O content, and trace_safe shows safe metadata.
+- [x] **Add Codex Tool Calls saved searches across traces, log_only, and trace_safe.** Add three Classic Discover saved searches that expose the same broad Tool Calls concept from three physical telemetry sources. These are intentionally overlapping lab views: traces show execution shape, log_only shows I/O content, and trace_safe shows safe metadata.
 
   1. **Codex CLI — Tool Calls (Traces / Execution)** — data view **AI Agents — Traces**; filter pill for `span.name` limited to `shell_command`, `apply_patch`, and `mcp.tools.call`; columns: `@timestamp`, `event.outcome`, `span.duration.us`, `span.name`, `labels.tool_name`, `labels.mcp_server_name`, `labels.conversation_id`, `trace.id`.
   2. **Codex CLI — Tool Calls (Log Only / I/O)** — data view **Codex CLI — Events**; filter pills `service.framework.name: codex_otel.log_only` and `labels.tool_name` exists; columns: `@timestamp`, `labels.success`, `labels.duration_ms`, `labels.tool_name`, `labels.mcp_server`, `labels.arguments`, `labels.output`, `labels.conversation_id`, `trace.id`.
