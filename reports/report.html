@@ -2407,6 +2407,39 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex CLI — trace-safe error saved searches (LLM Requests + Tool Calls)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Both views ship as <strong>Classic Discover</strong> saved searches (<code>isTextBasedQuery:false</code>) on the existing <code>codex-cli-events</code> data view — required so <code>trace.id</code> keeps its APM click-through, and consistent with the sibling Trace Safe lenses they complement.</li>
+      <li><strong>LLM Request Errors</strong> filter shape: three pills — phrase <code>labels.target: codex_otel.trace_safe</code>, a <code>phrases</code> pill on <code>labels.event_name</code> for the two channels (<code>codex.api_request</code> OR <code>codex.websocket_request</code>), and a <code>combined</code>/<code>OR</code> pill of phrase <code>labels.success: false</code> OR exists <code>labels.error_message</code>. Per the task, deliberately <em>no</em> filter on <code>labels.http_response_status_code</code> (string label with no numeric twin, so range comparisons are unreliable) — it is surfaced as a column instead. The combined-OR shape mirrors the existing <code>LLM Requests (Trace Safe / Communication)</code> view's nested filter, so it renders as a single removable pill.</li>
+      <li><strong>Tool Call Errors</strong> filter shape: three plain phrase pills — <code>labels.target: codex_otel.trace_safe</code>, <code>labels.event_name: codex.tool_result</code>, <code>labels.success: false</code> — the error narrowing of the <code>Tool Calls (Trace Safe / Metadata)</code> view; same column set.</li>
+      <li>The deeply-nested escaped saved-object JSON was generated with a one-off Python builder (using <code>json.dumps</code> for guaranteed escaping) rather than hand-authored, then validated line-by-line with <code>jq</code> — eliminates manual escaping error in the <code>searchSourceJSON</code> string and the per-filter <code>references[]</code> wiring. Stable readable IDs: <code>codex-cli-llm-request-errors-trace-safe</code>, <code>codex-cli-tool-call-errors-trace-safe</code>. The file's export-summary <code>exportedCount</code> was bumped 12 → 14.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Verified live against the running stack (Kibana on :5601): a direct <code>_import?overwrite=true</code> of <code>saved-searches.ndjson</code> returned <code>{success:true, successCount:14, errors:0}</code>, and the agent <code>import-kibana-objects.sh</code> run imported all 14 objects with ✓. Fetching each new object from the saved-objects API confirms <code>error:null</code> (opens cleanly), an empty query bar (<code>kuery</code>, <code>""</code>), the filter pills exactly as specified (including the combined-OR with no status-code filter), and references resolving to <code>codex-cli-events</code>. <code>docker compose config -q</code> passes for all three stacks. Smoke tests were not run (NDJSON-only change touches no shell script and cannot affect the OTLP probes); shellcheck is absent on this host (gate skipped per CONVENTIONS).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>This was the last open task — the PRD task list is now fully checked.</li>
+      <li>Reiterating a standing README drift (flagged in prior entries, human's beat): the Codex stack <code>README.md</code> still under-counts the shipped Codex saved searches (now fourteen). A single reconciliation pass of its saved-search count/listing is overdue.</li>
+      <li>These two error views are filter variants of the broader Communication / Metadata views. If error monitoring matures, they (and the analogous Claude Code API Errors / Retries Exhausted searches) are the natural base signals for alerting rules — a candidate future increment.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Two new Codex CLI saved searches isolate failures in the trace-safe telemetry: <strong>LLM Request Errors (Trace Safe)</strong> shows failed API / websocket requests to the model (status and error message as columns, no brittle status-code filter), and <strong>Tool Call Errors (Trace Safe)</strong> shows failed tool results. Both are clickable through to the APM trace view; Codex now ships fourteen curated saved searches.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The combined-OR pill in <strong>LLM Request Errors</strong> (<code>success:false</code> OR <code>error_message</code> exists) is the one non-trivial filter — worth a glance in Discover to confirm it renders as a single removable pill with an empty query bar, matching the precedent Communication view.</li>
+      <li>IDs: <code>codex-cli-llm-request-errors-trace-safe</code>, <code>codex-cli-tool-call-errors-trace-safe</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
