@@ -478,3 +478,12 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   Keep `docs` out of the output columns; once TTFT logs are included, a raw document count mixes trace documents and supporting log documents and is not useful as a primary analysis column.
 
   **Acceptance criteria:** Turns imports as an ES|QL saved search; output columns include `ttft_sec` after `duration_sec`; `docs` is no longer shown; TTFT values are populated from `codex.turn_ttft` where present and remain null where the event is absent; existing turn duration, execution counts, token totals, errors, `conversation_id`, and `trace_id` behavior remains unchanged.
+- [ ] **Show fractional seconds in the Codex Conversations duration.** Update **Codex CLI — Conversations** so `duration_sec` divides by `1000.0` rather than `1000`, matching the fractional-second convention now used by Turns.
+
+  The intended expression is:
+
+  ```esql
+  duration_sec = (MAX(ts_ms) - MIN(ts_ms)) / 1000.0,
+  ```
+
+  **Acceptance criteria:** Conversations imports as an ES|QL saved search; `duration_sec` can display fractional seconds; the rest of the Conversations query, columns, and counts remain unchanged.
