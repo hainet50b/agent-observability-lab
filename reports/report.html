@@ -2346,6 +2346,35 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Show fractional seconds in the Codex Conversations duration</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The fix is a single character: the <code>duration_sec = (MAX(ts_ms) - MIN(ts_ms)) / 1000</code> expression in the <strong>Codex CLI — Conversations</strong> ES|QL became <code>/ 1000.0</code>. <code>ts_ms</code> is <code>TO_LONG(@timestamp)</code> (a long), so integer division by <code>1000</code> truncated to whole seconds; dividing by the literal <code>1000.0</code> promotes the result to a double, matching the convention Turns already uses for its duration/TTFT fields.</li>
+      <li>Applied as a targeted in-place string replacement on the doubly-stringified <code>searchSourceJSON</code> so every other saved search in the file stays byte-identical. The PRD note that "the rest of the Conversations query, columns, and counts remain unchanged" is satisfied — only the divisor literal changed; the <code>columns</code> array and <code>description</code> were left as-is (neither mentions the divisor).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Verified live against the running stack: the Codex agent NDJSON re-imported with <code>success:true</code> (3 data views + 9 saved searches, no errors); running the saved object's exact ES|QL via the ES <code>_query</code> API now reports <code>duration_sec</code> with dtype <code>double</code> and a sample value of <code>80982.129</code> (fractional), where the integer form would have truncated. <code>docker compose config -q</code> passes for all three stacks.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>One open task remains: the three <strong>Codex Tool Calls</strong> saved searches (traces / log_only / trace_safe). After that the Codex saved-search set is feature-complete for now.</li>
+      <li>Still carried forward: the Codex stack README's saved-search count/listing is stale and worth a single reconciliation pass.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Conversations</strong> saved search now reports <code>duration_sec</code> with fractional seconds instead of truncating to whole seconds, consistent with the Turns view.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Pure one-literal change; nothing to flag. Worth a quick Discover glance to confirm short conversations no longer show <code>0</code> seconds.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
