@@ -2252,6 +2252,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add Codex User Prompts saved searches (log_only + trace_safe families)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modeled both new objects on the existing known-good <code>codex-cli-turn-timeline-events-deprecated</code> Classic Discover search rather than hand-rolling a fresh shape — it already targets the same <code>codex-cli-events</code> data view and uses the Kibana 9.x tabs format (top-level <code>attributes</code> + mirrored <code>tabs[0].attributes</code> sharing the same <code>indexRefName</code>s, <code>coreMigrationVersion 8.8.0</code> / <code>typeMigrationVersion 10.12.0</code>). Copying a proven structure is the lowest-risk way to guarantee filter pills render and the data view resolves.</li>
+      <li>For the "<code>labels.prompt</code> exists" pill I used a proper <code>type:"exists"</code> filter (<code>query.exists.field</code>), not a phrase — that is how Discover renders an existence pill. The other three pills are phrase filters (<code>service.framework.name: codex_otel.log_only</code>; <code>labels.target: codex_otel.trace_safe</code>; <code>labels.event_name: codex.user_prompt</code>), each wired to <code>codex-cli-events</code> via its own <code>references[]</code> entry.</li>
+      <li>Honored the task's explicit visible-column list verbatim — including the leading <code>@timestamp</code> — even though the sibling timeline searches omit it (the time column is otherwise implicit). Both families share the same eight columns; <code>labels.prompt</code> is intentionally blank on the trace_safe family.</li>
+      <li>Named both views after their telemetry-family source per the stated convention: <code>codex-cli-user-prompts-log-only</code> and <code>codex-cli-user-prompts-trace-safe-deprecated</code>, with the trace_safe title and description both carrying the deprecated marker.</li>
+      <li>No import-script change: <code>kibana/saved-searches.ndjson</code> is already in the agent import <code>FILES</code> after <code>data-views.ndjson</code>, so the references resolve. Bumped the file's trailing export summary from <code>exportedCount:4</code> to <code>6</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None blocking. Verified live against the running Kibana: the full file imported with <code>success:true</code> (6/6 objects, 0 errors); both new objects fetch back with all three references resolved; and ES holds matching data (56 <code>log_only</code> docs with <code>labels.prompt</code> present, 56 <code>trace_safe</code> <code>codex.user_prompt</code> docs), so the log_only view does open over real prompt text — some sessions ran with <code>log_user_prompt=true</code>. <code>docker compose config -q</code> passes for all three stacks.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The stack README (<code>stacks/codex-cli-elastic/README.md</code>) still says "four curated ES|QL saved searches" in several places. It is now stale on two counts: there are six saved searches, and the two new ones are <em>Classic Discover</em>, not ES|QL. This task's acceptance criteria did not include a README edit, so I left it untouched — a follow-up task should reword the count/type and list the two User Prompts views.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Codex CLI now ships two new Discover saved searches for user prompts — one on the <em>log_only</em> family (carries the actual prompt text when the gate is on) and a deprecated companion on the <em>trace_safe</em> family (envelope only) — both with clickable <code>trace.id</code> drilldown to the APM trace view.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The <code>columns</code> arrays include <code>@timestamp</code> per the task spec; if it reads as a duplicated time column in Discover on this Stack version, drop it from <code>columns</code> in a follow-up — purely cosmetic.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
