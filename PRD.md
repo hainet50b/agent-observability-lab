@@ -431,3 +431,50 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   These views are intentionally separate: Traces is the duration/execution view, Log Only is the token view, and Trace Safe is the communication-attempt/error view. Do not merge them in this task.
 
   **Acceptance criteria:** all three saved searches import as Classic Discover searches with filter pills and empty query bars; the Trace Safe OR condition is represented as a usable filter-pill shape in Discover; `trace.id` remains clickable where present; setup still imports all Codex saved searches successfully.
+- [ ] **Add TTFT to the Codex Turns aggregate.** Update **Codex CLI — Turns** so each turn row includes time-to-first-token as `ttft_sec`. TTFT is emitted as a trace-safe log event (`labels.target: codex_otel.trace_safe`, `labels.event_name: codex.turn_ttft`) and should be associated to the turn by `trace.id`, alongside the existing trace-derived turn fields. Use this ES|QL:
+
+  ```esql
+  FROM traces-apm-agents_codex_cli_rs*, logs-apm.app.codex_cli_rs*
+  | WHERE transaction.name == "turn/start"
+     OR span.name IN (
+       "session_task.turn",
+       "op.dispatch.user_input",
+       "try_run_sampling_request",
+       "built_tools",
+       "shell_command",
+       "mcp.tools.call"
+     )
+     OR (
+       labels.target == "codex_otel.trace_safe"
+       AND labels.event_name == "codex.turn_ttft"
+     )
+  | EVAL is_session_turn = span.name == "session_task.turn"
+  | EVAL is_ttft = labels.target == "codex_otel.trace_safe" AND labels.event_name == "codex.turn_ttft"
+  | EVAL is_user_prompt = span.name == "op.dispatch.user_input"
+  | EVAL is_llm_request = span.name == "try_run_sampling_request"
+  | EVAL is_tool_catalogue = span.name == "built_tools"
+  | EVAL is_shell_command = span.name == "shell_command"
+  | EVAL is_mcp_call = span.name == "mcp.tools.call"
+  | EVAL is_tool_call = is_shell_command OR is_mcp_call
+  | EVAL is_error = event.outcome == "failure"
+  | STATS
+      first_seen = MIN(@timestamp),
+      last_seen = MAX(@timestamp),
+      duration_sec = MAX(CASE(is_session_turn, span.duration.us / 1000000.0, null)),
+      ttft_sec = MAX(CASE(is_ttft, TO_LONG(labels.duration_ms) / 1000.0, null)),
+      user_prompts = COUNT_DISTINCT(CASE(is_user_prompt, span.id, null)),
+      llm_requests = COUNT_DISTINCT(CASE(is_llm_request, span.id, null)),
+      tool_catalogues = COUNT_DISTINCT(CASE(is_tool_catalogue, span.id, null)),
+      tool_calls = COUNT_DISTINCT(CASE(is_tool_call, span.id, null)),
+      cached_input_tokens = SUM(numeric_labels.codex_turn_token_usage_cached_input_tokens),
+      non_cached_input_tokens = SUM(numeric_labels.codex_turn_token_usage_non_cached_input_tokens),
+      output_tokens = SUM(numeric_labels.codex_turn_token_usage_output_tokens),
+      errors = SUM(CASE(is_error, 1, 0)),
+      conversation_id = VALUES(labels.thread_id)
+    BY trace_id = trace.id
+  | SORT last_seen DESC
+  ```
+
+  Keep `docs` out of the output columns; once TTFT logs are included, a raw document count mixes trace documents and supporting log documents and is not useful as a primary analysis column.
+
+  **Acceptance criteria:** Turns imports as an ES|QL saved search; output columns include `ttft_sec` after `duration_sec`; `docs` is no longer shown; TTFT values are populated from `codex.turn_ttft` where present and remain null where the event is absent; existing turn duration, execution counts, token totals, errors, `conversation_id`, and `trace_id` behavior remains unchanged.
