@@ -2283,6 +2283,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add Codex LLM Request saved searches (duration / tokens / communication)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Hand-authored the three Classic Discover objects by mirroring the exact exported shape of the existing Codex searches rather than building them in the Kibana UI: the simple-phrase searches follow <code>User Prompts (Log Only)</code>, and the combined OR in the Trace Safe view reuses the precise <code>relation:"combined"</code> nesting already proven in <code>Turn Timeline (Events) (Deprecated)</code> (an outer OR whose <code>params</code> are a <code>phrase</code> item plus a nested <code>relation:"AND"</code> combined item). Each object carries the dual top-level + <code>tabs[0]</code> <code>searchSourceJSON</code> and the <code>tab_&lt;uuid&gt;.…</code> <code>references[]</code> wiring the live Kibana expects.</li>
+      <li>Generated the NDJSON with a throwaway Python builder (deleted after) instead of by hand — the value of each saved object is a doubly-stringified JSON blob, and letting <code>json.dumps</code> do the escaping removed the main risk of a malformed pill/reference. Validated every line (and every nested <code>searchSourceJSON</code>) parses before importing.</li>
+      <li>Verified all referenced field paths against live data first: 163 <code>try_run_sampling_request</code> trace spans; 324 <code>log_only</code> <code>response.completed</code> docs carrying <code>input_token_count</code> / <code>cached_token_count</code> / <code>output_token_count</code>; 43 <code>codex.websocket_request</code> + 138 <code>/responses</code> <code>codex.api_request</code> trace_safe docs. <code>labels.success</code> / <code>labels.error_message</code> are legitimately blank on successful requests — kept as columns for the failure case, matching the task's communication-lens intent.</li>
+      <li>Used stable IDs <code>codex-cli-llm-requests-{traces-duration,log-only-tokens,trace-safe-communication}</code>. Search 1 is on <code>agents-traces</code> (2 refs: index + 1 filter); searches 2 and 3 are on <code>codex-cli-events</code> (3 refs each: index + 2 filters).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None blocking. Verified live: the agent import ran with <code>success:true</code> (9/9 objects); all three new objects fetch back with every reference resolved to an existing data view (<code>agents-traces</code> and <code>codex-cli-events</code> both 200); both data views carry the <code>trace.id</code> URL field formatter, so click-through to the APM trace view works in all three. <code>docker compose config -q</code> passes for all three stacks.</li>
+      <li>I did not build/re-export via the UI because the hand-authored shape imported and resolved cleanly on this Stack version (9.4.2) — the fallback was unnecessary. Confirming the pills render visually is a quick human glance in Discover.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The stack README (<code>stacks/codex-cli-elastic/README.md</code>) is now further out of date: it still says "four curated ES|QL saved searches", but the file holds nine (six Classic Discover + three ES|QL aggregates as of earlier tasks). A single follow-up should reword the count/type and list the current saved-search set in one pass.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Codex CLI gains three new Discover saved searches that slice an LLM request three ways — <em>Traces / Duration</em> (latency from the sampling span), <em>Log Only / Tokens</em> (input/cached/output token counts), and <em>Trace Safe / Communication</em> (endpoint, HTTP status, errors across both the WebSocket and <code>/responses</code> channels) — each with clickable <code>trace.id</code> drilldown to the APM trace view.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The Trace Safe view's filter pill is a combined OR of <code>codex.websocket_request</code> OR (<code>codex.api_request</code> AND <code>/responses</code>) — worth a glance in Discover to confirm it renders as one editable combined pill rather than collapsing, since that nested shape is the trickiest part of the three.</li>
+      <li>As with the prior User Prompts task, <code>@timestamp</code> is included in <code>columns</code> per the task spec; if it reads as a duplicated time column on this Stack version, drop it in a cosmetic follow-up.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
