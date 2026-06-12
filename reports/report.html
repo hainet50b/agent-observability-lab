@@ -2315,6 +2315,37 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Add TTFT to the Codex Turns aggregate</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Implemented the PRD's supplied ES|QL verbatim, including the change of <code>duration_sec</code> from <code>span.duration.us / 1000000</code> to <code>/ 1000000.0</code>. The acceptance note says existing duration behaviour is unchanged, and live data confirms it: <code>span.duration.us</code> is stored as a floating value, so both forms already yield fractional seconds — the <code>.0</code> is a clarity/consistency change, not a behavioural one.</li>
+      <li>Edited the saved object as targeted in-place string replacements on the doubly-stringified <code>searchSourceJSON</code> rather than regenerating the file, to keep every untouched search byte-identical. Five edits: <code>FROM</code> gains <code>logs-apm.app.codex_cli_rs*</code>; the <code>WHERE</code> gains the <code>codex.turn_ttft</code> OR-branch; a new <code>is_ttft</code> EVAL; the STATS block swaps <code>docs = COUNT(*)</code> for <code>ttft_sec = MAX(CASE(is_ttft, TO_LONG(labels.duration_ms) / 1000.0, null))</code> right after <code>duration_sec</code>; and the <code>columns</code> array drops <code>docs</code> / inserts <code>ttft_sec</code>.</li>
+      <li>Refreshed the search's <code>description</code> to name the TTFT field and the logs-index join, and to drop the now-removed "doc count" — the prose and the column list should not disagree.</li>
+      <li>Left the stack README untouched — out of scope for this task and not requested.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Verified live against the running stack: the agent NDJSON re-imported with <code>success:true</code> (9/9 objects, no errors); running the saved object's exact ES|QL via the ES <code>_query</code> API returns the 14 expected columns with <code>ttft_sec</code> immediately after <code>duration_sec</code> and no <code>docs</code>; sample rows show populated TTFT (e.g. 9.723s, 7.058s, 11.531s) alongside fractional <code>duration_sec</code>, and the <code>CASE(is_ttft, …, null)</code> leaves it null on turns with no <code>codex.turn_ttft</code> event. <code>docker compose config -q</code> passes for all three stacks.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The one remaining open task (fractional <code>duration_sec</code> in <strong>Conversations</strong>, a <code>/ 1000</code> → <code>/ 1000.0</code> change) is the natural next pickup and now mirrors the convention this task applied to Turns.</li>
+      <li>Carrying forward from prior entries: the Codex stack README's saved-search count/listing is stale and worth a single reconciliation pass.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Codex CLI — Turns</strong> saved search now shows <code>ttft_sec</code> (time-to-first-token) for each turn, sourced from the <code>codex.turn_ttft</code> trace-safe log event and associated to the turn by <code>trace.id</code>. The raw <code>docs</code> count column was dropped — once the logs index joins in, a document count conflates trace and log documents and stops being a useful primary column.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The query now reads from two index patterns (<code>traces-apm-agents_codex_cli_rs*</code> + <code>logs-apm.app.codex_cli_rs*</code>) and groups by <code>trace.id</code>; TTFT log events carry the same <code>trace.id</code> as the turn's spans, which is what makes the single-STATS association work without a second query. Worth a glance in Discover to confirm <code>ttft_sec</code> renders as a plain numeric column right after <code>duration_sec</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

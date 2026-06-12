@@ -431,7 +431,7 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   These views are intentionally separate: Traces is the duration/execution view, Log Only is the token view, and Trace Safe is the communication-attempt/error view. Do not merge them in this task.
 
   **Acceptance criteria:** all three saved searches import as Classic Discover searches with filter pills and empty query bars; the Trace Safe OR condition is represented as a usable filter-pill shape in Discover; `trace.id` remains clickable where present; setup still imports all Codex saved searches successfully.
-- [ ] **Add TTFT to the Codex Turns aggregate.** Update **Codex CLI — Turns** so each turn row includes time-to-first-token as `ttft_sec`. TTFT is emitted as a trace-safe log event (`labels.target: codex_otel.trace_safe`, `labels.event_name: codex.turn_ttft`) and should be associated to the turn by `trace.id`, alongside the existing trace-derived turn fields. Use this ES|QL:
+- [x] **Add TTFT to the Codex Turns aggregate.** Update **Codex CLI — Turns** so each turn row includes time-to-first-token as `ttft_sec`. TTFT is emitted as a trace-safe log event (`labels.target: codex_otel.trace_safe`, `labels.event_name: codex.turn_ttft`) and should be associated to the turn by `trace.id`, alongside the existing trace-derived turn fields. Use this ES|QL:
 
   ```esql
   FROM traces-apm-agents_codex_cli_rs*, logs-apm.app.codex_cli_rs*
