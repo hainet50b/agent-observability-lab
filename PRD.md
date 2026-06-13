@@ -502,3 +502,13 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   2. **Codex CLI — Tool Call Errors (Trace Safe)** — filter pills `labels.target: codex_otel.trace_safe`, `labels.event_name: codex.tool_result`, and `labels.success: false`. Columns: `@timestamp`, `labels.success`, `labels.duration_ms`, `labels.tool_origin`, `labels.tool_name`, `numeric_labels.arguments_length`, `numeric_labels.output_length`, `numeric_labels.output_line_count`, `labels.conversation_id`, `trace.id`.
 
   **Acceptance criteria:** both saved searches import as Classic Discover searches with filter pills and empty query bars; the LLM Request Errors view includes failed `codex.api_request` and `codex.websocket_request` documents without status-code range filtering; the Tool Call Errors view opens over failed `codex.tool_result` documents; `trace.id` remains clickable where present; setup still imports all Codex saved searches successfully.
+- [ ] **Characterize Codex `UserPromptSubmit` hook payload for prompt audit feasibility.** Add a stack-local verification hook for Codex CLI, analogous in shape to the existing stack-local `.codex/config.toml` telemetry setup but explicitly for hook characterization, not production audit storage yet.
+
+  Requirements:
+  - Add the hook script under `components/agents/codex-cli/hooks/` (POSIX shell plus PowerShell mirror, following the repo's existing script-pair convention).
+  - The hook must run on Codex `UserPromptSubmit` and capture the raw stdin payload plus a best-effort extracted prompt field into a stack-local file, for example `.codex/hook-captures/user-prompt-submit.ndjson`.
+  - Do **not** write the prompt to stdout. The verification hook must avoid changing the model context or disturbing the user's prompt; diagnostics should go to stderr and the hook should exit 0 on all non-fatal paths.
+  - Extend the Codex setup flow so running `stacks/codex-cli-elastic/scripts/setup.{sh,ps1}` creates the stack-local hook registration under `<stack>/.codex/`, preferably as `.codex/hooks.json` so it can coexist with the generated `.codex/config.toml`.
+  - Keep this as a characterization task only: do not write to `prompts-audit`, do not encrypt/seal content, and do not change the backend mapping yet.
+
+  **Acceptance criteria:** after setup, a Codex session launched with `CODEX_HOME=<stack>/.codex` has a trusted/reviewable `UserPromptSubmit` hook registered; submitting a prompt causes one local capture record to be appended under the stack `.codex/` directory; the captured record is sufficient to identify the actual Codex hook payload keys for prompt text and any available session/conversation/turn correlation fields; the hook never blocks normal prompt submission if capture fails.
