@@ -502,7 +502,7 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   2. **Codex CLI — Tool Call Errors (Trace Safe)** — filter pills `labels.target: codex_otel.trace_safe`, `labels.event_name: codex.tool_result`, and `labels.success: false`. Columns: `@timestamp`, `labels.success`, `labels.duration_ms`, `labels.tool_origin`, `labels.tool_name`, `numeric_labels.arguments_length`, `numeric_labels.output_length`, `numeric_labels.output_line_count`, `labels.conversation_id`, `trace.id`.
 
   **Acceptance criteria:** both saved searches import as Classic Discover searches with filter pills and empty query bars; the LLM Request Errors view includes failed `codex.api_request` and `codex.websocket_request` documents without status-code range filtering; the Tool Call Errors view opens over failed `codex.tool_result` documents; `trace.id` remains clickable where present; setup still imports all Codex saved searches successfully.
-- [ ] **Characterize Codex `UserPromptSubmit` hook payload for prompt audit feasibility.** Add a stack-local verification hook for Codex CLI, analogous in shape to the existing stack-local `.codex/config.toml` telemetry setup but explicitly for hook characterization, not production audit storage yet.
+- [x] **Characterize Codex `UserPromptSubmit` hook payload for prompt audit feasibility.** Add a stack-local verification hook for Codex CLI, analogous in shape to the existing stack-local `.codex/config.toml` telemetry setup but explicitly for hook characterization, not production audit storage yet.
 
   Requirements:
   - Add the hook script under `components/agents/codex-cli/hooks/` (POSIX shell plus PowerShell mirror, following the repo's existing script-pair convention).

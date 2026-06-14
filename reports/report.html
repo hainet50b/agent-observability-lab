@@ -2440,6 +2440,40 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex CLI — UserPromptSubmit characterization hook</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Codex's hook contract, confirmed against the official docs</strong> (developers.openai.com/codex/hooks): hooks live in <code>&lt;CODEX_HOME&gt;/.codex/hooks.json</code> as <code>{ "hooks": { "UserPromptSubmit": [ { "hooks": [ { "type":"command", "command":"…" } ] } ] } }</code>, are enabled by default (no <code>[features]</code> flag needed on current Codex), and the event arrives as JSON on stdin. So the registration is its own <code>hooks.json</code> beside the generated <code>config.toml</code> exactly as the task asked — both read as user-level config because the stack launches Codex with <code>CODEX_HOME=&lt;stack&gt;/.codex</code>.</li>
+      <li><strong>Capture location derived from <code>CODEX_HOME</code>, not baked in.</strong> The hook writes to <code>${CODEX_HOOK_CAPTURE_FILE:-${CODEX_HOME:-$HOME/.codex}/hook-captures/user-prompt-submit.ndjson}</code>. Because the user sets <code>CODEX_HOME=&lt;stack&gt;/.codex</code> to launch Codex, the hook process inherits it and resolves the capture path to <code>&lt;stack&gt;/.codex/hook-captures/…</code> with no path threading through <code>hooks.json</code> — and the env override keeps it unit-testable. <code>hooks.json</code> therefore only needs the script command.</li>
+      <li><strong>Record shape (jq happy path):</strong> one self-describing NDJSON line per submit — <code>{captured_at, hook:"codex.UserPromptSubmit", prompt:(.prompt // null), raw:&lt;the whole parsed payload&gt;}</code>. Embedding the entire raw object is the point of a characterization probe: it reveals every key Codex actually sends, while <code>prompt</code> is the best-effort extraction the task asked for. If jq is absent or stdin is not JSON, it degrades to appending the raw payload verbatim (still captures the keys) and logs to stderr — never blocks.</li>
+      <li><strong>Mirrored the Claude Code prompt hook's session-safety contract, but stopped at capture.</strong> Like <code>capture-prompt.{sh,ps1}</code>: nothing to stdout (UserPromptSubmit stdout can be injected into / alter the prompt), always exit 0. Unlike it: no POST, no <code>prompts-audit</code>, no sealing — per the task's explicit "characterization only" scope. The PowerShell mirror appends UTF-8 without a BOM (PS 5.1 would otherwise mangle multibyte prompt text / inject a BOM mid-file).</li>
+      <li><strong>Wiring as a new agent-owned renderer</strong> (<code>render-hooks.{sh,ps1}</code>), parallel to <code>render-config</code>, create-if-absent, referencing the hook scripts by absolute path (<code>command</code> for POSIX, <code>commandWindows</code> pwsh for Windows). Inserted as setup step 3/4 (renumbered from 3) right after the config render, since both are agent-side <code>.codex/</code> generation.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The one part not machine-verifiable here is launching a real interactive Codex REPL (Codex is not on this host's PATH and the REPL is interactive). Everything else was verified directly: feeding a synthetic UserPromptSubmit payload (with embedded quotes + Japanese) to <strong>both</strong> hooks produces empty stdout, exactly one NDJSON record per invocation (two invocations → two lines), correct <code>prompt</code> extraction, and all eight payload keys preserved under <code>raw</code> (<code>session_id, transcript_path, cwd, hook_event_name, model, turn_id, prompt, permission_mode</code>); empty stdin writes no file and exits 0; <code>render-hooks.{sh,ps1}</code> both emit valid create-if-absent <code>hooks.json</code> (PowerShell escapes the Windows backslash paths via <code>ConvertTo-Json</code>). <code>docker compose config -q</code> passes for all three stacks; both setup scripts parse. Smoke tests were not run — this change adds hook/renderer scripts and a setup step but touches no compose / config / OTLP-path file, so it cannot affect the smoke probes; shellcheck is absent on this host (gate skipped per CONVENTIONS). <strong>Human confirmation step:</strong> run <code>scripts/setup.ps1</code>, then a <code>CODEX_HOME=&lt;stack&gt;/.codex</code> Codex session, submit a prompt, and confirm one record appends under <code>.codex/hook-captures/</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>This was the last open task — the PRD task list is now fully checked.</li>
+      <li><strong>Stale README note (human's beat, flagging not editing):</strong> the stack <code>README.md</code> "Still open / later" section says the prompt-audit hook is "Claude-Code-specific … if Codex exposes a comparable hook, is a later increment." Codex <em>does</em> expose <code>UserPromptSubmit</code> and this task now characterizes it — that bullet wants a refresh (split into "characterized ✓" vs the still-deferred production audit store), plus a Layout entry for <code>hooks/</code> and <code>render-hooks.{sh,ps1}</code>. Spec-layer edits are owned by the human + conversational LLM, so noted here rather than done.</li>
+      <li><strong>Natural follow-on task:</strong> once the captured keys are reviewed (expected: <code>prompt</code> + <code>session_id</code>/<code>turn_id</code> for correlation), promote this into a Codex production prompt-audit hook — the parallel to Claude Code's <code>capture-prompt</code> shipping to <code>prompts-audit</code>, with the same local-sealing path. The capture records this hook produces are exactly the input that task needs.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex CLI stack now registers a <strong>UserPromptSubmit characterization hook</strong>: after <code>setup</code>, a Codex session launched at the stack appends each submitted prompt's raw hook payload to <code>.codex/hook-captures/user-prompt-submit.ndjson</code> so we can see exactly which keys Codex delivers (prompt text + session/turn correlation). It only captures locally — no telemetry is sent and the prompt is never altered or blocked. Adds <code>capture-user-prompt.{sh,ps1}</code> + <code>render-hooks.{sh,ps1}</code> and a new <code>setup</code> step.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>The hook is a <em>characterization probe</em>, deliberately not a production audit path: it writes only to a gitignored local NDJSON file (<code>.codex/</code> is ignored at any depth), never to <code>prompts-audit</code> and never sealed. Confirm that scope before any real-secret Codex session runs against it.</li>
+      <li>Session-safety to glance at: both hooks emit nothing on stdout and always exit 0 — the property that keeps a UserPromptSubmit hook from injecting context into / blocking the model. The new files are <code>components/agents/codex-cli/hooks/capture-user-prompt.{sh,ps1}</code> and <code>components/agents/codex-cli/scripts/render-hooks.{sh,ps1}</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
