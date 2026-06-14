@@ -39,14 +39,26 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
   },
   "user": {
     "id": "...",
+    "name": "..."
+  },
+  "host": {
     "name": "...",
-    "email": "..."
+    "hostname": "..."
   },
   "agent_audit": {
     "agent": {
       "provider": "openai",
       "name": "codex-cli",
-      "model": "gpt-5.5"
+      "model": "gpt-5.5",
+      "account": {
+        "id": null,
+        "name": null,
+        "email": null
+      },
+      "organization": {
+        "id": null,
+        "name": null
+      }
     },
     "conversation_id": "...",
     "turn_id": "...",
@@ -62,10 +74,13 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
 Field ownership:
 
 - ECS fields: `@timestamp`, `event.action`, `event.created`, `event.dataset`, `event.kind`.
-- ECS user fields: `user.id`, `user.name`, and `user.email` are populated on a best-effort basis per agent/runtime and are not application-encrypted. Access to the audit data stream is restricted instead.
+- ECS user fields: `user.id` and `user.name` identify the workstation/business login identity on a best-effort basis. `user.email` is not used because it is not available consistently from local hook scripts across platforms. Access to the audit data stream is restricted instead.
+- ECS host fields: `host.name` and `host.hostname` are populated on a best-effort basis per runtime.
 - Custom audit fields: `agent_audit.*`.
 - `agent_audit.prompt.text` carries plaintext in the lab and is searchable. Production-oriented audit flows may set it to `null` and populate `agent_audit.prompt.encrypted_text` with application-encrypted prompt content instead.
 - `agent_audit.agent.*` describes the AI agent application, not the ECS collecting agent.
+- `agent_audit.agent.account.*` describes the AI agent provider account when available.
+- `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it.
 - Standardized audit event names belong in `event.action`; user prompt submissions use `event.action: user-prompt`.
 - Hook senders should construct near-final JSON documents before indexing. Ingest pipelines for audit streams should stay minimal: defaulting, validation, and routing are acceptable, but prompt redaction/encryption belongs in the sender.
 - `logs-agent_audit.*` is access-controlled separately from OTel/APM telemetry indices. The intended production posture is that only audit-authorized users can read the audit data stream.
@@ -73,7 +88,7 @@ Field ownership:
 ## Mapping and lifecycle
 
 - Audit data stream mappings are strict by default. Unexpected fields should fail indexing rather than silently expanding the audit schema.
-- `user.id`, `user.name`, `user.email`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id`, and `agent_audit.turn_id` are mapped as `keyword` where applicable.
+- `user.id`, `user.name`, `host.name`, `host.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id`, and `agent_audit.turn_id` are mapped as `keyword` where applicable.
 - `agent_audit.prompt.text` is mapped as searchable `text` in the lab.
 - `agent_audit.prompt.encrypted_text` is mapped as `keyword` with `index: false`; encrypted prompt bodies are stored but not searchable.
 - `agent_audit.prompt.length` is mapped as `long`.
