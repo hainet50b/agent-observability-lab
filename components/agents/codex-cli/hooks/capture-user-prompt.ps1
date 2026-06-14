@@ -1,11 +1,20 @@
 #!/usr/bin/env pwsh
-# capture-user-prompt.ps1 — Codex CLI UserPromptSubmit characterization hook
+# capture-user-prompt.ps1 — Codex CLI UserPromptSubmit audit hook
 # (PowerShell mirror of capture-user-prompt.sh; same .sh/.ps1 pairing as the
 # repo's other scripts). See that file's header for the full rationale. In
-# short: fires once per submitted prompt, appends the RAW stdin payload plus a
-# best-effort extracted `prompt` to a stack-local NDJSON capture file, to
-# discover the exact Codex payload keys. CHARACTERIZATION ONLY — no POST, no
-# prompts-audit, no sealing.
+# short: fires once per submitted prompt, reshapes Codex's raw hook payload into
+# the canonical `agent_audit.user_prompt` document defined in SPEC/agent-audit.md,
+# and appends it (one per line) to a stack-local NDJSON capture file. This is the
+# exact shape that lands in `logs-agent_audit.user_prompt-default`; for now it
+# ONLY writes the local file — no POST, no sealing (plaintext prompt, lab mode).
+#
+# Field mapping (Codex raw payload -> canonical document):
+#   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
+#   .model -> agent_audit.agent.model            .prompt  -> agent_audit.prompt.text
+#   agent.provider/name are constants; prompt.length is the prompt's char count.
+#   user.* is best-effort (only the runtime OS username is available as user.name;
+#   id/email stay null). cwd / transcript_path / permission_mode are dropped (not
+#   part of the strict audit schema; cwd is PII).
 #
 # CONTRACT — must never disturb the Codex session:
 #   * Writes NOTHING to stdout (on UserPromptSubmit, exit-0 stdout can be
@@ -32,6 +41,11 @@ try {
     $raw = [Console]::In.ReadToEnd()
     if (-not $raw) { Log 'empty stdin — nothing to capture'; exit 0 }
 
+    $rawObj = $null
+    try { $rawObj = $raw | ConvertFrom-Json } catch {
+        Log 'payload not valid JSON — cannot shape audit document; skipping'; exit 0
+    }
+
     $dir = Split-Path -Parent $captureFile
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -39,22 +53,40 @@ try {
 
     $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 
-    $rawObj = $null
-    try { $rawObj = $raw | ConvertFrom-Json } catch { Log 'payload not valid JSON — capturing raw text' }
+    # Best-effort runtime identity (Codex's payload has none).
+    $userName = if ($env:USER) { $env:USER } elseif ($env:USERNAME) { $env:USERNAME } else { [Environment]::UserName }
+    if (-not $userName) { $userName = $null }
 
-    if ($null -ne $rawObj) {
-        $record = [ordered]@{
-            captured_at = $ts
-            hook        = 'codex.UserPromptSubmit'
-            prompt      = $rawObj.prompt
-            raw         = $rawObj
+    $promptText = $rawObj.prompt
+    $promptLen  = if ($null -ne $promptText) { ([string]$promptText).Length } else { 0 }
+
+    # Reshape raw Codex payload -> canonical agent_audit.user_prompt document.
+    $record = [ordered]@{
+        '@timestamp' = $ts
+        event = [ordered]@{
+            action  = 'user-prompt'
+            created = $ts
+            dataset = 'agent_audit.user_prompt'
+            kind    = 'event'
         }
-    } else {
-        $record = [ordered]@{
-            captured_at = $ts
-            hook        = 'codex.UserPromptSubmit'
-            prompt      = $null
-            raw_text    = $raw
+        user = [ordered]@{
+            id    = $null
+            name  = $userName
+            email = $null
+        }
+        agent_audit = [ordered]@{
+            agent = [ordered]@{
+                provider = 'openai'
+                name     = 'codex-cli'
+                model    = $rawObj.model
+            }
+            conversation_id = $rawObj.session_id
+            turn_id         = $rawObj.turn_id
+            prompt = [ordered]@{
+                text           = $promptText
+                encrypted_text = $null
+                length         = $promptLen
+            }
         }
     }
 
@@ -66,7 +98,7 @@ try {
         [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
     try { $fs.Write($bytes, 0, $bytes.Length) } finally { $fs.Dispose() }
 
-    Log "captured 1 record -> $captureFile"
+    Log "captured 1 audit document -> $captureFile"
 }
 catch {
     Log "capture failed ($_) — prompt proceeds uncaptured"

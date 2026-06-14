@@ -2508,6 +2508,39 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Codex prompt hook — emit canonical Agent Audit document</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Field mapping derived from the real captured payload.</strong> The previous characterization run left 58 records under <code>.codex/hook-captures/</code>; their keys are exactly <code>session_id, turn_id, transcript_path, cwd, hook_event_name, model, permission_mode, prompt</code>. Mapped to the SPEC canonical shape: <code>session_id → agent_audit.conversation_id</code> (a Codex "session" <em>is</em> the conversation), <code>turn_id → turn_id</code>, <code>model → agent_audit.agent.model</code>, <code>prompt → agent_audit.prompt.text</code>. <code>agent.provider/name</code> are the constants <code>"openai"/"codex-cli"</code> from the SPEC example.</li>
+      <li><strong>Strict-mapping discipline: drop everything not in the schema.</strong> <code>cwd</code>, <code>transcript_path</code>, <code>permission_mode</code>, and <code>hook_event_name</code> are deliberately <em>not</em> emitted — they are absent from the audit mapping (and <code>cwd</code> is PII), and since the data stream is <code>dynamic: strict</code> (built last iteration), emitting any of them would make the later ingest fail. The record written is exactly the canonical document, nothing more.</li>
+      <li><strong><code>user.*</code> is honestly best-effort.</strong> Codex's hook payload carries no user identity, so per SPEC "best-effort per agent/runtime" only the runtime OS username is available — populated as <code>user.name</code> (<code>$USER</code>/<code>$USERNAME</code>/<code>id -un</code>; <code>[Environment]::UserName</code> on PS). <code>user.id</code> and <code>user.email</code> stay <code>null</code> rather than being faked; a later config-driven increment can supply a richer identity.</li>
+      <li><strong><code>prompt.length</code> = character count, not bytes.</strong> jq's <code>length</code> on a string and .NET's <code>String.Length</code> both count characters (codepoints for BMP text) — verified equal (28) on the captured Japanese prompt across both shells. Character count is the meaningful "prompt length".</li>
+      <li><strong>No jq / non-JSON now skips instead of writing raw.</strong> Previously the degraded path appended the raw payload; now that the file holds canonical documents, appending a non-canonical line would poison the later ingest, so the bash hook logs to stderr and skips the write when jq is absent or stdin is not JSON. The PowerShell mirror needs no external tool (native <code>ConvertFrom/To-Json</code>). The session-safety contract is unchanged: nothing to stdout, always exit 0.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The local capture file (<code>.codex/hook-captures/user-prompt-submit.ndjson</code>, gitignored) now contains a mix: 58 old characterization-wrapper lines (<code>captured_at/hook/raw</code>) followed by new canonical lines. The old lines are history and were left as-is; the very next task makes the hook send to Elasticsearch and stop writing this file, so the transitional file is short-lived.</li>
+      <li>Testing the <code>.ps1</code> hook required piping JSON to <code>pwsh</code> as a real OS process — piping a PowerShell variable to <code>&amp; script.ps1</code> hangs, because the hook reads <code>[Console]::In.ReadToEnd()</code> (the process's stdin), which is how Codex actually invokes it, not the PowerShell object pipeline. A caller note worth remembering when writing future hook tests.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None beyond the already-listed tasks — the next step (read <code>.codex/agent-audit.toml</code>, POST to <code>logs-agent_audit.user_prompt-default</code>, stop writing the local file) is already queued.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex CLI <code>UserPromptSubmit</code> hook now reshapes each prompt into the <strong>canonical Agent Audit document</strong> (<code>SPEC/agent-audit.md</code>) — <code>@timestamp</code>, <code>event.*</code>, best-effort <code>user.*</code>, and <code>agent_audit.*</code> with conversation/turn ids, model, and plaintext prompt + length — instead of dumping the raw payload. It still only writes the local NDJSON file (no Elasticsearch yet) and still never touches stdout or blocks the prompt. Both <code>capture-user-prompt.sh</code> and <code>.ps1</code> updated.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified both shells against the real captured payload: each emits the identical canonical document, the multibyte Japanese prompt is preserved (length 28 codepoints), and the output <strong>indexes cleanly (HTTP 201) into the strict <code>logs-agent_audit.user_prompt-default</code> data stream</strong> — proving the hook output conforms to the mapping built last iteration. Test docs were deleted afterward. Codex stack smoke test still PASS.</li>
+      <li>One value judgement to confirm: capturing the OS username as <code>user.name</code> by default. It is the audit "who", but it is also auto-collected identity — acceptable for the lab, worth a glance before any secured deployment.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
