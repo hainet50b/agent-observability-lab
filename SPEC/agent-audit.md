@@ -51,13 +51,13 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
       "name": "codex-cli",
       "model": "gpt-5.5",
       "account": {
-        "id": null,
-        "name": null,
-        "email": null
+        "id": "...",
+        "name": "...",
+        "email": "..."
       },
       "organization": {
-        "id": null,
-        "name": null
+        "id": "...",
+        "name": "..."
       }
     },
     "conversation_id": "...",
@@ -74,16 +74,27 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
 Field ownership:
 
 - ECS fields: `@timestamp`, `event.action`, `event.created`, `event.dataset`, `event.kind`.
-- ECS user fields: `user.id` and `user.name` identify the workstation/business login identity on a best-effort basis. `user.email` is not used because it is not available consistently from local hook scripts across platforms. Access to the audit data stream is restricted instead.
+- ECS user fields: `user.id` and `user.name` identify the workstation/business login identity on a best-effort basis. `user.id` is the domain-qualified login (`whoami`: `DOMAIN\user` on Windows, the bare login on POSIX where no domain source exists) and `user.name` is the short login name. `user.email` is not used because it is not available consistently from local hook scripts across platforms. Access to the audit data stream is restricted instead. See [Identity derivation](#identity-derivation).
 - ECS host fields: `host.name` and `host.hostname` are populated on a best-effort basis per runtime.
 - Custom audit fields: `agent_audit.*`.
 - `agent_audit.prompt.text` carries plaintext in the lab and is searchable. Production-oriented audit flows may set it to `null` and populate `agent_audit.prompt.encrypted_text` with application-encrypted prompt content instead.
 - `agent_audit.agent.*` describes the AI agent application, not the ECS collecting agent.
-- `agent_audit.agent.account.*` describes the AI agent provider account when available.
-- `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it.
+- `agent_audit.agent.account.*` describes the AI agent provider account when available; it is read from the agent's local credential store (for Codex CLI, `$CODEX_HOME/auth.json` — see [Identity derivation](#identity-derivation)).
+- `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it, and is read from the same local credential store (see [Identity derivation](#identity-derivation)).
 - Standardized audit event names belong in `event.action`; user prompt submissions use `event.action: user-prompt`.
 - Hook senders should construct near-final JSON documents before indexing. Ingest pipelines for audit streams should stay minimal: defaulting, validation, and routing are acceptable, but prompt redaction/encryption belongs in the sender.
 - `logs-agent_audit.*` is access-controlled separately from OTel/APM telemetry indices. The intended production posture is that only audit-authorized users can read the audit data stream.
+
+## Identity derivation
+
+Identity fields are populated best-effort by the hook sender, **locally and with no network call** (the fail-open contract): any missing tool, file, or claim leaves the field `null` and never blocks the prompt.
+
+- **`user.id` / `user.name`** — the workstation login identity. `user.id` is the domain-qualified login from `whoami` (`DOMAIN\user` on Windows; the bare login on POSIX, where no domain source exists); `user.name` is the short login name. `user.email` is not used.
+- **`agent_audit.agent.account.*` / `agent_audit.agent.organization.*`** — the AI-agent *provider* identity, read from the agent's local credential store. For **Codex CLI** that is `$CODEX_HOME/auth.json` (ChatGPT auth mode):
+  - `account.id` ← `.tokens.account_id` (equals the `id_token` `chatgpt_account_id` claim; available without decoding the token).
+  - `account.email` ← the `id_token` `email` claim; `account.name` ← the `id_token` `name` claim (the authenticated person).
+  - `organization.id` / `organization.name` ← the `is_default` entry (fallback: first) of the `id_token` `https://api.openai.com/auth` → `organizations` array, mapping `.id` → `organization.id` and **`.title`** → `organization.name` (the claim has no `name` key — the human-readable label is `title`).
+  - The `id_token` is a JWT whose payload (second `.`-separated segment) is base64url-decoded and read as JSON claims; it is **not** signature-verified (a local, trusted file). In API-key auth mode (no `id_token` / `tokens`) these fields stay `null`.
 
 ## Mapping and lifecycle
 
