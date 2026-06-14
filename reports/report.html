@@ -2601,6 +2601,36 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add <code>verify-agent-audit.{sh,ps1}</code> for the direct Agent Audit path</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Modelled on <code>smoke-test.sh</code> but for the <em>direct</em> path.</strong> <code>smoke-test.sh</code> proves OTLP → APM Server → Elasticsearch; this new sibling proves the orthogonal Agent Audit path — UserPromptSubmit hook → Elasticsearch (no APM, no OTLP). Same 3A skeleton, same <code>aol-*</code> health-wait helper, same SKIP-on-no-docker posture, but it waits only for <code>aol-elasticsearch</code> (the audit destination — Kibana/APM are irrelevant to this path).</li>
+      <li><strong>Exercised the genuinely <em>configured</em> hook, not a stand-in.</strong> The Act step pipes a synthetic payload to <code>components/agents/codex-cli/hooks/capture-user-prompt.{sh,ps1}</code> — the exact script <code>.codex/hooks.json</code> registers — with <code>CODEX_HOME=&lt;stack&gt;/.codex</code> so it reads the stack's rendered <code>agent-audit.toml</code>, identical to how a real Codex session invokes it. Rather than parse the registered <code>command</code> path out of <code>hooks.json</code> (which on a Windows host is a backslashed <code>C:\…</code> path that breaks <code>bash "$cmd"</code>), I resolve the component hook from the repo layout and <em>assert</em> that <code>hooks.json</code> registers a UserPromptSubmit command as a precondition — same file, robust across platforms.</li>
+      <li><strong>The assertion is the signal, not the hook exit code.</strong> The hook is fail-open (always exits 0 — it must never block a prompt), so a green exit proves nothing about delivery. The script keys PASS/FAIL on the document actually landing in <code>logs-agent_audit.user_prompt-default</code>, polled by a unique per-run <code>conversation_id</code> (<code>aol-verify-&lt;epoch&gt;-&lt;pid&gt;</code>).</li>
+      <li><strong>Cleans up after itself.</strong> Unlike <code>smoke-test.sh</code> (which leaves probe docs in the APM streams), this deletes its synthetic document via <code>_delete_by_query</code> on the unique id — an <em>audit</em> stream should not accumulate fake prompts, and it keeps re-runs idempotent. The synthetic payload deliberately includes <code>cwd</code>/<code>transcript_path</code> so a reviewer can confirm the strict mapping drops them (it does — the landed doc shows only the canonical fields).</li>
+      <li><strong>PS mirror specifics.</strong> The hook is launched as a real child <code>pwsh</code> process (<code>$payload | &amp; pwsh -File …</code>) because piping a PowerShell variable straight to <code>&amp; script.ps1</code> hangs on the hook's <code>[Console]::In.ReadToEnd()</code> (noted in an earlier report). The verifier's <em>own</em> ES polling uses <code>127.0.0.1</code> (same IPv6-stall avoidance as the hook fix) so the 30-poll loop is fast.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Both scripts ran to PASS against the live stack. The <code>.sh</code> execute bit was set in the git index (<code>git update-index --chmod=+x</code> → <code>100755</code>) because this Windows checkout has <code>core.fileMode=false</code> — otherwise the CONVENTIONS lint loop's <code>[ -x ]</code> gate would skip it on a fresh POSIX clone (same fix the smoke-test skeleton task used).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <p>None new. Note for the human: the CONVENTIONS test loop only runs <code>scripts/smoke-test.sh</code>, so <code>verify-agent-audit.sh</code> is not auto-run as a gate; it is an on-demand verification (the task scoped it as a sibling, not a rename of the smoke test). If you want it gated too, that is a small follow-up to the lint/test command list — flagging rather than changing it.</p>
+
+    <h3>Change summary</h3>
+    <p>New <code>stacks/codex-cli-elastic/scripts/verify-agent-audit.{sh,ps1}</code> verify the Agent Audit delivery path end to end: they bring the stack up, feed a synthetic Codex <code>UserPromptSubmit</code> payload through the configured hook (with <code>CODEX_HOME</code> pointed at the stack's <code>.codex</code>), assert the canonical document lands in <code>logs-agent_audit.user_prompt-default</code>, then delete the test document. The existing <code>smoke-test.sh</code> (OTLP path) was not touched.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Both verified live to PASS</strong> on the running stack: the bash hook indexed HTTP&nbsp;201 and the PowerShell hook indexed via <code>127.0.0.1</code>; the document was found by <code>conversation_id</code> (<code>action=user-prompt</code>, <code>provider=openai</code>, <code>prompt.length=31</code>), and the synthetic doc was deleted afterward in both runs. <code>docker compose config -q</code> passes for all three stacks; <code>bash -n</code> and the PowerShell parser are clean.</li>
+      <li>Did <strong>not</strong> edit the stack README — its Layout block already lists both new scripts (human-owned spec layer), and the task scoped no other README change.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
