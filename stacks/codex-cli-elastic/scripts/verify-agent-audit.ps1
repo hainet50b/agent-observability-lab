@@ -124,6 +124,17 @@ try {
     if (-not $hit.host.hostname) { Fail 'audit document missing host.hostname — host enrichment or mapping not applied' }
     Write-Host "[assert] host enrichment present (host.hostname=$($hit.host.hostname)) ✓"
 
+    # Identity schema (SPEC update): provider account/organization envelope present,
+    # and user.email gone.
+    $agentProps = $hit.agent_audit.agent.PSObject.Properties.Name
+    if (($agentProps -notcontains 'account') -or ($agentProps -notcontains 'organization')) {
+        Fail 'audit document missing agent_audit.agent.account/organization — identity schema not applied'
+    }
+    if ($hit.user.PSObject.Properties.Name -contains 'email') {
+        Fail 'audit document still carries user.email — identity schema not applied'
+    }
+    Write-Host '[assert] identity schema applied (account/organization present, no user.email) ✓'
+
     # --- Cleanup ---------------------------------------------------------------
     Write-Host '[cleanup] removing the synthetic verification document…'
     $del = Invoke-RestMethod -Method Post -TimeoutSec 30 `

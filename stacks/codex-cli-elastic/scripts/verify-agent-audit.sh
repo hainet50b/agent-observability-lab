@@ -131,6 +131,14 @@ hhost=$(echo "$src" | jq -r '.host.hostname // empty')
 [ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
 echo "[assert] host enrichment present (host.hostname=$hhost) ✓"
 
+# Identity schema (SPEC update): provider account/organization envelope present,
+# and user.email gone.
+echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' >/dev/null \
+  || fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
+echo "$src" | jq -e '(.user | has("email")) | not' >/dev/null \
+  || fail "audit document still carries user.email — identity schema not applied"
+echo "[assert] identity schema applied (account/organization present, no user.email) ✓"
+
 # --- Cleanup ---------------------------------------------------------------
 echo "[cleanup] removing the synthetic verification document…"
 curl -s -X POST "$ES_URL/$DATA_STREAM/_delete_by_query?refresh=true&ignore_unavailable=true" \

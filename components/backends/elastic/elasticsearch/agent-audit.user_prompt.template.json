@@ -22,9 +22,8 @@
         },
         "user": {
           "properties": {
-            "id":    { "type": "keyword" },
-            "name":  { "type": "keyword" },
-            "email": { "type": "keyword" }
+            "id":   { "type": "keyword" },
+            "name": { "type": "keyword" }
           }
         },
         "host": {
@@ -39,7 +38,20 @@
               "properties": {
                 "provider": { "type": "keyword" },
                 "name":     { "type": "keyword" },
-                "model":    { "type": "keyword" }
+                "model":    { "type": "keyword" },
+                "account": {
+                  "properties": {
+                    "id":    { "type": "keyword" },
+                    "name":  { "type": "keyword" },
+                    "email": { "type": "keyword" }
+                  }
+                },
+                "organization": {
+                  "properties": {
+                    "id":   { "type": "keyword" },
+                    "name": { "type": "keyword" }
+                  }
+                }
               }
             },
             "conversation_id": { "type": "keyword" },

@@ -26,10 +26,15 @@
 #   .model       -> agent_audit.agent.model
 #   .prompt      -> agent_audit.prompt.text  (+ .length = its character count)
 #   agent.provider/name are constants ("openai" / "codex-cli").
-#   user.* is best-effort: Codex's hook payload carries no user identity, so only
-#   the runtime OS username is available (user.name); user.id/email stay null
-#   until a richer identity source is wired in. host.name/host.hostname are the
-#   runtime OS hostname (best-effort, both the same value). cwd / transcript_path /
+#   user.* is the workstation login identity, best-effort: Codex's hook payload
+#   carries none, so only the runtime OS username is available (user.name);
+#   user.id stays null until a richer identity source is wired in (user.email is
+#   not used — not consistently available cross-platform; access is restricted at
+#   the data stream instead). agent_audit.agent.account.* (id/name/email) and the
+#   parallel agent_audit.agent.organization.* (id/name) are the AI-agent PROVIDER
+#   account/org, emitted as null until a source supplies them. host.name/
+#   host.hostname are the runtime OS hostname (best-effort, both the same value).
+#   cwd / transcript_path /
 #   permission_mode are intentionally dropped — not part of the audit schema (and
 #   cwd is PII), and the mapping is strict, so stray fields must not be emitted.
 #
@@ -104,10 +109,10 @@ record=$(printf '%s' "$payload" \
        | {
         "@timestamp": $ts,
         event: { action: "user-prompt", created: $ts, dataset: "agent_audit.user_prompt", kind: "event" },
-        user: { id: null, name: (if ($uname | length) > 0 then $uname else null end), email: null },
+        user: { id: null, name: (if ($uname | length) > 0 then $uname else null end) },
         host: { name: (if ($hname | length) > 0 then $hname else null end), hostname: (if ($hhost | length) > 0 then $hhost else null end) },
         agent_audit: {
-          agent: { provider: "openai", name: "codex-cli", model: (.model // null) },
+          agent: { provider: "openai", name: "codex-cli", model: (.model // null), account: { id: null, name: null, email: null }, organization: { id: null, name: null } },
           conversation_id: (.session_id // null),
           turn_id: (.turn_id // null),
           prompt: { text: (if $plain then $p else null end), encrypted_text: null, length: (($p // "") | length) }

@@ -2689,6 +2689,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Apply the Agent Audit identity schema update (drop <code>user.email</code>, add provider account/organization)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Applied across all five surfaces in lockstep</strong> (the strict mapping must change with the hook, or strict rejects the new fields): the template drops <code>user.email</code> and adds <code>agent_audit.agent.account</code> (id/name/email) + parallel <code>agent_audit.agent.organization</code> (id/name) as keyword; both hooks emit <code>user:{id,name}</code> and a null account/organization envelope; both verify scripts assert the envelope is present and <code>user.email</code> is gone; the saved search drops the <code>user.email</code> column and adds the five account/organization columns after the agent identity.</li>
+      <li><strong>account/organization are emitted as explicit null objects, not omitted.</strong> SPEC describes them as "when available", and the Codex hook has no provider-account source, so every field is null — but the objects are present in the document (matching the SPEC canonical shape exactly) so the columns and mapping have something to bind to and a reviewer sees the schema is in place awaiting a source. organization is parallel to account (a sibling under <code>agent</code>), not nested, per SPEC.</li>
+      <li><strong>The mapping-sync step from the previous task carried this for free on the live stream.</strong> <code>setup-agent-audit</code> PUT the new mappings onto the existing stream (adding account/organization; <code>user.email</code> stays mapped on the old backing index but is simply never populated again — PUT _mapping can't and needn't remove it). No teardown needed; a fresh provision gets the clean mapping from the template.</li>
+      <li><strong>user.email removal is honest about why.</strong> Per SPEC it is "not used because it is not available consistently from local hook scripts across platforms" — access to the audit stream is restricted instead. The hook header and saved-search description both now say so rather than leaving a null column that reads like missing data.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Documents written before this change keep their old shape (some carry <code>user.email: null</code>, none carry account/organization); that is expected history, not a defect. The strict mapping on the pre-existing backing index still lists <code>user.email</code>, harmlessly unused.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>This was the last open task — the PRD task list is now fully complete. The natural future increment is a real <em>source</em> for <code>agent_audit.agent.account.*</code> / <code>organization.*</code> (e.g. parsing the Codex auth/account context) so those columns populate, plus the encrypted <code>audit.mode</code> that nulls <code>prompt.text</code> and fills <code>prompt.encrypted_text</code> — both already anticipated in SPEC but out of scope here.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Agent Audit user-prompt documents now use the updated identity schema: workstation identity is <code>user.id</code>/<code>user.name</code> only (no <code>user.email</code>), and the AI-agent provider <em>account</em> (id/name/email) and <em>organization</em> (id/name) are first-class fields under <code>agent_audit.agent</code> (null until a source supplies them). The change spans the strict mapping, both hooks, both verify scripts, and the <strong>Agent Audit — User Prompts</strong> saved-search columns.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end on the live stack:</strong> the mapping synced (<code>acknowledged: true</code>), the saved search re-imported cleanly with the new columns, and both verify scripts reached PASS asserting "account/organization present, no user.email". A direct dump of a landed document matches the SPEC canonical shape byte-for-byte (<code>user:{id,name}</code>, <code>host</code>, <code>agent.account:{id,name,email}</code>, <code>agent.organization:{id,name}</code>, all the provider fields null). <code>docker compose config -q</code> passes for all three stacks; <code>bash -n</code> and the PowerShell parser are clean.</li>
+      <li><strong>Session note:</strong> tasks 518–522 were completed in this one takeover session after I stopped the separately-running <code>ralph.sh 10</code> loop at your request. The PRD task list is now empty; the only standing review item across the five is the PS-only <code>localhost → 127.0.0.1</code> hook rewrite and the <code>setup-agent-audit</code> mapping-sync addition, both flagged in their entries.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
