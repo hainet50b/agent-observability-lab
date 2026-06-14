@@ -2541,6 +2541,35 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Generate stack-local <code>.codex/agent-audit.toml</code> with local ES defaults</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Mirrored the existing render pattern exactly.</strong> Added an agent-owned template <code>components/agents/codex-cli/agent-audit.template.toml</code> plus a <code>scripts/render-agent-audit.{sh,ps1}</code> pair, modelled on the <code>config.template.toml</code> + <code>render-config.{sh,ps1}</code> that already render <code>.codex/config.toml</code>: single placeholder fill (<code>@@ES_URL@@</code>), create-if-absent, <code>sed</code> (bash) / <code>-replace</code> (pwsh), UTF-8 no-BOM on Windows. The toml is agent-owned because hook delivery config lives under <code>.codex/</code> beside <code>config.toml</code>/<code>hooks.json</code>, so it sits in the codex-cli agent component, not the backend.</li>
+      <li><strong>Local ES defaults per <code>SPEC/agent-audit.md</code>.</strong> <code>[elasticsearch]</code> url = the stack's ES base (default <code>http://localhost:9200</code>, overridable via <code>ES_URL</code>); <code>data_stream = logs-agent_audit.user_prompt-default</code>; <code>timeout_ms = 300</code>; <code>[audit] mode = "plaintext"</code>. <strong><code>api_key = ""</code></strong> deliberately — this stack's Elasticsearch runs single-node with security disabled, so no key is needed; the template comments how to set url=https + a <code>create_doc</code>-scoped key for a secured cluster.</li>
+      <li><strong>Wired as a new setup step (4 of 6).</strong> Inserted in both <code>setup.sh</code> and <code>setup.ps1</code> after config.toml and before hooks.json, renumbering the surrounding steps and header comments. Added <code>ES_URL=${ES_URL:-…}</code> / <code>$EsUrlLocal</code> so the rendered toml's url agrees with the ES URL the backend-provisioning steps already use.</li>
+      <li><strong>Left hook delivery untouched</strong> as the task scopes — <code>capture-user-prompt.{sh,ps1}</code> still only write the local NDJSON. Reading this toml and POSTing is the next task.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Minor: the first pass left the literal <code>@@ES_URL@@</code> token in the template's <em>comment</em> prose, which <code>sed</code> then rewrote in the rendered file — reworded the comment to "fill the url field below" so only the real <code>url =</code> line carries the token.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <p>None new — the immediately following tasks (hook reads/POSTs this toml; <code>verify-agent-audit.{sh,ps1}</code>) already cover the natural continuation.</p>
+
+    <h3>Change summary</h3>
+    <p>Running the Codex stack <code>setup</code> now also generates a gitignored <code>.codex/agent-audit.toml</code> — the Agent Audit hook's Elasticsearch delivery config — pre-filled with this stack's local Elasticsearch defaults (localhost:9200, the <code>logs-agent_audit.user_prompt-default</code> stream, empty api_key since security is off, 300&nbsp;ms timeout, plaintext mode). It is create-if-absent, so a real api_key you add survives re-runs.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end on the live stack:</strong> <code>setup.sh</code> ran all six steps and produced the file; it <strong>parses as valid TOML</strong> (Python <code>tomllib</code>) with exactly the expected keys; the PowerShell renderer produces a byte-identical, BOM-free file; both renderers are correctly create-if-absent. <code>docker compose config -q</code> passes for all stacks and the codex-cli-elastic smoke test is <strong>PASS</strong>.</li>
+      <li>Confirm the <code>api_key = ""</code> default is the intended posture for the security-disabled lab ES (vs. omitting the key entirely). It reads cleanly and the next task's hook can treat empty as "no auth header".</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
