@@ -2,11 +2,13 @@
 # render-hooks.ps1 — write the Codex CLI agent's stack-local .codex/hooks.json
 # (PowerShell mirror of render-hooks.sh).
 #
-# Registers the characterization hook hooks/capture-user-prompt.{sh,ps1} on
-# Codex's UserPromptSubmit event into <TargetDir>/.codex/hooks.json (referencing
-# the hook scripts by absolute path — `command` for POSIX, `commandWindows`
-# pwsh for Windows), so a Codex session launched with CODEX_HOME=<TargetDir>/.codex
-# picks it up alongside the [otel] config.toml. hooks.json is gitignored.
+# Registers the Agent Audit hook hooks/capture-user-prompt.{sh,ps1} on Codex's
+# UserPromptSubmit event into <TargetDir>/.codex/hooks.json (referencing the hook
+# scripts by absolute path — `command` for POSIX, `commandWindows` pwsh for
+# Windows), so a Codex session launched with CODEX_HOME=<TargetDir>/.codex picks
+# it up alongside the [otel] config.toml. At run time the hook delivers each
+# submitted prompt to the local Agent Audit data stream using the delivery config
+# in .codex/agent-audit.toml. hooks.json is gitignored.
 #
 # ConvertTo-Json escapes the Windows backslash paths correctly. Written as UTF-8
 # WITHOUT a BOM.
@@ -50,7 +52,7 @@ $config = [ordered]@{
                         command        = $HookSh
                         commandWindows = "pwsh -NoProfile -File $HookPs1"
                         timeout        = 10
-                        statusMessage  = 'capturing UserPromptSubmit payload (characterization)'
+                        statusMessage  = 'delivering UserPromptSubmit audit document'
                     }
                 )
             }

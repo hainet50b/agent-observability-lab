@@ -2,17 +2,18 @@
 #
 # render-hooks.sh — write the Codex CLI agent's stack-local .codex/hooks.json.
 #
-# Registers the characterization hook hooks/capture-user-prompt.{sh,ps1} on
-# Codex's `UserPromptSubmit` event into <target>/.codex/hooks.json, so a Codex
-# session launched with CODEX_HOME=<target>/.codex picks it up as user-level
-# hooks config — coexisting with the [otel] config.toml that render-config
-# writes (Codex reads hooks.json and config.toml side by side under CODEX_HOME).
+# Registers the Agent Audit hook hooks/capture-user-prompt.{sh,ps1} on Codex's
+# `UserPromptSubmit` event into <target>/.codex/hooks.json, so a Codex session
+# launched with CODEX_HOME=<target>/.codex picks it up as user-level hooks config
+# — coexisting with the [otel] config.toml that render-config writes (Codex reads
+# hooks.json and config.toml side by side under CODEX_HOME). At run time the hook
+# delivers each submitted prompt to the local Agent Audit data stream using the
+# delivery config in .codex/agent-audit.toml (see render-agent-audit.sh).
 #
 # The hook scripts are referenced by ABSOLUTE path (resolved from this
 # component): `command` for POSIX hosts and `commandWindows` (pwsh) for Windows.
 # hooks.json is written under .codex/, which is gitignored — it carries
-# machine-specific absolute paths and the captured payloads it points at can
-# contain prompt text.
+# machine-specific absolute paths.
 #
 # create-if-absent: an existing hooks.json is left untouched (delete to
 # regenerate — e.g. after the repo moves and the absolute paths go stale).
@@ -53,7 +54,7 @@ cat > "$out" <<JSON
             "command": "$HOOK_SH",
             "commandWindows": "pwsh -NoProfile -File $HOOK_PS1",
             "timeout": 10,
-            "statusMessage": "capturing UserPromptSubmit payload (characterization)"
+            "statusMessage": "delivering UserPromptSubmit audit document"
           }
         ]
       }

@@ -2570,6 +2570,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Deliver the Codex <code>UserPromptSubmit</code> audit document to Elasticsearch</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Took over an interrupted Ralph run rather than re-implementing from scratch.</strong> When this iteration began, a live <code>ralph.sh 10</code> process (plus its headless <code>claude -p "You are Ralph"</code> executor) was already mid-flight on this exact task — files were mutating under me (the modified-file set grew from 3 to 6 between two <code>git status</code> calls). I surfaced the conflict; you chose "stop it and take over"; I stopped the four processes and then <em>verified</em> the in-progress changes instead of overwriting them. The six modified files (<code>capture-user-prompt.{sh,ps1}</code>, <code>render-hooks.{sh,ps1}</code>, <code>setup.{sh,ps1}</code>) were already a complete, self-consistent implementation: both hooks read <code>.codex/agent-audit.toml</code>, POST the canonical document to <code>logs-agent_audit.user_prompt-default</code>, are fail-open, and no longer write any local capture file; render/setup comments + status messages moved from "characterization" to "Agent Audit delivery". No <code>hook-captures</code> / <code>CODEX_HOOK_CAPTURE_FILE</code> references remain anywhere.</li>
+      <li><strong>Document shape deliberately unchanged.</strong> This task is delivery-only, so the canonical document is byte-for-byte the one task 516 produced — including <code>user.email: null</code> and no <code>host.*</code> / <code>agent_audit.agent.account</code>/<code>organization</code>. Those schema changes belong to the still-open tasks 521 (host fields) and 522 (identity rework); folding them in here would violate one-task-per-iteration.</li>
+      <li><strong>Found and fixed a real PowerShell delivery defect (the one change I authored).</strong> The bash hook (curl) delivered fine against the rendered <code>url = "http://localhost:9200"</code>, but the PowerShell hook <em>timed out every time</em>: .NET's HTTP client resolves <code>localhost</code> to IPv6 <code>::1</code> first and connects serially, stalling ~2.26&nbsp;s before IPv4 fallback (measured live: <code>localhost</code> 2262&nbsp;ms vs <code>127.0.0.1</code> 10&nbsp;ms) — which blows the <code>timeout_ms = 300</code> default, so the PS hook never actually delivered in the real config even though ES was up. curl sidesteps this via IPv4 preference. Minimal contained fix, PS hook only: rewrite a bare <code>localhost</code> host to <code>127.0.0.1</code> (regex on the scheme boundary; any other host untouched), with a comment explaining why. The asymmetry (bash unchanged) is justified — it is a .NET-client quirk, not a config problem.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The PS hook's end-to-end wall time was ~696&nbsp;ms, but that is dominated by cold <code>pwsh</code> process startup; the POST itself is sub-100&nbsp;ms against <code>127.0.0.1</code>. In a real Codex session the interpreter is already warm, so the short timeout is comfortable.</li>
+      <li>The <code>localhost → 127.0.0.1</code> rewrite is intentionally PS-only and lab-oriented. A remote <code>https://</code> cluster is unaffected (only a bare <code>localhost</code> host is rewritten), but it is worth remembering the rewrite exists.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <p>None new — the next queued task (<code>verify-agent-audit.{sh,ps1}</code>, feeding a synthetic <code>UserPromptSubmit</code> payload through the hook and asserting the doc lands) is the natural continuation, and tasks 521/522 already cover the deferred host/identity schema work.</p>
+
+    <h3>Change summary</h3>
+    <p>The Codex CLI <code>UserPromptSubmit</code> hook now <strong>delivers</strong> each submitted prompt as the canonical Agent Audit document straight to the local <code>logs-agent_audit.user_prompt-default</code> data stream — reading endpoint, data stream, api_key, timeout, and audit mode at run time from <code>.codex/agent-audit.toml</code> — and no longer writes any local capture file. Delivery is fail-open with a very short timeout, and the hook still never writes to stdout or blocks the prompt. Setup step 5 and the hook-registration status message were relabelled from "characterization" to "Agent Audit delivery".</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Process note:</strong> a <code>ralph.sh 10</code> loop was already running when this session began (you asked me not to launch the script, and I did not — it was started separately). I stopped it at your direction and took over as executor. Tasks 519–522 remain open; I can continue one per iteration.</li>
+      <li><strong>Verified both hooks end-to-end against the live stack</strong> using a temp config mirroring the rendered one: bash returned HTTP&nbsp;201; PowerShell (after the IPv4 fix, with the real <code>timeout_ms = 300</code>) indexed cleanly — both landed the exact canonical document, multi-byte prompt text preserved (length counted in codepoints, 30/31), and <code>cwd</code>/<code>permission_mode</code> correctly dropped against the strict mapping. All throwaway test docs were deleted afterward.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> passes for all three stacks; <code>bash -n</code> clean on the modified <code>.sh</code>; the PowerShell parser is clean on the modified <code>.ps1</code>; shellcheck is not installed (skipped per CONVENTIONS).</li>
+      <li>Worth a glance: the PS-only <code>localhost → 127.0.0.1</code> rewrite — confirm you are happy with that as the fix versus changing the rendered URL.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

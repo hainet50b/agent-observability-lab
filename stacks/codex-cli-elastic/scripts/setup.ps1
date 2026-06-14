@@ -12,23 +12,23 @@
 # for [otel]; CODEX_HOME is the supported per-project mechanism)  4) render
 # .codex/agent-audit.toml (the Agent Audit hook's Elasticsearch delivery config)
 # from the agent-owned template with this stack's local ES defaults (url = -EsUrl,
-# security-disabled so api_key empty; see SPEC/agent-audit.md) — GENERATE only, the
-# hook is wired to read/POST it separately  5) register the UserPromptSubmit
-# characterization hook into .codex/hooks.json — a CHARACTERIZATION probe that
-# appends each submitted prompt's raw payload to
-# .codex/hook-captures/user-prompt-submit.ndjson to discover Codex's hook payload
-# keys (no POST / no prompts-audit / no sealing)  6) import the Kibana saved
+# security-disabled so api_key empty; see SPEC/agent-audit.md); the step-5 hook
+# reads this at run time  5) register the UserPromptSubmit Agent Audit hook into
+# .codex/hooks.json — at run time it reshapes each submitted prompt into the
+# canonical agent_audit.user_prompt document and POSTs it (fail-open, short
+# timeout) to the local Agent Audit data stream logs-agent_audit.user_prompt-default
+# using the step-4 config; lab mode stores prompt text in plaintext (no sealing
+# yet)  6) import the Kibana saved
 # objects: the Elastic backend's cross-agent AI Agents — Traces data view, then
 # the Codex CLI agent's per-agent data views (Metrics / Events / Traces) and saved
 # searches. Steps 1 and 2 idempotent; steps 3, 4 and 5 create-if-absent; step 6
 # imports with overwrite=true. Override the ES endpoint with -EsUrl, the Kibana URL
 # with the KIBANA_URL env var. Verification (smoke-test.sh) stays separate.
 #
-# NOT done here (deferred): the prompts-audit index and the production
-# prompt-audit pipeline (ship + local sealing) are not built for Codex yet —
-# step 3 only characterizes the hook payload locally. A dashboard, ingest
-# filtering, TTFT integration, and normalized summary indices also remain
-# deferred (the data views and the four curated saved searches import in step 4).
+# NOT done here (deferred): prompt sealing/encryption is not built yet — the hook
+# delivers prompt text in plaintext (lab mode). A dashboard, ingest filtering,
+# TTFT integration, and normalized summary indices also remain deferred (the data
+# views and the curated saved searches import in step 6).
 
 [CmdletBinding()]
 param(
@@ -60,7 +60,7 @@ Invoke-Step '3/6 - local Codex session config (.codex/config.toml, [otel] teleme
 Invoke-Step '4/6 - Agent Audit delivery config (.codex/agent-audit.toml, local ES defaults)' `
     (Join-Path $C 'agents/codex-cli/scripts/render-agent-audit.ps1') `
     @{ EsUrl = $EsUrlLocal; TargetDir = $StackDir }
-Invoke-Step '5/6 - UserPromptSubmit capture hook (.codex/hooks.json, characterization)' `
+Invoke-Step '5/6 - UserPromptSubmit Agent Audit hook (.codex/hooks.json, ES delivery)' `
     (Join-Path $C 'agents/codex-cli/scripts/render-hooks.ps1') `
     @{ TargetDir = $StackDir }
 Invoke-Step '6/6 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
