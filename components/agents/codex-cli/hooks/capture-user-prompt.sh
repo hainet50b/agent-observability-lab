@@ -28,7 +28,8 @@
 #   agent.provider/name are constants ("openai" / "codex-cli").
 #   user.* is best-effort: Codex's hook payload carries no user identity, so only
 #   the runtime OS username is available (user.name); user.id/email stay null
-#   until a richer identity source is wired in. cwd / transcript_path /
+#   until a richer identity source is wired in. host.name/host.hostname are the
+#   runtime OS hostname (best-effort, both the same value). cwd / transcript_path /
 #   permission_mode are intentionally dropped — not part of the audit schema (and
 #   cwd is PII), and the mapping is strict, so stray fields must not be emitted.
 #
@@ -83,18 +84,28 @@ ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 # Best-effort runtime identity (Codex's payload has none).
 user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
 
+# Best-effort runtime host (ECS host.hostname/host.name). Codex's payload has
+# none; use the OS hostname. host.name and host.hostname are the same value here
+# (best-effort — ECS permits it); a richer source could split FQDN vs short name.
+host_hostname=${HOSTNAME:-}
+[ -n "$host_hostname" ] || host_hostname=$(hostname 2>/dev/null || echo "")
+[ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
+host_name=$host_hostname
+
 # Reshape raw Codex payload -> canonical agent_audit.user_prompt document. In
 # plaintext mode prompt.text carries the prompt; any other mode nulls it (sealing
 # into encrypted_text is a later increment) — prompt.length is the true char count
 # regardless, so the audit trail still records that a prompt of that size occurred.
 record=$(printf '%s' "$payload" \
   | jq -c --arg ts "$ts" --arg uname "$user_name" --arg mode "$mode" \
+      --arg hname "$host_name" --arg hhost "$host_hostname" \
       '($mode == "plaintext") as $plain
        | (.prompt // null) as $p
        | {
         "@timestamp": $ts,
         event: { action: "user-prompt", created: $ts, dataset: "agent_audit.user_prompt", kind: "event" },
         user: { id: null, name: (if ($uname | length) > 0 then $uname else null end), email: null },
+        host: { name: (if ($hname | length) > 0 then $hname else null end), hostname: (if ($hhost | length) > 0 then $hhost else null end) },
         agent_audit: {
           agent: { provider: "openai", name: "codex-cli", model: (.model // null) },
           conversation_id: (.session_id // null),

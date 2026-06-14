@@ -18,8 +18,9 @@
 #   .model -> agent_audit.agent.model            .prompt  -> agent_audit.prompt.text
 #   agent.provider/name are constants; prompt.length is the prompt's char count.
 #   user.* is best-effort (only the runtime OS username is available as user.name;
-#   id/email stay null). cwd / transcript_path / permission_mode are dropped (not
-#   part of the strict audit schema; cwd is PII).
+#   id/email stay null). host.name/host.hostname are the runtime OS hostname
+#   (best-effort, both the same value). cwd / transcript_path / permission_mode are
+#   dropped (not part of the strict audit schema; cwd is PII).
 #
 # CONTRACT — must never disturb the Codex session:
 #   * Writes NOTHING to stdout (on UserPromptSubmit, exit-0 stdout can be
@@ -86,6 +87,11 @@ try {
     $userName = if ($env:USER) { $env:USER } elseif ($env:USERNAME) { $env:USERNAME } else { [Environment]::UserName }
     if (-not $userName) { $userName = $null }
 
+    # Best-effort runtime host (ECS host.hostname/host.name). name == hostname here
+    # (best-effort); a richer source could split FQDN vs short name.
+    $hostName = try { [System.Net.Dns]::GetHostName() } catch { $null }
+    if (-not $hostName) { $hostName = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { $null } }
+
     $promptText = $rawObj.prompt
     $promptLen  = if ($null -ne $promptText) { ([string]$promptText).Length } else { 0 }
 
@@ -106,6 +112,10 @@ try {
             id    = $null
             name  = $userName
             email = $null
+        }
+        host = [ordered]@{
+            name     = $hostName
+            hostname = $hostName
         }
         agent_audit = [ordered]@{
             agent = [ordered]@{

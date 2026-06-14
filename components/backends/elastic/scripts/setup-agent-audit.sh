@@ -93,6 +93,27 @@ else
   echo "[setup] data stream '$DATA_STREAM' created ✓"
 fi
 
+# 3. Sync the template's mapping onto the live data stream. The template only
+# shapes NEW backing indices, so a stream provisioned before a mapping change
+# (e.g. the host.* fields) would keep the old strict mapping and REJECT the new
+# fields — silent loss on a fail-open hook. Adding fields to a strict mapping is
+# allowed and idempotent, so PUT the template's mappings to the stream every run
+# to keep an already-provisioned stream forward-compatible.
+echo "[setup] syncing mapping onto data stream '$DATA_STREAM'…"
+mappings=$(jq -c '.template.mappings' "$TEMPLATE_FILE") || fail "could not read mappings from $TEMPLATE_FILE"
+result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/$DATA_STREAM/_mapping" \
+  -H 'Content-Type: application/json' --data "$mappings") || fail "request to Elasticsearch failed"
+code=$(echo "$result" | tail -n1)
+body=$(echo "$result" | sed '$d')
+echo "$body" | jq . 2>/dev/null || echo "$body"
+case "$code" in
+  2*) : ;;
+  *) fail "PUT $DATA_STREAM/_mapping returned HTTP $code (expected 2xx)" ;;
+esac
+acknowledged=$(echo "$body" | jq -r '.acknowledged // false')
+[ "$acknowledged" = true ] || fail "data stream mapping update not acknowledged"
+echo "[setup] mapping synced onto '$DATA_STREAM' ✓"
+
 echo
 echo "PASS: Agent Audit store '$DATA_STREAM' ready on $ES_URL (strict mapping,"
 echo "30-day retention). The UserPromptSubmit hook indexes one document per"

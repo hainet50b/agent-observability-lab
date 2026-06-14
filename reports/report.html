@@ -2660,6 +2660,35 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add ECS <code>host.name</code> / <code>host.hostname</code> to Agent Audit</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Applied to all four targets the task names</strong> — the strict mapping (<code>agent-audit.user_prompt.template.json</code> gains a <code>host</code> object with <code>name</code>/<code>hostname</code> as <code>keyword</code>), both hooks (emit a best-effort <code>host</code> block), both verify scripts (assert it landed), and the saved-search columns (insert <code>host.name</code>/<code>host.hostname</code> between the user identity and the agent identity, mirroring the SPEC document order).</li>
+      <li><strong>Closed a silent-loss trap the mapping change would otherwise create — the one judgement call beyond the literal four targets.</strong> The mapping is <code>dynamic: strict</code> and <code>setup-agent-audit</code> only created the data stream when absent; the template alone shapes <em>new</em> backing indices. So on an already-provisioned stream, the hook would start emitting <code>host.*</code> that the old strict mapping <em>rejects</em> (HTTP 400 → fail-open hook drops the doc silently). I added a third step to <code>setup-agent-audit.{sh,ps1}</code> that PUTs the template's mappings onto the live stream every run (adding fields to a strict mapping is allowed and idempotent), keeping an existing stream forward-compatible. This is squarely "apply to the mapping" — without it the change is inert or harmful on existing deployments — but I'm flagging it as a behaviour addition to the setup script.</li>
+      <li><strong>host.name == host.hostname (both the OS hostname), by design.</strong> Codex's payload carries no host identity, so per SPEC "best-effort per runtime" the hook uses the OS hostname for both. ECS permits them equal; a richer source could later split FQDN (<code>host.name</code>) from the short name (<code>host.hostname</code>). Resolution is layered: <code>$HOSTNAME</code> → <code>hostname</code> → <code>$COMPUTERNAME</code> (bash); <code>[System.Net.Dns]::GetHostName()</code> → <code>$env:COMPUTERNAME</code> (pwsh); null if all are empty (never faked).</li>
+      <li><strong>Verification now asserts the enrichment, not just delivery.</strong> Both verify scripts fail if the landed document has no <code>host.hostname</code> — which would catch either the hook not emitting it or the strict mapping rejecting it. The synthetic payload still carries no host field (the hook derives it), so this genuinely tests the runtime enrichment.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The <code>down -v</code>-free path works because of the new mapping-sync step. Documents written before this change simply lack <code>host.*</code> (they predate it); that is expected, not a defect.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <p>None new — task 522 (drop <code>user.email</code>, add <code>agent_audit.agent.account.*</code>/<code>organization.*</code>) is the last queued increment and touches the same five surfaces (mapping, both hooks, verification, saved-search columns). It will exercise the new mapping-sync step the same way.</p>
+
+    <h3>Change summary</h3>
+    <p>Every Agent Audit user-prompt document now records the originating workstation's hostname as ECS <code>host.name</code> / <code>host.hostname</code> — added to the strict mapping, emitted best-effort by both the bash and PowerShell hooks, asserted by both verify scripts, and shown as columns in the <strong>Agent Audit — User Prompts</strong> saved search. The provisioning script now also syncs the mapping onto an already-running stream so existing deployments accept the new fields without a teardown.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end on the live stack:</strong> <code>setup-agent-audit.sh</code> synced the mapping (<code>acknowledged: true</code>); both verify scripts reached PASS with the host fields landing through the strict mapping (<code>host.name=host.hostname=hainet50b-thinkpad</code>); the saved search re-imported cleanly with the two new columns. <code>docker compose config -q</code> passes for all three stacks; <code>bash -n</code> and the PowerShell parser are clean on every modified script.</li>
+      <li><strong>The setup-script behaviour addition is the thing to sign off:</strong> <code>setup-agent-audit</code> now PUTs the mapping to the live stream on every run (step 3), not just on first creation — added specifically so the strict mapping accepts <code>host.*</code> (and future fields) on already-provisioned streams. See Judgement points.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

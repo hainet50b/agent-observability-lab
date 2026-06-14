@@ -118,7 +118,11 @@ try {
     $hit = (Invoke-RestMethod -Method Post -TimeoutSec 10 `
         -Uri "$EsApi/$DataStream/_search?ignore_unavailable=true&allow_no_indices=true" `
         -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
-    Write-Host "[assert] document: action=$($hit.event.action) provider=$($hit.agent_audit.agent.provider) model=$($hit.agent_audit.agent.model) prompt.length=$($hit.agent_audit.prompt.length)"
+    Write-Host "[assert] document: action=$($hit.event.action) host.name=$($hit.host.name) host.hostname=$($hit.host.hostname) provider=$($hit.agent_audit.agent.provider) model=$($hit.agent_audit.agent.model) prompt.length=$($hit.agent_audit.prompt.length)"
+    # Host-enrichment assertion: host.name/host.hostname must be present (added to
+    # the strict mapping and emitted by the hook).
+    if (-not $hit.host.hostname) { Fail 'audit document missing host.hostname — host enrichment or mapping not applied' }
+    Write-Host "[assert] host enrichment present (host.hostname=$($hit.host.hostname)) ✓"
 
     # --- Cleanup ---------------------------------------------------------------
     Write-Host '[cleanup] removing the synthetic verification document…'

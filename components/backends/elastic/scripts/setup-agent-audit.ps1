@@ -97,6 +97,28 @@ else {
     Write-Host "[setup] data stream '$DataStream' created"
 }
 
+# 3. Sync the template's mapping onto the live data stream. The template only
+# shapes NEW backing indices, so a stream provisioned before a mapping change
+# (e.g. the host.* fields) would keep the old strict mapping and REJECT the new
+# fields — silent loss on a fail-open hook. Adding fields to a strict mapping is
+# allowed and idempotent, so PUT the template's mappings to the stream every run.
+Write-Host "[setup] syncing mapping onto data stream '$DataStream'…"
+$mappings = ((Get-Content -Raw -LiteralPath $TemplateFile | ConvertFrom-Json).template.mappings | ConvertTo-Json -Depth 20)
+try {
+    $result = Invoke-RestMethod -Method Put -Uri "$EsUrl/$DataStream/_mapping" `
+        -ContentType 'application/json' -Body $mappings
+}
+catch {
+    Write-Error "FAIL: request to Elasticsearch failed ($_)"
+    exit 1
+}
+$result | ConvertTo-Json -Depth 10 | Write-Host
+if (-not $result.acknowledged) {
+    Write-Error "FAIL: data stream mapping update not acknowledged"
+    exit 1
+}
+Write-Host "[setup] mapping synced onto '$DataStream'"
+
 Write-Host ""
 Write-Host "PASS: Agent Audit store '$DataStream' ready on $EsUrl (strict mapping,"
 Write-Host "30-day retention). The UserPromptSubmit hook indexes one document per"

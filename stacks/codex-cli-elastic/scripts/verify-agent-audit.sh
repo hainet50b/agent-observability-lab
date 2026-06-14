@@ -119,11 +119,17 @@ for _ in $(seq 1 30); do
 done
 [ "$landed" = 1 ] || fail "no audit document landed in $DATA_STREAM for conversation_id=$cid within timeout"
 
-# Informational: show the canonical document that landed.
-curl -s "$ES_URL/$DATA_STREAM/_search?ignore_unavailable=true&allow_no_indices=true" \
+# Fetch the landed document once for the informational line + the host-enrichment
+# assertion (host.name/host.hostname must be present — added to the strict mapping
+# and emitted by the hook).
+src=$(curl -s "$ES_URL/$DATA_STREAM/_search?ignore_unavailable=true&allow_no_indices=true" \
   -H 'Content-Type: application/json' \
   --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" \
-  | jq -r '.hits.hits[0]._source | "[assert] document: action=\(.event.action) provider=\(.agent_audit.agent.provider) model=\(.agent_audit.agent.model) prompt.length=\(.agent_audit.prompt.length)"'
+  | jq -c '.hits.hits[0]._source')
+echo "$src" | jq -r '"[assert] document: action=\(.event.action) host.name=\(.host.name) host.hostname=\(.host.hostname) provider=\(.agent_audit.agent.provider) model=\(.agent_audit.agent.model) prompt.length=\(.agent_audit.prompt.length)"'
+hhost=$(echo "$src" | jq -r '.host.hostname // empty')
+[ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
+echo "[assert] host enrichment present (host.hostname=$hhost) ✓"
 
 # --- Cleanup ---------------------------------------------------------------
 echo "[cleanup] removing the synthetic verification document…"
