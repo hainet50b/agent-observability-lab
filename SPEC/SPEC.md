@@ -42,6 +42,7 @@ Telemetry-as-audit in this lab targets the **non-adversarial / network-reliabili
 Developer-facing references that sit beside this spec. The user-facing `README.md` files do **not** link into these — they are found here, via `SPEC/`:
 
 - [`threat-model.md`](threat-model.md) — audit-coverage threat model: the (A) non-adversarial / (B) adversarial split, why telemetry only solves (A), and the local-sidecar (`file_storage`) solution the `*-otelcol-*` stacks demonstrate.
+- [`agent-audit.md`](agent-audit.md) — direct agent-audit data streams and hook delivery: canonical user-prompt schema, mapping/lifecycle defaults, fail-open delivery, and hook-specific configuration.
 - [`claude-code-telemetry.md`](claude-code-telemetry.md) — what Claude Code emits into the `claude-code-elastic` stack: every metric / event / span field, the string-vs-numeric and PII caveats, the trace data model, and the trace-isolation routing.
 - [`codex-cli-telemetry.md`](codex-cli-telemetry.md) — what OpenAI Codex CLI emits into the `codex-cli-elastic` stack: the real `service.name` (`codex_cli_rs`), the dual `log_only`/`trace_safe` log families (identity+content vs `event_name`, joined on `call_id`/`span.id`), the metric/event catalogs, the WebSocket-vs-SSE transport split, and the pending trace-isolation routing.
 - [`kibana-saved-objects.md`](kibana-saved-objects.md) — the design of the stack's Kibana data views, saved searches, and dashboard: the curated columns and the reasoning, why saved searches rather than data views, and how to regenerate the NDJSON.
