@@ -3,20 +3,22 @@
 #
 # PowerShell mirror of setup.sh. Run once after `docker compose up -d` (healthy).
 # Steps: 1) trace-routing pipeline (isolates codex-cli spans into
-# traces-apm-agents_codex_cli)  2) render .codex/config.toml ([otel] telemetry
-# config) from the agent-owned template, so a Codex session launched with
-# CODEX_HOME=<stack>/.codex emits into the stack without touching the user's
-# ~/.codex (a repo-local .codex/config.toml is ignored for [otel]; CODEX_HOME is
-# the supported per-project mechanism)  3) register the UserPromptSubmit
-# characterization hook into .codex/hooks.json — a CHARACTERIZATION probe that
-# appends each submitted prompt's raw payload to
+# traces-apm-agents_codex_cli)  2) provision the Agent Audit data stream
+# (logs-agent_audit.user_prompt-default) + its strict index template per
+# SPEC/agent-audit.md (agent-cross-cutting, backend-owned)  3) render
+# .codex/config.toml ([otel] telemetry config) from the agent-owned template, so a
+# Codex session launched with CODEX_HOME=<stack>/.codex emits into the stack
+# without touching the user's ~/.codex (a repo-local .codex/config.toml is ignored
+# for [otel]; CODEX_HOME is the supported per-project mechanism)  4) register the
+# UserPromptSubmit characterization hook into .codex/hooks.json — a CHARACTERIZATION
+# probe that appends each submitted prompt's raw payload to
 # .codex/hook-captures/user-prompt-submit.ndjson to discover Codex's hook payload
-# keys (no POST / no prompts-audit / no sealing)  4) import the Kibana saved
+# keys (no POST / no prompts-audit / no sealing)  5) import the Kibana saved
 # objects: the Elastic backend's cross-agent AI Agents — Traces data view, then
 # the Codex CLI agent's per-agent data views (Metrics / Events / Traces) and saved
-# searches. Step 1 idempotent; steps 2 and 3 create-if-absent; step 4 imports with
-# overwrite=true. Override the ES endpoint with -EsUrl, the Kibana URL with the
-# KIBANA_URL env var. Verification (smoke-test.sh) stays separate.
+# searches. Steps 1 and 2 idempotent; steps 3 and 4 create-if-absent; step 5
+# imports with overwrite=true. Override the ES endpoint with -EsUrl, the Kibana URL
+# with the KIBANA_URL env var. Verification (smoke-test.sh) stays separate.
 #
 # NOT done here (deferred): the prompts-audit index and the production
 # prompt-audit pipeline (ship + local sealing) are not built for Codex yet —
@@ -44,16 +46,18 @@ function Invoke-Step {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-Invoke-Step '1/4 - trace-routing ingest pipeline' (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') $es
-Invoke-Step '2/4 - local Codex session config (.codex/config.toml, [otel] telemetry)' `
+Invoke-Step '1/5 - trace-routing ingest pipeline' (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') $es
+Invoke-Step '2/5 - Agent Audit data stream (logs-agent_audit.user_prompt-default)' `
+    (Join-Path $C 'backends/elastic/scripts/setup-agent-audit.ps1') $es
+Invoke-Step '3/5 - local Codex session config (.codex/config.toml, [otel] telemetry)' `
     (Join-Path $C 'agents/codex-cli/scripts/render-config.ps1') `
     @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
-Invoke-Step '3/4 - UserPromptSubmit capture hook (.codex/hooks.json, characterization)' `
+Invoke-Step '4/5 - UserPromptSubmit capture hook (.codex/hooks.json, characterization)' `
     (Join-Path $C 'agents/codex-cli/scripts/render-hooks.ps1') `
     @{ TargetDir = $StackDir }
-Invoke-Step '4/4 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
+Invoke-Step '5/5 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
     (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') @{}
-Invoke-Step '4/4 - Kibana saved objects (2/2): Codex agent data views + saved searches' `
+Invoke-Step '5/5 - Kibana saved objects (2/2): Codex agent data views + saved searches' `
     (Join-Path $C 'agents/codex-cli/scripts/import-kibana-objects.ps1') @{}
 
 Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

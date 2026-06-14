@@ -1,0 +1,53 @@
+{
+  "index_patterns": ["logs-agent_audit.user_prompt-*"],
+  "data_stream": {},
+  "priority": 200,
+  "_meta": {
+    "description": "Strict mapping for direct agent-audit user-prompt records. Agent-cross-cutting: AI-agent identity lives in agent_audit.agent.*, not in the data stream name. See SPEC/agent-audit.md.",
+    "managed_by": "agent-observability-lab"
+  },
+  "template": {
+    "lifecycle": { "data_retention": "30d" },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "event": {
+          "properties": {
+            "action":  { "type": "keyword" },
+            "created": { "type": "date" },
+            "dataset": { "type": "keyword" },
+            "kind":    { "type": "keyword" }
+          }
+        },
+        "user": {
+          "properties": {
+            "id":    { "type": "keyword" },
+            "name":  { "type": "keyword" },
+            "email": { "type": "keyword" }
+          }
+        },
+        "agent_audit": {
+          "properties": {
+            "agent": {
+              "properties": {
+                "provider": { "type": "keyword" },
+                "name":     { "type": "keyword" },
+                "model":    { "type": "keyword" }
+              }
+            },
+            "conversation_id": { "type": "keyword" },
+            "turn_id":         { "type": "keyword" },
+            "prompt": {
+              "properties": {
+                "text":           { "type": "text" },
+                "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
+                "length":         { "type": "long" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

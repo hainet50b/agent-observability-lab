@@ -2474,6 +2474,40 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Agent Audit — user-prompt data stream + strict index template</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Backend-owned, not agent-owned.</strong> <code>SPEC/agent-audit.md</code> defines the audit stream as <em>agent-cross-cutting</em> — the AI agent is a document field (<code>agent_audit.agent.*</code>), not a segment of the stream name — so a future Claude/Codex/opencode capture all land in one store. I placed the bootstrap in the Elastic <strong>backend</strong> component (<code>components/backends/elastic/</code>), mirroring the existing <code>setup-prompt-audit.{sh,ps1}</code>, rather than under the Codex agent. The Codex stack's <code>setup.{sh,ps1}</code> just calls it.</li>
+      <li><strong>Composable index template + explicit data stream, both created.</strong> The template <code>logs-agent_audit.user_prompt</code> (pattern <code>logs-agent_audit.user_prompt-*</code>, <code>data_stream: {}</code>) gets <code>priority: 200</code> so it wins over Elastic's built-in <code>logs-*-*</code> template (priority 100). After the template PUT the script also <code>PUT</code>s the <code>-default</code> data stream so the store exists immediately (the task asked for the data stream <em>and</em> the template).</li>
+      <li><strong>Retention = lab default one month via data-stream lifecycle (DSL).</strong> <code>template.lifecycle.data_retention: "30d"</code>. Verified live the data stream reports <code>effective_retention: "30d"</code> determined by data-stream configuration. Chose DSL (GA on this 9.4.2 stack) over an ILM policy — far less ceremony for a single retention requirement, and it is the SPEC's "configurable retention" knob in one place.</li>
+      <li><strong><code>event.created</code> mapped <code>date</code>, not <code>keyword</code>.</strong> The SPEC lists <code>event.*</code> as "keyword where applicable"; <code>event.created</code> is an ECS timestamp, so it is the "where applicable" exception. Everything else in <code>event.*</code> / <code>user.*</code> / <code>agent_audit.agent.*</code> / the two correlation ids is <code>keyword</code>; <code>prompt.text</code> is <code>text</code>, <code>prompt.length</code> is <code>long</code>.</li>
+      <li><strong><code>prompt.encrypted_text</code>: <code>keyword, index:false, doc_values:false</code>.</strong> SPEC says "keyword with index:false (stored but not searchable)". I added <code>doc_values:false</code> as well (matching the repo's existing <code>prompt_cipher</code> cipher-field convention) so a future encrypted blob is <code>_source</code>-only — present in the document, neither searchable nor aggregatable, with no <code>ignore_above</code> truncation concern.</li>
+      <li><strong>Idempotency split by verb.</strong> Template PUT replaces in place (safe to re-run); the data-stream create is guarded by a prior existence check because <code>PUT /_data_stream</code> is not idempotent. Same skip-on-missing-<code>curl</code>/<code>jq</code>, <code>ES_URL</code> override, and fail-loud-on-non-2xx contract as the sibling setup scripts.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The pre-existing <code>setup-prompt-audit.{sh,ps1}</code> / <code>prompts-audit</code> index (Claude Code's earlier flat-index design) is intentionally left untouched — it is a separate, older audit path; this task adds the new SPEC-defined data-stream path alongside it.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The two audit designs now coexist (<code>prompts-audit</code> flat index for Claude Code vs <code>logs-agent_audit.user_prompt-default</code> data stream per the new SPEC). A later task could migrate Claude Code onto the cross-cutting stream and retire <code>setup-prompt-audit</code>, leaving one audit store keyed by <code>agent_audit.agent.*</code>.</li>
+      <li>Write credentials for the hook (next tasks) should be scoped to <code>create_doc</code> on <code>logs-agent_audit.user_prompt-*</code> per SPEC "Delivery and authorization" — but this lab runs ES with security disabled, so there is no credential to scope yet; worth a note when a secured variant is added.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Running <code>setup</code> for the Codex CLI stack now provisions the <strong>Agent Audit</strong> store: a strict-mapped Elasticsearch data stream <code>logs-agent_audit.user_prompt-default</code> (with a 30-day retention and a matching index template) where hook-captured user prompts will land, separate from OTLP/APM telemetry. New backend files <code>setup-agent-audit.{sh,ps1}</code> + <code>elasticsearch/agent-audit.user_prompt.template.json</code>, wired in as <code>setup</code> step 2/5.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li>Verified live on the running stack: template + data stream create (and re-create idempotently), the resolved mapping is <code>dynamic: strict</code>, retention is <code>30d</code>, a canonical user-prompt document indexes (HTTP 201), and a document with a stray field is rejected (<code>strict_dynamic_mapping_exception</code>, HTTP 400). The test docs were deleted afterward — the stream is back to 0 documents.</li>
+      <li>No hook, config, Kibana, or external-cluster changes were made (task scope) — only the ES template/data-stream bootstrap and its wiring into <code>setup.{sh,ps1}</code>. The stack README already documented this step ("provisions the local Agent Audit data stream"), so it was left unedited.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
