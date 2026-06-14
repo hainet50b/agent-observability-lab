@@ -34,11 +34,15 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq   >/dev/null 2>&1 || skip "jq not found"
 
-# The cross-agent data view this backend owns (AI Agents — Traces,
-# traces-apm-agents_*). Agent-specific data views / saved searches / dashboards
-# are imported by the agent's own import script.
+# The cross-agent assets this backend owns: the AI Agents — Traces data view
+# (traces-apm-agents_*) and the Agent Audit — User Prompts data view + saved
+# search (the cross-agent hook->ES audit stream logs-agent_audit.user_prompt-*).
+# Agent-specific data views / saved searches / dashboards are imported by the
+# agent's own import script. Each NDJSON is self-contained (its saved search's
+# data-view reference resolves within the same file).
 FILES="
 kibana/agents-data-views.ndjson
+kibana/agent-audit.ndjson
 "
 
 import_file() {

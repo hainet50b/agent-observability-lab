@@ -2631,6 +2631,35 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add the <code>Agent Audit — User Prompts</code> data view + saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Placed in the <em>backend</em> component, not the codex agent — because the Agent Audit stream is cross-agent.</strong> <code>SPEC/agent-audit.md</code> is explicit that <code>logs-agent_audit.*</code> is agent-cross-cutting (the agent is a document field, not in the stream name), and <code>SPEC/SPEC.md</code> assigns cross-agent Kibana assets to <code>components/backends/&lt;backend&gt;/</code>. So the new objects live in <code>components/backends/elastic/kibana/agent-audit.ndjson</code>, exactly mirroring the existing cross-agent <strong>AI Agents — Traces</strong> view there — not under <code>components/agents/codex-cli/</code> (the view's title is the cross-agent stream and its columns include <code>agent_audit.agent.provider/name</code> precisely because it spans agents). The codex stack's setup already runs the backend import as step 6 (1/2), so running setup imports these for free.</li>
+      <li><strong>Authored as a <em>classic</em> (data-view-based) saved search, not ES|QL.</strong> The codex agent's existing saved searches are ES|QL sessions, but the task asked for a "Classic Discover saved search", so I copied the proven classic pill-less shape from <code>claude-code-event-overview</code>: <code>indexRefName</code> + a <code>references[]</code> entry resolving the data view, empty <code>filter:[]</code> with an empty kuery query (no pills), <code>sort:[["@timestamp","desc"]]</code>, and the ten task-specified columns verbatim in order.</li>
+      <li><strong>Data view and saved search given distinct ids</strong> (<code>agent-audit-user-prompts</code> for the index-pattern, <code>agent-audit-user-prompts-search</code> for the search) following the same collision-avoidance the claude-code traces view/search pair uses. Single self-contained NDJSON (data view line 1, search line 2, export summary <code>exportedCount:2</code>) so the import resolves the reference within the one file — no cross-file ordering dependency.</li>
+      <li><strong>Kept <code>user.email</code> as a column, as task 520 specifies</strong>, even though task 522 will later remove it. One task per iteration: 520 ships the columns as written; 521 (host fields) and 522 (identity rework) adjust them as their own increments.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The same backend import now runs for the two claude-code stacks too, so they will gain an <strong>Agent Audit — User Prompts</strong> data view that resolves no documents there (only the codex stack's setup creates the audit data stream today). This is benign — an empty cross-agent data view — and arguably correct: the audit view is shared infrastructure that would populate if another agent grew an audit hook. Flagging it since it is a visible side effect on the other stacks.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <p>None new — tasks 521 (add <code>host.name</code>/<code>host.hostname</code> columns) and 522 (drop <code>user.email</code>, add <code>agent_audit.agent.account.*</code>/<code>organization.*</code>) already cover the column evolution of this exact saved search.</p>
+
+    <h3>Change summary</h3>
+    <p>A new cross-agent <strong>Agent Audit — User Prompts</strong> Kibana data view (on <code>logs-agent_audit.user_prompt-*</code>) and a Classic Discover saved search now ship in the Elastic backend component and import automatically with the stack's Kibana setup. The search opens with no filter pills, sorted newest-first, with the ten audit columns: workstation identity (<code>user.id/name/email</code>), AI-agent identity (provider/name/model), the prompt (text + length), and the conversation/turn ids.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live against the running Kibana</strong>: both the <code>.sh</code> and <code>.ps1</code> backend import scripts imported <code>agent-audit.ndjson</code> with <code>success: true</code> / 2 objects (the data view + a <code>discoverApp</code> search), the search's reference resolved to the data view (no missing references), and the audit stream's real documents carry all ten column fields. <code>docker compose config -q</code> passes for all three stacks; every NDJSON line and the inner <code>searchSourceJSON</code> parse as JSON.</li>
+      <li>Placement decision worth a sign-off: backend (cross-agent) vs codex-agent component — I chose backend per the SPEC cross-agent rule and the AI Agents — Traces precedent (see Judgement points). The visible consequence is the empty data view on the claude-code stacks noted above.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
