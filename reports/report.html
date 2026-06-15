@@ -2776,6 +2776,30 @@
     </ul>
   </section>
 
+
+<section>
+<h2>Codex CLI — Hooks saved search</h2>
+<p class="ts">Task: Add a <strong>Codex CLI — Hooks</strong> Classic Discover saved search on the <strong>Codex CLI — Metrics</strong> data view.</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li><code>codex.hooks.run</code> is a <em>metric</em> (per <code>SPEC/codex-cli-telemetry.md</code>, the Hooks row), so the search is built on the <code>codex-cli-metrics</code> data view (<code>metrics-apm.app.codex_cli_rs*</code>) — the first saved search on that data view; all prior Codex searches live on the events or traces views.</li>
+  <li>"Filter pill <code>codex.hooks.run</code> exists" was implemented as a single <code>exists</code>-type filter, matching the established Codex exists-filter shape (e.g. <em>User Prompts (Log Only)</em>'s <code>labels.prompt</code> exists pill) rather than a query-bar string — a removable, labelled pill with an empty query bar.</li>
+  <li>Built as a Classic Discover object (not ES|QL) with the dual <code>attributes</code> + <code>tabs[]</code> structure and <code>references[]</code> wiring (<code>indexRefName</code> for both the source index and <code>filter[0].meta.index</code>) like every other Classic Codex saved search, so import resolves the data-view reference. Stable id <code>codex-cli-hooks</code>.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The Codex Metrics data view now has its first saved search; the broader metrics families in <code>SPEC/codex-cli-telemetry.md</code> (Turn token usage, Startup phases, Transport) remain unsurfaced and could become their own metrics-based saved searches or a Codex metrics dashboard.</p>
+
+<h3>Change summary</h3>
+<p>Kibana now ships a "Codex CLI — Hooks" saved search that lists each Codex hook run (name, status, the <code>codex.hooks.run</code> metric, source) from the Codex metrics stream.</p>
+
+<h3>Review highlights</h3>
+<p>Verified against the live Kibana: the NDJSON imports cleanly (<code>success: true</code>, 15 objects, 0 errors) and the new object resolved its <code>codex-cli-metrics</code> reference. A live-data sanity check (whether <code>codex.hooks.run</code> documents currently exist in the window) is a human step — the view is the standing lens regardless.</p>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
