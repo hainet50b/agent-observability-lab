@@ -2824,6 +2824,31 @@
 <h3>Review highlights</h3>
 <p>Imported cleanly into the live Kibana (<code>success: true</code>, 15 objects, 0 errors). Worth a glance in Discover to confirm the shorter text reads well in the saved-objects list.</p>
 </section>
+
+<section>
+<h2>Restore the dropped websocket_request channel in two Codex views</h2>
+<p class="ts">Task: Conversations and Turn Timeline (Events) matched only <code>codex.api_request</code> /responses and silently dropped the <code>codex.websocket_request</code> channel — a real undercount in live data.</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li>Used the already-correct <strong>LLM Requests (Trace Safe / Communication)</strong> predicate as the canonical both-channel shape: <code>websocket_request OR (api_request AND endpoint=/responses)</code>, preserving the <code>/models</code> exclusion (only api_request is endpoint-scoped; websocket is unconditionally an LLM request).</li>
+  <li>Conversations is ES|QL, so the fix is a one-line <code>is_llm_request</code> EVAL swap. The Deprecated timeline is Classic Discover, so I appended a third phrase branch (<code>codex.websocket_request</code>) to the combined-OR <code>filter[1].meta.params</code> — and to the mirrored <code>tabs[0]</code> copy, which Classic Discover stores identically.</li>
+  <li>The new phrase branch carries an inline <code>index: codex-cli-events</code> (matching the sibling api_request branch), so no new <code>references[]</code> entry was needed — the reference count stayed at 3 and import still resolves cleanly.</li>
+  <li>Edited only the two affected NDJSON lines via a JSON-aware Python pass (the file is uniform jq-compact after the prior task), leaving the other 14 lines byte-identical — the git diff is 2 lines changed, 2 removed.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None. (The Deprecated timeline was fixed too, per the task, even though it is lab-reference only — channel completeness should still be correct.)</p>
+
+<h3>Next PRD suggestions</h3>
+<p>Worth confirming the per-turn <strong>Turns</strong> aggregate, which counts LLM requests via the <code>try_run_sampling_request</code> trace span rather than by event_name: it sidesteps this channel issue, but it would be good to sanity-check that its count tracks the now-fixed Conversations count on the same sessions.</p>
+
+<h3>Change summary</h3>
+<p>The Codex Conversations usage summary and the (deprecated) events timeline now count and show LLM requests sent over the websocket transport, not just the HTTP /responses ones — fixing a large undercount (most conversations previously read 0 LLM requests).</p>
+
+<h3>Review highlights</h3>
+<p>Verified live: the saved Conversations ES|QL run through the ES _query API now returns llm_requests &gt; 0 for all 6 conversations (59, 12, 9, 6, 2, 1) where 5 of 6 were previously 0; import is clean (15 objects, references resolved).</p>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
