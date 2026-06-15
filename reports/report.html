@@ -2752,6 +2752,30 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Trim Agent Audit — User Prompts saved-search columns</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The task spelled out the exact 11-column allowlist, so the column edit was mechanical. The one real choice: the saved search's own <code>description</code> enumerated the dropped fields (<code>user.id/name</code>, <code>host.name/host.hostname</code>, <code>agent.provider/name/model</code>, <code>account.*/organization.*</code>). I updated that prose to match the trimmed view so the object isn't self-contradictory — a saved search whose description lists columns it no longer shows is a defect. I touched nothing else: sort, the empty filter list, and the data-view reference are unchanged.</li>
+      <li>No README/SPEC edit: the stack README only <em>names</em> this saved search, it does not enumerate its columns, so there was nothing to keep in sync there.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <p>None.</p>
+
+    <h3>Next PRD suggestions</h3>
+    <p>None — this was the last open task. The hook still indexes all dropped fields (<code>user.name</code>, <code>host.hostname</code>, <code>agent.provider</code>, <code>account.id</code>, <code>organization.id</code>), so any future task that wants them back in a view is a pure NDJSON column change.</p>
+
+    <h3>Change summary</h3>
+    <p>The <strong>Agent Audit — User Prompts</strong> Discover view is now leaner: it drops the redundant/opaque columns (<code>user.name</code>, <code>host.hostname</code>, <code>agent.provider</code>, and the two account/organization <code>id</code>s) and shows just the 11 audit-relevant fields — who, host, agent name/model, account name+email, org name, the prompt text+length, and the conversation/turn ids. Data is unaffected; only the view changed.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live Kibana:</strong> re-imported <code>agent-audit.ndjson</code> via the Saved Objects <code>_import?overwrite=true</code> API → <code>success: true</code>, 2 objects, 0 errors; then fetched <code>search/agent-audit-user-prompts-search</code> back and confirmed its persisted <code>columns</code> are exactly the 11 specified, in order. <code>docker compose config -q</code> is green for all three stacks; the NDJSON parses clean per line.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
