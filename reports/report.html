@@ -2800,6 +2800,30 @@
 <h3>Review highlights</h3>
 <p>Verified against the live Kibana: the NDJSON imports cleanly (<code>success: true</code>, 15 objects, 0 errors) and the new object resolved its <code>codex-cli-metrics</code> reference. A live-data sanity check (whether <code>codex.hooks.run</code> documents currently exist in the window) is a human step — the view is the standing lens regardless.</p>
 </section>
+
+<section>
+<h2>Shorten Codex CLI saved-search descriptions</h2>
+<p class="ts">Task: Shorten every Codex CLI saved-search <code>description</code> so the Discover saved-objects list and search header stop crowding the UI.</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li>Rewrote each object's <code>attributes.description</code> with a JSON-aware pass keyed by saved-object <code>id</code> (a 15-entry id→text map fed to <code>jq</code>), rather than 15 hand-matched string edits — robust against the mixed em-dash escaping in the file (some lines stored <code>—</code>, others literal <code>—</code>).</li>
+  <li>Verified the change is surgical: <code>jq 'del(.attributes.description)'</code> on the before/after files is byte-identical (order-normalized), proving titles, ids, columns, filter pills, sorts, references, and ES|QL queries are untouched.</li>
+  <li>Side effect of the <code>jq -c</code> rewrite: lines that were authored with spaced separators are now compact like the rest of the file, and the two <code>—</code>-escaped lines now carry literal em dashes — cosmetic normalization only, no content change.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None — descriptions now run 80–161 chars (was 462–1041).</p>
+
+<h3>Change summary</h3>
+<p>All 15 Codex CLI saved searches now show a concise one-line description in Discover instead of a multi-sentence paragraph; what each view shows and its telemetry family is still clear, and Deprecated / log_user_prompt-gate notes are retained.</p>
+
+<h3>Review highlights</h3>
+<p>Imported cleanly into the live Kibana (<code>success: true</code>, 15 objects, 0 errors). Worth a glance in Discover to confirm the shorter text reads well in the saved-objects list.</p>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
