@@ -2720,6 +2720,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Implement Identity derivation in the Codex UserPromptSubmit hook</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>JWT decode stays inside existing tooling — no new dependency.</strong> The <code>id_token</code> is a JWT; its payload is the base64url-encoded second segment. In the bash hook I decode it entirely within <code>jq</code> (a small <code>b64urldec</code> def: url-safe→standard alphabet, re-pad to a multiple of 4, <code>@base64d | fromjson</code>), so the hook still needs only <code>jq</code>/<code>curl</code> as before. In PowerShell I used <code>[Convert]::FromBase64String</code> after the same alphabet/padding fix. The token is read, <em>not</em> signature-verified — it is a local trusted file, exactly as the SPEC states.</li>
+      <li><strong>auth.json parse is fully fail-open.</strong> bash builds the provider-identity object in one guarded <code>jq</code> call wrapped in <code>try … catch {}</code> with a literal all-null default; PowerShell wraps <code>Get-CodexProviderIdentity</code> in a try/catch returning the null-filled ordered map. Any missing file, missing <code>tokens</code>, malformed JWT, or API-key-auth file (no <code>id_token</code>) leaves every provider field <code>null</code> and never blocks the prompt.</li>
+      <li><strong>Organization selection.</strong> The <code>https://api.openai.com/auth.organizations</code> array is filtered for <code>is_default == true</code> with a fallback to the first entry, mapping <code>.id</code>→<code>organization.id</code> and <code>.title</code>→<code>organization.name</code> (the claim has no <code>name</code> key — the label lives in <code>title</code>), per the SPEC.</li>
+      <li><strong><code>user.id</code> source.</strong> Used <code>whoami</code> verbatim: it yields <code>DOMAIN\\user</code> on Windows PowerShell and the bare login under POSIX/git-bash (no domain source) — both are the SPEC's intended best-effort forms. Empty output coerces to <code>null</code>.</li>
+      <li><strong>Verify-script assertion is conditional on auth.json.</strong> <code>user.id</code> is always asserted (whoami is universal). <code>account.id</code> is asserted only when <code>$CODEX_HOME/auth.json</code> exists — API-key auth / no file legitimately yields a null account, so an unconditional assertion would be wrong. The condition keys off the same path the hook reads.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The bash hook under git-bash gets a <em>bare</em> login from <code>whoami</code> (no domain qualifier), while the PowerShell hook gets <code>DOMAIN\\user</code>. This is the SPEC's documented best-effort behaviour, not a defect — flagging only so it is not mistaken for a bug if the two hooks are compared on the same Windows host.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The strict mapping already has <code>agent_audit.agent.account.*</code> / <code>organization.*</code> as keyword, so no mapping change was needed — but no Kibana saved-search currently surfaces the provider <em>account</em>/<em>organization</em> columns. A follow-up could add those to the <strong>Agent Audit — User Prompts</strong> view now that they carry real values.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex <code>UserPromptSubmit</code> audit hook now fills in <em>who</em> and <em>which account</em>: <code>user.id</code> is the workstation login (from <code>whoami</code>), and the AI-provider <code>account</code> (id/name/email) and <code>organization</code> (id/name) are read locally from <code>$CODEX_HOME/auth.json</code> — no network call, fully fail-open. The verification scripts now assert those fields land.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end on the live stack:</strong> <code>verify-agent-audit.sh</code> reached PASS with the real stack <code>.codex/auth.json</code> present, printing <code>user.id derived (user.id=hainet50b)</code> and <code>provider account.id derived … (account.id=15a2ade5-…)</code> — so the JWT decode and org selection work against a genuine Codex credential file, not just a synthetic one. The OTLP <code>smoke-test.sh</code> still PASSes (untouched path), <code>docker compose config -q</code> is green for all three stacks, <code>bash -n</code> and the PowerShell parser are clean.</li>
+      <li>I unit-tested the jq and PowerShell decoders against a hand-built JWT (default-org selection) and an API-key (no <code>id_token</code>) file → all-null, before the live run.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

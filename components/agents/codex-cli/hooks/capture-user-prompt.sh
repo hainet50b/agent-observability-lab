@@ -26,17 +26,22 @@
 #   .model       -> agent_audit.agent.model
 #   .prompt      -> agent_audit.prompt.text  (+ .length = its character count)
 #   agent.provider/name are constants ("openai" / "codex-cli").
-#   user.* is the workstation login identity, best-effort: Codex's hook payload
-#   carries none, so only the runtime OS username is available (user.name);
-#   user.id stays null until a richer identity source is wired in (user.email is
-#   not used — not consistently available cross-platform; access is restricted at
-#   the data stream instead). agent_audit.agent.account.* (id/name/email) and the
-#   parallel agent_audit.agent.organization.* (id/name) are the AI-agent PROVIDER
-#   account/org, emitted as null until a source supplies them. host.name/
-#   host.hostname are the runtime OS hostname (best-effort, both the same value).
-#   cwd / transcript_path /
-#   permission_mode are intentionally dropped — not part of the audit schema (and
-#   cwd is PII), and the mapping is strict, so stray fields must not be emitted.
+#   user.* is the workstation login identity, best-effort: user.id is the
+#   domain-qualified login from `whoami` (DOMAIN\user on Windows, the bare login on
+#   POSIX) and user.name is the short login name (user.email is not used — not
+#   consistently available cross-platform; access is restricted at the data stream
+#   instead). agent_audit.agent.account.* (id/name/email) and the parallel
+#   agent_audit.agent.organization.* (id/name) are the AI-agent PROVIDER account/org,
+#   read locally (NO network) from $CODEX_HOME/auth.json: account.id from
+#   .tokens.account_id; account.email/name from the id_token's email/name claims; and
+#   organization.id/name from the is_default (fallback: first) organizations entry's
+#   .id/.title in the id_token's "https://api.openai.com/auth" claim (the id_token is
+#   a JWT — its base64url payload is decoded and read, NOT signature-verified). Any
+#   missing file/claim leaves the field null (API-key auth has no id_token -> all
+#   null). host.name/host.hostname are the runtime OS hostname (best-effort, both the
+#   same value). cwd / transcript_path / permission_mode are intentionally dropped —
+#   not part of the audit schema (and cwd is PII), and the mapping is strict, so
+#   stray fields must not be emitted.
 #
 # CONTRACT — must never disturb the Codex session:
 #   * Writes NOTHING to stdout. On UserPromptSubmit, stdout can be injected into
@@ -88,6 +93,9 @@ ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Best-effort runtime identity (Codex's payload has none).
 user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
+# user.id is the domain-qualified workstation login (whoami: DOMAIN\user on
+# Windows, the bare login on POSIX where no domain source exists). Empty -> null.
+user_id=$(whoami 2>/dev/null || echo "")
 
 # Best-effort runtime host (ECS host.hostname/host.name). Codex's payload has
 # none; use the OS hostname. host.name and host.hostname are the same value here
@@ -97,22 +105,55 @@ host_hostname=${HOSTNAME:-}
 [ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
 host_name=$host_hostname
 
+# Best-effort AI-agent PROVIDER identity, read LOCALLY (no network) from
+# $CODEX_HOME/auth.json (Codex's ChatGPT-auth credential store). account.id is
+# .tokens.account_id; account.email/name and the organization come from the
+# id_token JWT's claims (payload = 2nd dot-segment, base64url-decoded via jq's
+# @base64d — NOT signature-verified, it is a local trusted file). Any missing
+# file/claim leaves that field null; API-key auth has no id_token, so all null.
+codex_home=${CODEX_HOME:-$HOME/.codex}
+auth_file="$codex_home/auth.json"
+identity='{"account_id":null,"account_email":null,"account_name":null,"org_id":null,"org_name":null}'
+if [ -f "$auth_file" ]; then
+  parsed=$(jq -c '
+      def b64urldec:
+        (gsub("-";"+") | gsub("_";"/"))
+        | (length % 4) as $m
+        | (if $m > 0 then . + ("=" * (4 - $m)) else . end)
+        | @base64d;
+      (.tokens.account_id // null) as $acct
+      | (.tokens.id_token // "") as $idt
+      | ($idt | split(".")) as $parts
+      | (if ($parts | length) >= 2 then (try ($parts[1] | b64urldec | fromjson) catch {}) else {} end) as $claims
+      | (($claims["https://api.openai.com/auth"].organizations) // []) as $orgs
+      | (([$orgs[] | select(.is_default == true)][0]) // $orgs[0] // {}) as $org
+      | {
+          account_id: $acct,
+          account_email: ($claims.email // null),
+          account_name: ($claims.name // null),
+          org_id: ($org.id // null),
+          org_name: ($org.title // null)
+        }' "$auth_file" 2>/dev/null) \
+    && [ -n "$parsed" ] && identity=$parsed \
+    || log "could not parse provider identity from $auth_file — account/organization stay null"
+fi
+
 # Reshape raw Codex payload -> canonical agent_audit.user_prompt document. In
 # plaintext mode prompt.text carries the prompt; any other mode nulls it (sealing
 # into encrypted_text is a later increment) — prompt.length is the true char count
 # regardless, so the audit trail still records that a prompt of that size occurred.
 record=$(printf '%s' "$payload" \
-  | jq -c --arg ts "$ts" --arg uname "$user_name" --arg mode "$mode" \
-      --arg hname "$host_name" --arg hhost "$host_hostname" \
+  | jq -c --arg ts "$ts" --arg uname "$user_name" --arg uid "$user_id" --arg mode "$mode" \
+      --arg hname "$host_name" --arg hhost "$host_hostname" --argjson id "$identity" \
       '($mode == "plaintext") as $plain
        | (.prompt // null) as $p
        | {
         "@timestamp": $ts,
         event: { action: "user-prompt", created: $ts, dataset: "agent_audit.user_prompt", kind: "event" },
-        user: { id: null, name: (if ($uname | length) > 0 then $uname else null end) },
+        user: { id: (if ($uid | length) > 0 then $uid else null end), name: (if ($uname | length) > 0 then $uname else null end) },
         host: { name: (if ($hname | length) > 0 then $hname else null end), hostname: (if ($hhost | length) > 0 then $hhost else null end) },
         agent_audit: {
-          agent: { provider: "openai", name: "codex-cli", model: (.model // null), account: { id: null, name: null, email: null }, organization: { id: null, name: null } },
+          agent: { provider: "openai", name: "codex-cli", model: (.model // null), account: { id: $id.account_id, name: $id.account_name, email: $id.account_email }, organization: { id: $id.org_id, name: $id.org_name } },
           conversation_id: (.session_id // null),
           turn_id: (.turn_id // null),
           prompt: { text: (if $plain then $p else null end), encrypted_text: null, length: (($p // "") | length) }

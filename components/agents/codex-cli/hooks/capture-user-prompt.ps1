@@ -17,10 +17,16 @@
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
 #   .model -> agent_audit.agent.model            .prompt  -> agent_audit.prompt.text
 #   agent.provider/name are constants; prompt.length is the prompt's char count.
-#   user.* is the workstation login identity, best-effort (only the runtime OS
-#   username is available as user.name; user.id stays null; user.email is not used).
+#   user.* is the workstation login identity, best-effort: user.id is the
+#   domain-qualified login from `whoami` (DOMAIN\user on Windows, bare login on
+#   POSIX); user.name is the short login name; user.email is not used.
 #   agent_audit.agent.account.* (id/name/email) + parallel organization.* (id/name)
-#   are the AI-agent PROVIDER account/org, null until a source supplies them.
+#   are the AI-agent PROVIDER account/org, read LOCALLY (no network) from
+#   $CODEX_HOME/auth.json: account.id from .tokens.account_id; account.email/name
+#   from the id_token JWT's email/name claims; organization.id/name from the
+#   is_default (fallback: first) organizations entry's .id/.title in the id_token's
+#   "https://api.openai.com/auth" claim (payload base64url-decoded, NOT
+#   signature-verified). Missing file/claim -> null (API-key auth has no id_token).
 #   host.name/host.hostname are the runtime OS hostname (best-effort, both the same
 #   value). cwd / transcript_path / permission_mode are dropped (not part of the
 #   strict audit schema; cwd is PII).
@@ -48,6 +54,43 @@ function Get-TomlValue($lines, $key) {
         }
     }
     return $null
+}
+
+# Decode a base64url string (JWT segment) to its UTF-8 text. Translates the
+# url-safe alphabet back to standard base64 and restores padding.
+function ConvertFrom-Base64Url($s) {
+    $t = $s.Replace('-', '+').Replace('_', '/')
+    switch ($t.Length % 4) { 2 { $t += '==' } 3 { $t += '=' } }
+    return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($t))
+}
+
+# Best-effort AI-agent PROVIDER identity from $CODEX_HOME/auth.json (no network).
+# Returns an object with account_id/account_email/account_name/org_id/org_name;
+# any missing file/claim leaves that field $null. Never throws (fail-open).
+function Get-CodexProviderIdentity($codexHome) {
+    $r = [ordered]@{ account_id = $null; account_email = $null; account_name = $null; org_id = $null; org_name = $null }
+    try {
+        $authFile = Join-Path $codexHome 'auth.json'
+        if (-not (Test-Path -LiteralPath $authFile)) { return $r }
+        $auth = Get-Content -Raw -LiteralPath $authFile | ConvertFrom-Json
+        $r.account_id = $auth.tokens.account_id
+        $idt = $auth.tokens.id_token
+        if ($idt) {
+            $parts = ([string]$idt).Split('.')
+            if ($parts.Length -ge 2) {
+                $claims = ConvertFrom-Base64Url $parts[1] | ConvertFrom-Json
+                $r.account_email = $claims.email
+                $r.account_name  = $claims.name
+                $orgs = $claims.'https://api.openai.com/auth'.organizations
+                if ($orgs) {
+                    $org = $orgs | Where-Object { $_.is_default -eq $true } | Select-Object -First 1
+                    if (-not $org) { $org = $orgs | Select-Object -First 1 }
+                    if ($org) { $r.org_id = $org.id; $r.org_name = $org.title }
+                }
+            }
+        }
+    } catch { }
+    return $r
 }
 
 try {
@@ -89,6 +132,14 @@ try {
     # Best-effort runtime identity (Codex's payload has none).
     $userName = if ($env:USER) { $env:USER } elseif ($env:USERNAME) { $env:USERNAME } else { [Environment]::UserName }
     if (-not $userName) { $userName = $null }
+    # user.id is the domain-qualified workstation login (whoami: DOMAIN\user on
+    # Windows, bare login on POSIX). Empty -> null.
+    $userId = try { ([string](& whoami) 2>$null).Trim() } catch { $null }
+    if (-not $userId) { $userId = $null }
+
+    # Best-effort AI-agent PROVIDER identity from $CODEX_HOME/auth.json (no network).
+    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+    $ident = Get-CodexProviderIdentity $codexHome
 
     # Best-effort runtime host (ECS host.hostname/host.name). name == hostname here
     # (best-effort); a richer source could split FQDN vs short name.
@@ -112,7 +163,7 @@ try {
             kind    = 'event'
         }
         user = [ordered]@{
-            id    = $null
+            id    = $userId
             name  = $userName
         }
         host = [ordered]@{
@@ -124,8 +175,8 @@ try {
                 provider     = 'openai'
                 name         = 'codex-cli'
                 model        = $rawObj.model
-                account      = [ordered]@{ id = $null; name = $null; email = $null }
-                organization = [ordered]@{ id = $null; name = $null }
+                account      = [ordered]@{ id = $ident.account_id; name = $ident.account_name; email = $ident.account_email }
+                organization = [ordered]@{ id = $ident.org_id; name = $ident.org_name }
             }
             conversation_id = $rawObj.session_id
             turn_id         = $rawObj.turn_id

@@ -139,6 +139,22 @@ echo "$src" | jq -e '(.user | has("email")) | not' >/dev/null \
   || fail "audit document still carries user.email — identity schema not applied"
 echo "[assert] identity schema applied (account/organization present, no user.email) ✓"
 
+# Identity derivation (SPEC "Identity derivation"): user.id is the domain-qualified
+# workstation login, always derivable via whoami; account.id is read from
+# CODEX_HOME/auth.json and is populated only when that ChatGPT-auth file exists
+# (API-key auth / no file -> null is valid, so only assert it when present).
+uid=$(echo "$src" | jq -r '.user.id // empty')
+[ -n "$uid" ] || fail "audit document missing user.id — identity derivation not applied"
+echo "[assert] user.id derived (user.id=$uid) ✓"
+
+if [ -f "$CODEX_HOME_DIR/auth.json" ]; then
+  acct=$(echo "$src" | jq -r '.agent_audit.agent.account.id // empty')
+  [ -n "$acct" ] || fail "auth.json present but agent_audit.agent.account.id not populated — provider identity derivation not applied"
+  echo "[assert] provider account.id derived from $CODEX_HOME_DIR/auth.json (account.id=$acct) ✓"
+else
+  echo "[assert] no $CODEX_HOME_DIR/auth.json — skipping provider account.id assertion (API-key auth / null is valid)"
+fi
+
 # --- Cleanup ---------------------------------------------------------------
 echo "[cleanup] removing the synthetic verification document…"
 curl -s -X POST "$ES_URL/$DATA_STREAM/_delete_by_query?refresh=true&ignore_unavailable=true" \

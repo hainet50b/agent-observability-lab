@@ -135,6 +135,23 @@ try {
     }
     Write-Host '[assert] identity schema applied (account/organization present, no user.email) ✓'
 
+    # Identity derivation (SPEC "Identity derivation"): user.id is the
+    # domain-qualified workstation login, always derivable via whoami; account.id is
+    # read from CODEX_HOME/auth.json and populated only when that ChatGPT-auth file
+    # exists (API-key auth / no file -> null is valid, so only assert when present).
+    if (-not $hit.user.id) { Fail 'audit document missing user.id — identity derivation not applied' }
+    Write-Host "[assert] user.id derived (user.id=$($hit.user.id)) ✓"
+
+    $authFile = Join-Path $CodexHome 'auth.json'
+    if (Test-Path -LiteralPath $authFile) {
+        if (-not $hit.agent_audit.agent.account.id) {
+            Fail 'auth.json present but agent_audit.agent.account.id not populated — provider identity derivation not applied'
+        }
+        Write-Host "[assert] provider account.id derived from $authFile (account.id=$($hit.agent_audit.agent.account.id)) ✓"
+    } else {
+        Write-Host "[assert] no $authFile — skipping provider account.id assertion (API-key auth / null is valid)"
+    }
+
     # --- Cleanup ---------------------------------------------------------------
     Write-Host '[cleanup] removing the synthetic verification document…'
     $del = Invoke-RestMethod -Method Post -TimeoutSec 30 `
