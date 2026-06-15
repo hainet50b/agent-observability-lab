@@ -113,6 +113,7 @@ metric name *is* the field. Grouped:
 | Turn | `codex.turn.token_usage` (by `token_type`: input/output/total/reasoning_output/cached…), `codex.turn.e2e_duration_ms`, `codex.turn.ttft.duration_ms`, `codex.turn.ttfm.duration_ms`, `codex.turn.tool.call`, `codex.turn.memory`, `codex.turn.network_proxy` | `model`, `token_type`, `session_source`, `os` |
 | Transport | `codex.websocket.event.duration_ms`, `codex.websocket.request.duration_ms` | |
 | Tools / MCP | `codex.tool.call.duration_ms`, `codex.mcp.tools.list.duration_ms`, `codex.mcp.tools.cache_write.duration_ms` | |
+| Hooks | `codex.hooks.run` | `hook_name`, `status`, `source` |
 | Startup | `codex.startup.phase.duration_ms`, `codex.startup_prewarm.age_at_first_turn_ms`, `codex.sqlite.init.duration_ms` / `.count`, `codex.shell_snapshot.duration_ms`, `codex.db.backfill.duration_ms`, `codex.remote_models.load_cache.duration_ms`, `codex.cloud_config_bundle.load` / `.fetch_attempt` / `.fetch_final` | |
 | Thread / skills | `codex.thread.skills.enabled_total`, `.kept_total`, `.truncated`, `.description_truncated_chars` | |
 | Misc | `codex.plugins.startup_sync`, `codex.rollout_compression.materialize`, `codex.windows_sandbox.elevated_setup_success` | |
