@@ -1,0 +1,206 @@
+# codex-cli-elastic-audit
+
+> OpenAI **Codex CLI** audit hooks → Elasticsearch → Kibana. The **audit**
+> counterpart to `codex-cli-elastic`: a direct hook → Elasticsearch write with
+> **no APM Server** and no OTLP telemetry.
+
+```
+Codex CLI hooks  ──HTTPS (direct)──▶  Elasticsearch  ──▶  Kibana
+(UserPromptSubmit, PostToolUse)       :9200               :5601
+```
+
+This stack captures **what a Codex session did** — each submitted prompt and each
+completed tool call — by writing canonical audit documents straight to
+Elasticsearch from fail-open Codex hooks. There is **no APM Server** here: audit
+is a direct hook → Elasticsearch path that never traverses the OTLP / APM
+pipeline (see [`../../SPEC/agent-audit.md`](../../SPEC/agent-audit.md)). For the
+OpenTelemetry **telemetry** view (metrics / events / traces over APM Server), use
+the sibling [`codex-cli-elastic`](../codex-cli-elastic/) stack instead.
+
+> ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
+> `127.0.0.1`. Never expose this publicly. Audit documents capture prompt text
+> and tool I/O (plaintext in lab mode) — don't run a session containing secrets
+> against this stack, and never commit captured audit data into the repo.
+
+> ⚠️ **Cannot run alongside the other Elastic stacks.** This stack reuses the
+> Elastic backend's fixed `aol-*` container names and host ports (`9200` /
+> `5601`), so it **cannot run at the same time** as `codex-cli-elastic`,
+> `claude-code-elastic`, or `claude-code-otelcol-elastic`. It is an
+> **alternative** to the telemetry stack, not a co-run: `docker compose down` the
+> other stack before bringing this one up.
+
+## Why a separate stack
+
+Telemetry and audit are composed as **separate stacks** — not for physical
+isolation (the lab is single-node) but to keep each stack's load-bearing set
+legible. This stack's compose visibly carries **no APM Server**, and its agent
+home (`.codex`) holds **only** the audit config (`agent-audit.toml` + `hooks.json`,
+no `[otel]` `config.toml`). The two stacks own separate Compose projects, volumes,
+and agent homes. See [`../../SPEC/agent-audit.md`](../../SPEC/agent-audit.md)
+"Where this runs".
+
+## Data streams
+
+Audit records are **agent-cross-cutting**: the AI agent (Codex CLI / Claude Code /
+…) is a document field (`agent_audit.agent.*`), not a segment of the data-stream
+name. Two streams are provisioned by `scripts/setup.sh`:
+
+- `logs-agent_audit.user_prompt-default` — one document per submitted prompt
+  (the `UserPromptSubmit` hook).
+- `logs-agent_audit.tool_call-default` — one document per completed tool call
+  (the `PostToolUse` hook).
+
+Both use **strict** mappings (an unexpected field fails the index rather than
+silently growing the audit schema) and a 30-day retention default.
+
+## Prerequisites
+
+- Docker with a running daemon (`docker compose`).
+- `curl` and `jq` (used by `setup.sh` and the verify scripts).
+- Codex CLI (`codex`), to generate real audit records.
+
+## Quick Tour
+
+The shortest path from clone to "I see Codex prompts and tool calls in
+Elasticsearch."
+
+### 1. Bring the stack up and bootstrap it
+
+```sh
+cd stacks/codex-cli-elastic-audit
+docker compose up -d
+docker compose ps        # wait until both services report healthy
+scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
+```
+
+Kibana is then at <http://localhost:5601>. The two backend services
+(`aol-elasticsearch`, `aol-kibana`) are the `elastic-audit` backend — the same
+local Elasticsearch as the telemetry stack, **minus APM Server**. `scripts/setup.sh`
+runs the post-up bootstrap in one shot — it provisions the two Agent Audit data
+streams and their strict index templates, renders the hook delivery config to
+`.codex/agent-audit.toml` and registers the audit hooks in `.codex/hooks.json`
+(both in this directory), and imports the Agent Audit Kibana **data views** and
+**saved searches**. Steps are idempotent / create-if-absent, so re-run it any
+time. Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the
+Kibana URL with `KIBANA_URL`.
+
+### 2. Point a Codex session at the stack
+
+`scripts/setup.sh` (step 1) wrote a self-contained Codex home at
+`stacks/codex-cli-elastic-audit/.codex/` (gitignored) carrying **only** the audit
+config — `agent-audit.toml` (the hooks' Elasticsearch delivery config) and
+`hooks.json` (the `UserPromptSubmit` + `PostToolUse` registrations). There is no
+`[otel]` `config.toml` — this stack does no telemetry. Launch Codex with
+**`CODEX_HOME`** pointed at it so the hooks are picked up as user-level config:
+
+```sh
+# bash / zsh — from the stack directory
+CODEX_HOME="$PWD/.codex" codex
+```
+
+```fish
+# fish
+env CODEX_HOME="$PWD/.codex" codex
+```
+
+```powershell
+# PowerShell — from the stack directory
+$env:CODEX_HOME = "$PWD\.codex"; codex
+```
+
+> **First run under a fresh `CODEX_HOME` has no credentials.** Because
+> `CODEX_HOME` relocates the entire Codex home, Codex won't see your existing
+> `~/.codex` login. Either `codex login` once under this `CODEX_HOME`, or copy
+> your `~/.codex/auth.json` into `stacks/codex-cli-elastic-audit/.codex/`.
+> Provider identity (`agent_audit.agent.account.*` / `organization.*`) is read
+> from that `auth.json`; without it those fields stay `null` (valid — the
+> workstation `user.id` is still derived). Everything Codex writes here stays in
+> the gitignored `.codex/`.
+
+Then do a little work in the session. Each prompt you submit and each tool call
+Codex completes is reshaped into a canonical `agent_audit.*` document and POSTed
+(fail-open, short timeout) to the local audit data streams. Lab mode stores the
+captured text in **plaintext** for searchability; production-oriented deployments
+should use encrypted content and restricted read access.
+
+> **Entrypoint matters.** The hooks fire from the interactive `codex` REPL. The
+> audit path is independent of telemetry, so it works even though this stack
+> emits no OTLP.
+
+### 3. Verify the audit path (optional)
+
+```sh
+scripts/verify-agent-audit.sh        # UserPromptSubmit -> user_prompt stream
+scripts/verify-tool-call-audit.sh    # PostToolUse      -> tool_call stream
+```
+
+Each follows the 3A pattern: **Arrange** brings the stack up and waits for
+Elasticsearch health; **Act** feeds a synthetic Codex hook payload through the
+configured hook (with `CODEX_HOME` pointed at this stack's `.codex`, exactly as a
+real session invokes it); **Assert** confirms the canonical audit document landed
+in the right stream; **Cleanup** deletes the synthetic document. They need
+`docker` (running daemon), `curl`, `jq`, and a completed `setup.sh`; they **SKIP**
+(exit 0) when the daemon is unreachable or setup has not run. Override the ES
+endpoint with `ES_URL` (`-EsUrl` for the `.ps1`).
+
+### 4. See the audit records
+
+The Agent Audit **data views** — **Agent Audit — User Prompts** and **Agent Audit
+— Tool Calls** — plus their curated saved searches are imported by `scripts/setup.sh`
+(step 1). Open Discover, pick a data view from the selector or open a saved search
+from the Open menu. These views are backed by `logs-agent_audit.*-*`, not by any
+APM data stream.
+
+You can also look directly with a query:
+
+```sh
+# the latest captured prompts
+curl -s 'http://localhost:9200/logs-agent_audit.user_prompt-default/_search?size=5&sort=@timestamp:desc' \
+  -H 'Content-Type: application/json' | jq '.hits.hits[]._source.agent_audit.user_prompt'
+```
+
+### 5. Tear down
+
+```sh
+docker compose down        # keep the Elasticsearch volume
+docker compose down -v     # also wipe captured audit records
+```
+
+## What's deferred
+
+Wired now: the composition (Elasticsearch + Kibana, no APM Server), the two Agent
+Audit data streams with strict mappings, the fail-open `UserPromptSubmit` +
+`PostToolUse` hooks, and the Agent Audit data views + saved searches. Authored
+later, with the human:
+
+- **Prompt / tool-I/O sealing** — lab mode stores captured text in plaintext; an
+  encrypted mode (null `text`, populated `encrypted_text`) is reserved in the
+  schema but not built.
+- **A Claude Code audit variant** — `claude-code-elastic-audit` would reuse this
+  `elastic-audit` backend wholesale, adding only Claude Code's audit hooks.
+
+## Layout
+
+```
+codex-cli-elastic-audit/
+├─ docker-compose.yml                     # thin composition: `include:`s the elastic-audit backend component
+├─ README.md                              # this Quick Tour
+└─ scripts/
+   ├─ setup.sh                            # bootstrap: audit streams + hook config + hooks.json + Kibana import
+   ├─ setup.ps1                           # PowerShell mirror of setup.sh
+   ├─ verify-agent-audit.sh               # UserPromptSubmit -> user_prompt stream verification
+   ├─ verify-agent-audit.ps1              # PowerShell mirror
+   ├─ verify-tool-call-audit.sh           # PostToolUse -> tool_call stream verification
+   └─ verify-tool-call-audit.ps1          # PowerShell mirror
+```
+
+`setup.{sh,ps1}` calls the component bootstrap scripts directly. The backend
+services, their config, the Agent Audit index templates, the Agent Audit Kibana
+NDJSON, and the audit setup / import scripts live in
+`../../components/backends/elastic-audit/`; the Codex CLI agent's audit hooks
+(`hooks/capture-user-prompt.{sh,ps1}`, `hooks/capture-tool-call.{sh,ps1}`), the
+hook delivery-config template, and the render scripts live in
+`../../components/agents/codex-cli/`. `scripts/setup.sh` renders the delivery
+config into this directory's gitignored `.codex/agent-audit.toml`, registers the
+stack-local hooks in `.codex/hooks.json`, provisions the audit data streams, and
+imports those Kibana objects.

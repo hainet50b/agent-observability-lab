@@ -3032,6 +3032,39 @@
     <li><strong>Operator follow-up</strong>: recreate <code>logs-agent_audit.user_prompt-default</code> when convenient to drop the now-unused <code>prompt.*</code> / <code>user.email</code> mapping entries.</li>
   </ul>
 </section>
+  <section>
+    <h2>Split the Codex audit concern into an <code>elastic-audit</code> backend + <code>codex-cli-elastic-audit</code> stack</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Copy vs move.</strong> The backend compose + <code>config/</code> were <em>copied</em> into <code>components/backends/elastic-audit/</code> (the <code>elastic</code> backend keeps its APM Server), but the audit-only assets — <code>setup-agent-audit.{sh,ps1}</code>, the two <code>agent-audit.{user_prompt,tool_call}.template.json</code>, and <code>kibana/agent-audit.ndjson</code> — plus both <code>verify-*-audit.{sh,ps1}</code> pairs were <em>moved</em> with <code>git mv</code> so history is preserved. The only genuinely new backend script is <code>elastic-audit</code>'s <code>import-kibana-objects.{sh,ps1}</code> (modelled on <code>elastic</code>'s, FILES = just <code>agent-audit.ndjson</code>).</li>
+      <li><strong>Shared names, separate state.</strong> Reused the <code>aol-elasticsearch</code> / <code>aol-kibana</code> container names and ports 9200/5601 per the task (the two stacks are alternatives, never co-run). The <code>elasticsearch-data</code> volume stays Compose-project-scoped (no fixed <code>name:</code>), so each stack keeps its own state — per the SPEC invariant.</li>
+      <li><strong>Audit <code>setup.sh</code> is 4 steps</strong> (setup-agent-audit → render-agent-audit → render-hooks → import audit Kibana) and deliberately omits <code>render-config</code>: the audit <code>.codex</code> carries only <code>agent-audit.toml</code> + <code>hooks.json</code>, no <code>[otel]</code> <code>config.toml</code>.</li>
+      <li><strong>Moved verify scripts needed no functional change.</strong> They resolve the agent hooks via <code>REPO_ROOT/components/agents/codex-cli</code> and the stack's <code>.codex</code> via <code>STACK_DIR</code> — both unchanged at the same <code>stacks/&lt;name&gt;/scripts</code> depth. Only header comments changed (new stack name; dropped the now-wrong "sibling of smoke-test.sh" framing, since the audit stack has no smoke test).</li>
+      <li><strong>Executable bits.</strong> Set <code>100755</code> on the new/moved directly-invoked <code>.sh</code> files to match the repo's dominant convention and fix a pre-existing inconsistency (<code>setup-agent-audit.sh</code> and <code>verify-tool-call-audit.sh</code> were committed <code>100644</code> though invoked directly). Config YAML header comments were retitled to the <code>elastic-audit</code> backend (substance byte-identical to <code>elastic</code>'s).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Interactive-session checks ran via the synthetic proxy.</strong> A real <code>codex</code> REPL can't run in this non-interactive environment, so the "session emits only OTLP" / "session lands <code>agent_audit.*</code>" criteria were exercised with the repo's established stand-in — the <code>verify-*-audit.sh</code> scripts feeding synthetic <code>UserPromptSubmit</code> / <code>PostToolUse</code> payloads through the real hooks. Both PASSed live.</li>
+      <li><strong>Operator follow-up.</strong> An existing gitignored <code>stacks/codex-cli-elastic/.codex</code> from earlier runs may still hold a stale <code>agent-audit.toml</code> / <code>hooks.json</code>; the slimmed <code>setup.sh</code> no longer renders them but (create-if-absent) won't delete them. Remove those two files for a strictly telemetry-only <code>.codex</code>.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>A <code>claude-code-elastic-audit</code> stack would now reuse the <code>elastic-audit</code> backend wholesale, adding only Claude Code's audit hooks (the SPEC already anticipates this).</li>
+      <li>The moved <code>setup-agent-audit.{sh,ps1}</code> header still says "(like setup-prompt-audit.sh)"; that prototype sibling now lives in the <code>elastic</code> backend, not <code>elastic-audit</code> — a future cleanup could reword the parenthetical.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Audit is now its own stack. <code>codex-cli-elastic</code> is telemetry-only (OTLP → APM Server → Elasticsearch); the new <code>codex-cli-elastic-audit</code> stack composes an APM-less <code>elastic-audit</code> backend with Codex's hooks to write prompts and tool calls straight to Elasticsearch. Each stack's compose now makes its load-bearing set obvious.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live.</strong> Brought up <code>codex-cli-elastic-audit</code> (ES + Kibana only — <code>docker compose ps</code> shows <em>no</em> <code>aol-apm-server</code>), ran <code>setup.sh</code> (both audit streams provisioned, hooks rendered, 4 Kibana objects imported), then <code>verify-agent-audit.sh</code> and <code>verify-tool-call-audit.sh</code> both PASSed (synthetic <code>UserPromptSubmit</code> → <code>user_prompt</code> stream; <code>PostToolUse</code> → <code>tool_call</code> stream). All four stacks pass <code>docker compose config -q</code>; <code>backends/elastic</code> has zero <code>agent-audit</code> references (grep).</li>
+      <li>Worth a skim: the new <code>stacks/codex-cli-elastic-audit/README.md</code> Quick Tour and the audit/telemetry cross-links added to <code>codex-cli-elastic/README.md</code>.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

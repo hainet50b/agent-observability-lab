@@ -19,9 +19,10 @@ variant would be a separate stack, mirroring `claude-code-otelcol-elastic`).
 > real Codex CLI session at it, and ships the Codex data views plus curated saved
 > searches: `scripts/setup.sh` installs trace routing, renders a Codex `[otel]`
 > telemetry config (see [Point a Codex session](#2-point-a-codex-session-at-the-stack)),
-> imports the Kibana data views and saved searches, and provisions the direct
-> Agent Audit user-prompt path. A **dashboard, ingest filtering, and normalized
-> summary indices** remain deferred. See [What's deferred](#whats-deferred).
+> and imports the Kibana data views and saved searches. A **dashboard, ingest
+> filtering, and normalized summary indices** remain deferred. See
+> [What's deferred](#whats-deferred). For prompt / tool-call **audit**, see the
+> sibling [`codex-cli-elastic-audit`](../codex-cli-elastic-audit/) stack.
 
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
 > `127.0.0.1`. Never expose this publicly. The events/traces channels can capture
@@ -70,13 +71,12 @@ Kibana is then at <http://localhost:5601>. The three backend services
 (`aol-elasticsearch`, `aol-kibana`, `aol-apm-server`) are the same Elastic
 backend the other stacks compose. `scripts/setup.sh` runs the post-up bootstrap
 in one shot — it installs the trace-routing ingest pipeline (isolates Codex's
-spans into a dedicated per-agent trace stream), renders a Codex `[otel]` config
-to `.codex/config.toml` in this directory (pointed at the APM Server OTLP
-endpoint on `:8200`), provisions the Agent Audit user-prompt data stream and
-hook config, and imports the Codex Kibana **data views** (Metrics / Events /
-Traces / Agent Audit) and **saved searches**, plus the shared cross-agent **AI
-Agents — Traces** view. Steps are idempotent / create-if-absent, so re-run it any
-time.
+spans into a dedicated per-agent trace stream), installs the logs-drop pipeline,
+renders a Codex `[otel]` config to `.codex/config.toml` in this directory
+(pointed at the APM Server OTLP endpoint on `:8200`), and imports the Codex Kibana
+**data views** (Metrics / Events / Traces) and **saved searches**, plus the
+shared cross-agent **AI Agents — Traces** view. Steps are idempotent /
+create-if-absent, so re-run it any time.
 Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the Kibana
 URL with `KIBANA_URL`.
 
@@ -122,12 +122,12 @@ register telemetry **globally** instead, copy the `[otel]` block from
 `.codex/config.toml` into your own `~/.codex/config.toml`. Then do a little work
 in the session; telemetry lands in Elasticsearch under `service.name: codex-cli`.
 
-The same setup also registers a fail-open `UserPromptSubmit` hook for **Agent
-Audit**. This is a direct Elasticsearch path, separate from OTel/APM telemetry:
-user prompts are written to `logs-agent_audit.user_prompt-default` using the
-schema in `../../SPEC/agent-audit.md`. Lab mode stores prompt text in plaintext
-for searchability; production-oriented deployments should use encrypted prompt
-content and restricted read access.
+> **Prompt / tool-call audit is a separate stack.** Capturing what a session did
+> (each prompt, each tool call) via fail-open hooks that write straight to
+> Elasticsearch is the **audit** concern — it lives in the sibling
+> [`codex-cli-elastic-audit`](../codex-cli-elastic-audit/) stack (Elasticsearch +
+> Kibana, no APM Server), not here. See
+> [`../../SPEC/agent-audit.md`](../../SPEC/agent-audit.md).
 
 > **Entrypoint matters.** Interactive `codex` emits telemetry; at the time of
 > writing `codex exec` emits no metrics and `codex mcp-server` emits none — so use
@@ -152,17 +152,12 @@ Codex session. It needs `docker` (running daemon), `curl`, `jq`, `base64`; it
 ### 4. See the telemetry
 
 The Codex **data views** — **Codex CLI — Metrics**, **Codex CLI — Events**,
-**Codex CLI — Traces**, **Agent Audit — User Prompts**, and the shared **AI
-Agents — Traces** view — plus the curated saved searches are imported by
-`scripts/setup.sh` (Quick Tour step 1). Open Discover, pick a data view from the
-selector or open a saved search from the Open menu. (A dashboard is still
-deferred — see
+**Codex CLI — Traces**, and the shared **AI Agents — Traces** view — plus the
+curated saved searches are imported by `scripts/setup.sh` (Quick Tour step 1).
+Open Discover, pick a data view from the selector or open a saved search from the
+Open menu. (A dashboard is still deferred — see
 [What's deferred](#whats-deferred); the Traces view and the traces-based searches
 stay empty until a Codex session emits spans after trace routing is installed.)
-
-For direct prompt audit records, open the **Agent Audit — User Prompts** saved
-search. This view is backed by `logs-agent_audit.user_prompt-*`, not by APM data
-streams.
 
 You can also look directly with a query:
 
@@ -187,10 +182,11 @@ docker compose down -v     # also wipe ingested telemetry
 
 Wired now: the composition, the OTLP-path smoke test, trace isolation, a real
 Codex session's `[otel]` telemetry config, the three Codex **data views**
-(Metrics / Events / Traces), direct Agent Audit user-prompt storage, the shared
-cross-agent **AI Agents — Traces** view, and the curated Codex saved searches,
-all with their own import script — modelled on
-`components/agents/claude-code/kibana/`. Authored later, with the human:
+(Metrics / Events / Traces), the shared cross-agent **AI Agents — Traces** view,
+and the curated Codex saved searches, all with their own import script — modelled
+on `components/agents/claude-code/kibana/`. (Prompt / tool-call **audit** is the
+sibling [`codex-cli-elastic-audit`](../codex-cli-elastic-audit/) stack.) Authored
+later, with the human:
 
 - **An overview dashboard** — a Lens dashboard over the Codex data views, the way
   Claude Code's Overview dashboard sits on its views.
@@ -207,21 +203,19 @@ all with their own import script — modelled on
 codex-cli-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
 └─ scripts/
-   ├─ setup.sh                            # bootstrap: trace routing + Codex config + Agent Audit + Kibana import
+   ├─ setup.sh                            # bootstrap: trace routing + logs-drop + Codex config + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
-   ├─ smoke-test.sh                       # agent-independent OTLP-path verification (stack property)
-   ├─ verify-agent-audit.sh               # direct Agent Audit verification
-   └─ verify-agent-audit.ps1              # PowerShell mirror of verify-agent-audit.sh
+   └─ smoke-test.sh                       # agent-independent OTLP-path verification (stack property)
 ```
 
 `setup.{sh,ps1}` calls the component bootstrap scripts directly. The backend
 services, their config, the cross-agent data view, the `traces-apm@custom`
 pipeline body, and the Backend bootstrap scripts live in
 `../../components/backends/elastic/`; the Codex CLI agent's `[otel]` config
-template, hook scripts, render scripts, Kibana data views and saved searches
+template, render scripts, Kibana data views and saved searches
 (`kibana/data-views.ndjson`, `kibana/saved-searches.ndjson`), and Kibana import
 script (`scripts/import-kibana-objects.{sh,ps1}`) live in
 `../../components/agents/codex-cli/`. `scripts/setup.sh` renders the telemetry
-template into this directory's gitignored `.codex/config.toml`, renders
-`.codex/agent-audit.toml`, registers the stack-local hooks, provisions the local
-Agent Audit data stream, and imports those Kibana objects.
+template into this directory's gitignored `.codex/config.toml` and imports those
+Kibana objects. (The direct Agent Audit path — hooks writing straight to
+Elasticsearch — is the sibling `codex-cli-elastic-audit` stack.)

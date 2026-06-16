@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# verify-agent-audit.sh — codex-cli-elastic Agent Audit delivery verification.
+# verify-agent-audit.sh — codex-cli-elastic-audit Agent Audit delivery verification.
 #
-# Sibling of smoke-test.sh, but for the DIRECT Agent Audit path (hook ->
-# Elasticsearch) rather than the OTLP -> APM Server -> Elasticsearch path that
-# smoke-test.sh covers. Follows the 3A pattern (see CONVENTIONS.md):
+# This stack's integration test for the DIRECT Agent Audit path (hook ->
+# Elasticsearch). The audit stack has no OTLP -> APM Server -> Elasticsearch path
+# (that is codex-cli-elastic's smoke-test.sh). Follows the 3A pattern (see CONVENTIONS.md):
 #
 #   Arrange — bring the stack up and wait for Elasticsearch (the audit
 #             destination) to report healthy. Require that scripts/setup.sh has

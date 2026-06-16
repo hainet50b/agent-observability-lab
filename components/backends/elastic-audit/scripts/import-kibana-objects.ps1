@@ -1,13 +1,13 @@
 #!/usr/bin/env pwsh
-# import-kibana-objects.ps1 — import the Elastic backend's cross-agent Kibana
-# saved objects.
+# import-kibana-objects.ps1 — import the elastic-audit backend's Agent Audit
+# Kibana saved objects.
 #
 # PowerShell mirror of import-kibana-objects.sh (same pairing as ralph.sh /
-# ralph.ps1). Scope: **cross-agent telemetry backend assets only** — agent-specific
-# assets (per-agent data views, saved searches, dashboards) are imported by each
-# agent's own import script (e.g. components/agents/claude-code/scripts/import-kibana-objects.ps1);
-# the cross-agent Agent Audit assets are imported by the elastic-audit backend.
-# A stack composes the two by running this script first, then the agent's.
+# ralph.ps1). Scope: the cross-agent **Agent Audit** assets this backend owns —
+# the Agent Audit data views (logs-agent_audit.user_prompt-* /
+# logs-agent_audit.tool_call-*) and their saved searches. These are
+# agent-cross-cutting (the AI agent is a document field, not a stream-name
+# segment), so they belong to the backend, not to any single agent's import script.
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
 # `_import?overwrite=true` API. Prints the per-file import result.
@@ -35,14 +35,12 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 
-# The cross-agent assets this backend owns: the AI Agents — Traces data view
-# (traces-apm-agents_*). Agent-specific data views / saved searches / dashboards
-# are imported by the agent's own import script; the cross-agent Agent Audit
-# assets live in the elastic-audit backend (composed by *-elastic-audit stacks),
-# not here. Each NDJSON is self-contained (its saved search's data-view reference
-# resolves within the same file).
+# The Agent Audit assets this backend owns: the Agent Audit — User Prompts and
+# Agent Audit — Tool Calls data views + saved searches (the cross-agent hook->ES
+# audit streams logs-agent_audit.*-*). Each NDJSON is self-contained (its saved
+# search's data-view reference resolves within the same file).
 $Files = @(
-    'kibana/agents-data-views.ndjson'
+    'kibana/agent-audit.ndjson'
 )
 
 function Import-File {
@@ -75,10 +73,10 @@ function Import-File {
     Write-Host "[import] $File -> $($result.successCount) object(s) imported"
 }
 
-Write-Host "[import] importing Kibana saved objects into $KibanaUrl…"
+Write-Host "[import] importing Agent Audit Kibana saved objects into $KibanaUrl…"
 foreach ($f in $Files) {
     Import-File -File $f
 }
 
 Write-Host ""
-Write-Host "PASS: backend cross-agent Kibana objects imported into $KibanaUrl."
+Write-Host "PASS: Agent Audit Kibana objects imported into $KibanaUrl."

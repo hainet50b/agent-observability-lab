@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# import-kibana-objects.sh — import the Elastic backend's cross-agent Kibana
-# saved objects.
+# import-kibana-objects.sh — import the elastic-audit backend's Agent Audit
+# Kibana saved objects.
 #
-# Scope: **cross-agent telemetry backend assets only** — agent-specific assets
-# (per-agent data views, saved searches, dashboards) are imported by each agent's
-# own import script (e.g. components/agents/claude-code/scripts/import-kibana-objects.sh);
-# the cross-agent Agent Audit assets are imported by the elastic-audit backend. A
-# stack composes the two by running this script first, then the agent's.
+# Scope: the cross-agent **Agent Audit** assets this backend owns — the Agent
+# Audit data views (logs-agent_audit.user_prompt-* / logs-agent_audit.tool_call-*)
+# and their saved searches. These are agent-cross-cutting (the AI agent is a
+# document field, not a stream-name segment), so they belong to the backend, not
+# to any single agent's import script.
 #
 # Imports the NDJSON files in ../kibana/ through the Kibana Saved Objects
 # `_import?overwrite=true` API. Prints the per-file import result.
@@ -35,14 +35,12 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq   >/dev/null 2>&1 || skip "jq not found"
 
-# The cross-agent assets this backend owns: the AI Agents — Traces data view
-# (traces-apm-agents_*). Agent-specific data views / saved searches / dashboards
-# are imported by the agent's own import script; the cross-agent Agent Audit
-# assets live in the elastic-audit backend (composed by *-elastic-audit stacks),
-# not here. Each NDJSON is self-contained (its saved search's data-view reference
-# resolves within the same file).
+# The Agent Audit assets this backend owns: the Agent Audit — User Prompts and
+# Agent Audit — Tool Calls data views + saved searches (the cross-agent hook->ES
+# audit streams logs-agent_audit.*-*). Each NDJSON is self-contained (its saved
+# search's data-view reference resolves within the same file).
 FILES="
-kibana/agents-data-views.ndjson
+kibana/agent-audit.ndjson
 "
 
 import_file() {
@@ -60,10 +58,10 @@ import_file() {
   echo "[import] $f -> $count object(s) imported ✓"
 }
 
-echo "[import] importing Kibana saved objects into $KIBANA_URL…"
+echo "[import] importing Agent Audit Kibana saved objects into $KIBANA_URL…"
 for f in $FILES; do
   import_file "$f"
 done
 
 echo
-echo "PASS: backend cross-agent Kibana objects imported into $KIBANA_URL."
+echo "PASS: Agent Audit Kibana objects imported into $KIBANA_URL."

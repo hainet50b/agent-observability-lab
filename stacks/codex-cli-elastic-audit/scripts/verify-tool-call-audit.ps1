@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# verify-tool-call-audit.ps1 — codex-cli-elastic Agent Audit tool-call verification
+# verify-tool-call-audit.ps1 — codex-cli-elastic-audit Agent Audit tool-call verification
 # (PowerShell mirror of verify-tool-call-audit.sh; see that file's header for the
 # full rationale). Verifies the DIRECT Agent Audit tool-call path (PostToolUse hook
 # -> logs-agent_audit.tool_call-default), not the OTLP/APM path. 3A pattern:

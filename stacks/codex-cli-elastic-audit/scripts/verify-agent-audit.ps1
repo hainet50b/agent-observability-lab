@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# verify-agent-audit.ps1 — codex-cli-elastic Agent Audit delivery verification
+# verify-agent-audit.ps1 — codex-cli-elastic-audit Agent Audit delivery verification
 # (PowerShell mirror of verify-agent-audit.sh; see that file's header for the full
 # rationale). Verifies the DIRECT Agent Audit path (UserPromptSubmit hook ->
 # Elasticsearch), not the OTLP/APM path. 3A pattern:

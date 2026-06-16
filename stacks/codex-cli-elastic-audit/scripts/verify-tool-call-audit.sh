@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# verify-tool-call-audit.sh — codex-cli-elastic Agent Audit tool-call verification.
+# verify-tool-call-audit.sh — codex-cli-elastic-audit Agent Audit tool-call verification.
 #
 # Sibling of verify-agent-audit.sh (which covers the UserPromptSubmit -> user_prompt
 # stream path); this one covers the DIRECT Agent Audit tool-call path (Codex's
-# PostToolUse hook -> logs-agent_audit.tool_call-default), not the OTLP/APM path that
-# smoke-test.sh covers. Follows the 3A pattern (see CONVENTIONS.md):
+# PostToolUse hook -> logs-agent_audit.tool_call-default). The audit stack has no
+# OTLP/APM path (that is codex-cli-elastic's smoke-test.sh). Follows the 3A pattern (see CONVENTIONS.md):
 #
 #   Arrange — bring the stack up and wait for Elasticsearch (the audit destination)
 #             healthy. Require scripts/setup.sh to have rendered .codex/hooks.json
