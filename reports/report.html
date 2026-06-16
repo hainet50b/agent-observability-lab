@@ -3097,6 +3097,38 @@
       <li>Worth a look: the SC2015 rewrites in <code>components/agents/codex-cli/hooks/capture-user-prompt.sh</code> and <code>capture-tool-call.sh</code> — the new <code>if … then identity=$parsed; else log …; fi</code> changes behavior slightly on purpose (the fail-open log no longer fires when the parse actually succeeded).</li>
     </ul>
   </section>
+  <section>
+    <h2>Format PowerShell scripts with Invoke-Formatter and clear the positional-parameter / empty-catch findings</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>PSScriptAnalyzer 1.25.0 was already installed</strong> on this host (unlike <code>shfmt</code>/<code>shellcheck</code> in the sibling shell task), so no download was needed — <code>Invoke-Formatter</code> and <code>Invoke-ScriptAnalyzer</code> ran directly with the repo's <code>PSScriptAnalyzerSettings.psd1</code>.</li>
+      <li><strong>Scope = <code>stacks/</code> + <code>components/</code></strong> (the CONVENTIONS gate's <code>Get-ChildItem -Recurse stacks, components</code> target), excluding the vendored plugin scripts. The two other tracked <code>*.ps1</code> — <code>ralph.ps1</code> and <code>dev/sync-claude-settings.ps1</code> — already had zero findings, so they were left untouched; the final clean verification still covers all 24 tracked <code>*.ps1</code>.</li>
+      <li><strong>Formatting cleared 21 <code>PSUseConsistentIndentation</code> findings</strong> on its own. Only the 10 files that actually had findings ended up modified — the 12 already-conformant scripts produced no diff, keeping the change minimal.</li>
+      <li><strong>Line endings:</strong> the working tree was CRLF but <code>.gitattributes</code> normalizes to LF (<code>eol=lf</code>); I wrote each formatted file back as LF + single trailing newline (via <code>[IO.File]::WriteAllText</code>) to match <code>.editorconfig</code> rather than letting <code>Set-Content</code> reintroduce CRLF.</li>
+      <li><strong>PSAvoidUsingPositionalParameters</strong> (22): the <code>Invoke-Step</code> calls in the four <code>setup.ps1</code> files and the two <code>Invoke-Provision</code> calls in <code>setup-agent-audit.ps1</code> were switched to named parameters (<code>-Label/-Path/-StepArgs</code> and <code>-Template/-DataStream/-TemplateFile</code> — read off each helper's own <code>param()</code>). Pure call-site change; argument values are identical.</li>
+      <li><strong>PSAvoidUsingEmptyCatchBlock</strong> (5): the fail-open <code>catch { }</code> blocks in <code>capture-prompt.ps1</code>, <code>capture-tool-call.ps1</code>, <code>capture-user-prompt.ps1</code>, <code>verify-agent-audit.ps1</code>, <code>verify-tool-call-audit.ps1</code> got the behavior-neutral body <code>catch { Write-Verbose "fail-open: $_" }</code> — keeps fail-open at default verbosity while leaving the rule live for future accidental empties.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. After the hand edits I re-ran <code>Invoke-Formatter</code> over the touched files so the new backtick continuations were formatter-normalized rather than hand-indented.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>(Same as the shell task) recording the analyzer/formatter tool versions or an install path in <code>CONVENTIONS.md</code> would make the format/lint gate reproducible across hosts.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>All tracked PowerShell scripts are now <code>Invoke-Formatter</code>-formatted (4-space indent) and <code>PSScriptAnalyzer</code>-clean — helper calls use named parameters and the fail-open <code>catch</code> blocks carry a verbose-log body instead of being empty.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified:</strong> <code>Invoke-ScriptAnalyzer -Settings PSScriptAnalyzerSettings.psd1</code> reports 0 findings across all 24 tracked <code>*.ps1</code>, and every edited file parses cleanly (<code>[Parser]::ParseFile</code>).</li>
+      <li>Worth a glance: the <code>catch { Write-Verbose … }</code> bodies are a deliberate behavior tweak (the catches stay fail-open but now emit a verbose trace), and the <code>setup.ps1</code> step calls are now self-documenting via named parameters.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

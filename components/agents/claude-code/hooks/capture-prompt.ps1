@@ -45,7 +45,7 @@ try {
             $cfg = Get-Content -Raw -LiteralPath $ClaudeConfig | ConvertFrom-Json
             $userEmail = [string]$cfg.oauthAccount.emailAddress
             $organization = [string]$cfg.oauthAccount.organizationName
-        } catch { }
+        } catch { Write-Verbose "fail-open: $_" }
     }
 
     $hostname = [System.Net.Dns]::GetHostName()

@@ -44,15 +44,15 @@ function Invoke-Step {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-Invoke-Step '1/4 - trace-routing ingest pipeline' (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') $es
-Invoke-Step '2/4 - logs-drop ingest pipeline (logs-apm.app@custom)' `
-    (Join-Path $C 'backends/elastic/scripts/setup-logs-drop.ps1') $es
-Invoke-Step '3/4 - local Codex session config (.codex/config.toml, [otel] telemetry)' `
-    (Join-Path $C 'agents/codex-cli/scripts/render-config.ps1') `
-    @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
-Invoke-Step '4/4 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
-    (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') @{}
-Invoke-Step '4/4 - Kibana saved objects (2/2): Codex agent data views + saved searches' `
-    (Join-Path $C 'agents/codex-cli/scripts/import-kibana-objects.ps1') @{}
+Invoke-Step -Label '1/4 - trace-routing ingest pipeline' -Path (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') -StepArgs $es
+Invoke-Step -Label '2/4 - logs-drop ingest pipeline (logs-apm.app@custom)' `
+    -Path (Join-Path $C 'backends/elastic/scripts/setup-logs-drop.ps1') -StepArgs $es
+Invoke-Step -Label '3/4 - local Codex session config (.codex/config.toml, [otel] telemetry)' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-config.ps1') `
+    -StepArgs @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
+Invoke-Step -Label '4/4 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
+    -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs @{}
+Invoke-Step -Label '4/4 - Kibana saved objects (2/2): Codex agent data views + saved searches' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/import-kibana-objects.ps1') -StepArgs @{}
 
 Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

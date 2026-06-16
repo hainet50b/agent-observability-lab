@@ -46,15 +46,15 @@ function Invoke-Step {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-Invoke-Step '1/4 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)' `
-    (Join-Path $C 'backends/elastic-audit/scripts/setup-agent-audit.ps1') $es
-Invoke-Step '2/4 - Agent Audit delivery config (.codex/agent-audit.toml, local ES defaults)' `
-    (Join-Path $C 'agents/codex-cli/scripts/render-agent-audit.ps1') `
-    @{ EsUrl = $EsUrlLocal; TargetDir = $StackDir }
-Invoke-Step '3/4 - UserPromptSubmit + PostToolUse Agent Audit hooks (.codex/hooks.json, ES delivery)' `
-    (Join-Path $C 'agents/codex-cli/scripts/render-hooks.ps1') `
-    @{ TargetDir = $StackDir }
-Invoke-Step '4/4 - Kibana saved objects: Agent Audit data views + saved searches' `
-    (Join-Path $C 'backends/elastic-audit/scripts/import-kibana-objects.ps1') @{}
+Invoke-Step -Label '1/4 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)' `
+    -Path (Join-Path $C 'backends/elastic-audit/scripts/setup-agent-audit.ps1') -StepArgs $es
+Invoke-Step -Label '2/4 - Agent Audit delivery config (.codex/agent-audit.toml, local ES defaults)' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-agent-audit.ps1') `
+    -StepArgs @{ EsUrl = $EsUrlLocal; TargetDir = $StackDir }
+Invoke-Step -Label '3/4 - UserPromptSubmit + PostToolUse Agent Audit hooks (.codex/hooks.json, ES delivery)' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-hooks.ps1') `
+    -StepArgs @{ TargetDir = $StackDir }
+Invoke-Step -Label '4/4 - Kibana saved objects: Agent Audit data views + saved searches' `
+    -Path (Join-Path $C 'backends/elastic-audit/scripts/import-kibana-objects.ps1') -StepArgs @{}
 
 Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/verify-agent-audit.ps1 and scripts/verify-tool-call-audit.ps1."

@@ -108,15 +108,15 @@ try {
                 Write-Host "[assert] found $($r.count) audit document(s) for conversation_id=$cid ✓"
                 $landed = $true; break
             }
-        } catch { }
+        } catch { Write-Verbose "fail-open: $_" }
         Start-Sleep -Seconds 2
     }
     if (-not $landed) { Fail "no audit document landed in $DataStream for conversation_id=$cid within timeout" }
 
     $search = @{ size = 1; query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
     $hit = (Invoke-RestMethod -Method Post -TimeoutSec 10 `
-        -Uri "$EsApi/$DataStream/_search?ignore_unavailable=true&allow_no_indices=true" `
-        -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
+            -Uri "$EsApi/$DataStream/_search?ignore_unavailable=true&allow_no_indices=true" `
+            -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
     $tc = $hit.agent_audit.tool_call
     Write-Host "[assert] document: action=$($hit.event.action) tool=$($tc.tool.name) call_id=$($tc.tool.call_id) input.length=$($tc.input.length) output.length=$($tc.output.length)"
 

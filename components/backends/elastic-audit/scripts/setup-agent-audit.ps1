@@ -94,10 +94,10 @@ function Invoke-Provision($Template, $DataStream, $TemplateFile) {
     Write-Host ""
 }
 
-Invoke-Provision 'logs-agent_audit.user_prompt' 'logs-agent_audit.user_prompt-default' `
-    (Join-Path $ComponentDir 'elasticsearch/agent-audit.user_prompt.template.json')
-Invoke-Provision 'logs-agent_audit.tool_call' 'logs-agent_audit.tool_call-default' `
-    (Join-Path $ComponentDir 'elasticsearch/agent-audit.tool_call.template.json')
+Invoke-Provision -Template 'logs-agent_audit.user_prompt' -DataStream 'logs-agent_audit.user_prompt-default' `
+    -TemplateFile (Join-Path $ComponentDir 'elasticsearch/agent-audit.user_prompt.template.json')
+Invoke-Provision -Template 'logs-agent_audit.tool_call' -DataStream 'logs-agent_audit.tool_call-default' `
+    -TemplateFile (Join-Path $ComponentDir 'elasticsearch/agent-audit.tool_call.template.json')
 
 Write-Host "PASS: Agent Audit stores ready on $EsUrl (strict mappings, 30-day retention):"
 Write-Host "  logs-agent_audit.user_prompt-default — one document per submitted prompt."

@@ -91,7 +91,7 @@ function Get-CodexProviderIdentity($codexHome) {
                 }
             }
         }
-    } catch { }
+    } catch { Write-Verbose "fail-open: $_" }
     return $r
 }
 

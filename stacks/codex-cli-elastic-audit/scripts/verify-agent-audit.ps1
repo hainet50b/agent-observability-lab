@@ -108,7 +108,7 @@ try {
                 Write-Host "[assert] found $($r.count) audit document(s) for conversation_id=$cid ✓"
                 $landed = $true; break
             }
-        } catch { }
+        } catch { Write-Verbose "fail-open: $_" }
         Start-Sleep -Seconds 2
     }
     if (-not $landed) { Fail "no audit document landed in $DataStream for conversation_id=$cid within timeout" }
@@ -116,8 +116,8 @@ try {
     # Informational: show the canonical document that landed.
     $search = @{ size = 1; query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
     $hit = (Invoke-RestMethod -Method Post -TimeoutSec 10 `
-        -Uri "$EsApi/$DataStream/_search?ignore_unavailable=true&allow_no_indices=true" `
-        -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
+            -Uri "$EsApi/$DataStream/_search?ignore_unavailable=true&allow_no_indices=true" `
+            -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
     Write-Host "[assert] document: action=$($hit.event.action) host.name=$($hit.host.name) host.hostname=$($hit.host.hostname) provider=$($hit.agent_audit.agent.provider) model=$($hit.agent_audit.agent.model) user_prompt.length=$($hit.agent_audit.user_prompt.length)"
     # Host-enrichment assertion: host.name/host.hostname must be present (added to
     # the strict mapping and emitted by the hook).
