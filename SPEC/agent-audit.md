@@ -85,6 +85,42 @@ Field ownership:
 - Hook senders should construct near-final JSON documents before indexing. Ingest pipelines for audit streams should stay minimal: defaulting, validation, and routing are acceptable, but prompt redaction/encryption belongs in the sender.
 - `logs-agent_audit.*` is access-controlled separately from OTel/APM telemetry indices. The intended production posture is that only audit-authorized users can read the audit data stream.
 
+## Tool call documents
+
+Tool call audit documents in `logs-agent_audit.tool_call-default` record one tool invocation each, captured from Codex's `PostToolUse` hook (which carries both the tool input and its result). Canonical shape:
+
+```json
+{
+  "@timestamp": "...",
+  "event": { "action": "tool-call", "created": "...", "dataset": "agent_audit.tool_call", "kind": "event" },
+  "user": { "id": "...", "name": "..." },
+  "host": { "name": "...", "hostname": "..." },
+  "agent_audit": {
+    "agent": {
+      "provider": "openai", "name": "codex-cli", "model": "...",
+      "account": { "id": "...", "name": "...", "email": "..." },
+      "organization": { "id": "...", "name": "..." }
+    },
+    "conversation_id": "...",
+    "turn_id": "...",
+    "tool_call": {
+      "tool":   { "name": "...", "call_id": "..." },
+      "input":  { "text": "...", "encrypted_text": null, "length": 123 },
+      "output": { "text": "...", "encrypted_text": null, "length": 456 }
+    }
+  }
+}
+```
+
+`event.*`, `user.*`, `host.*`, `agent_audit.agent.*`, `conversation_id`, and `turn_id` carry the same meaning and identity derivation as user prompt documents. Tool-call-specific ownership:
+
+- `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
+- `agent_audit.tool_call.tool.name` ← Codex `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP trace_safe `codex.tool_result` `call_id`).
+- `agent_audit.tool_call.input` ← `tool_input`, `.output` ← `tool_response`. Both Codex fields are heterogeneous JSON (an object for MCP tools; a string or object for shell tools), so the sender **serializes each to a JSON string** into `.text`, with `.length` the character count. The strict mapping then sees one scalar per side, not the tool's arbitrary nested keys.
+- `audit.mode = plaintext` populates `.text`; other modes null it and reserve `.encrypted_text` (the same gate as the prompt body).
+- No success / exit field — Codex's `tool_response` is opaque and not reliably parseable across tools.
+- Source is Codex `PostToolUse` **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`, `agent.model` ← `model`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict).
+
 ## Identity derivation
 
 Identity fields are populated best-effort by the hook sender, **locally and with no network call** (the fail-open contract): any missing tool, file, or claim leaves the field `null` and never blocks the prompt.
@@ -103,6 +139,11 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 - `agent_audit.prompt.text` is mapped as searchable `text` in the lab.
 - `agent_audit.prompt.encrypted_text` is mapped as `keyword` with `index: false`; encrypted prompt bodies are stored but not searchable.
 - `agent_audit.prompt.length` is mapped as `long`.
+- `agent_audit.tool_call.tool.name` and `.tool.call_id` are mapped as `keyword`.
+- `agent_audit.tool_call.input.text` and `.output.text` are mapped as **`wildcard`**, not `keyword` (a tool output over Lucene's ~32 KB term limit would reject the whole document) and not `text` (the audit need is substring / regexp over machine-generated JSON, not word relevance). The prompt body stays `text` because it is natural language — mapping follows data nature, so the two streams differ deliberately.
+- `agent_audit.tool_call.input.encrypted_text` and `.output.encrypted_text` are mapped as `keyword` with `index: false`.
+- `agent_audit.tool_call.input.length` and `.output.length` are mapped as `long`.
+- Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is later sealed or capped.
 - Audit data streams should have configurable retention. The lab default retention is one month, after which documents may be deleted.
 
 ## Delivery and authorization
