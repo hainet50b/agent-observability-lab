@@ -182,6 +182,75 @@ isolate (PII once content gates are on, independent deletion/ILM/RBAC,
 experimental/high-churn) are the same as for Claude Code; only traces are routed
 (metrics/logs are already per-service).
 
+## Volume reduction (ingest drops)
+
+The dominant document producers are streaming fragments with no analytical value.
+Two ingest drops remove them; measured on a representative session they cut
+**~94% of trace spans** and **~91% of event/`log_only` docs** with no loss of
+content (Codex's export carries none — see below). Two rules govern the design:
+
+- **Leaf-only.** An ES ingest pipeline is stateless and per-document, so it cannot
+  reparent children — only a span that is *never* a `parent.id` is safe to drop
+  without orphaning descendants.
+- **Service-scoped.** `traces-apm@custom` and `logs-apm.app@custom` are **shared**
+  across every producer (claude-code, codex_cli_rs, smoke-test, future agents), so
+  **both drop conditions are gated on `ctx.service?.name == 'codex_cli_rs'`** to
+  confine the effect to Codex CLI — matching on span name / `event_kind` alone
+  would also hit any other producer that happens to emit the same value.
+
+**Traces — `traces-apm@custom`, dropped *before* the reroutes** (so dropped spans
+never reach routing):
+
+| `span.name` | role | leaf? | share |
+| --- | --- | --- | --- |
+| `receiving` | per-SSE-chunk receive tick (`core/src/session/turn.rs`, ~8 µs) | **yes** (0 children) | ~47% of spans |
+| `handle_responses` | per-SSE-event handler; parents `receiving` **and** the meaningful `handle_output_item_done → build_tool_call / handle_tool_call` tool subtree | **no** (intermediate) | ~47% of spans |
+
+`receiving` is a true leaf — dropping it is free. `handle_responses` is
+intermediate: dropping it **orphans** the tool-call subtree and degrades the APM
+waterfall / flame graph. We drop it anyway by **explicit decision** — at
+production scale (hundreds of users) individual trace waterfalls are rarely
+opened (consumption is aggregate / dashboard), the volume is decisive (~0.86 TB /
+90 d in a 300-user × 150-turn/day × 1-replica model), and orphans self-heal within
+the data stream's retention. Condition:
+`ctx.service?.name == 'codex_cli_rs' && (ctx.span?.name == 'receiving' ||
+ctx.span?.name == 'handle_responses')`.
+
+**Logs — `logs-apm.app@custom`** (created if absent; the managed
+`logs-apm.app@default-pipeline` already calls it via `ignore_missing_pipeline`, so
+creating it activates it). Drop the three **verified** streaming-delta
+`event_kind`s — together ~91% of the stream:
+
+```
+ctx.service?.name == 'codex_cli_rs' && (
+     ctx.labels?.event_kind == 'response.output_text.delta'
+  || ctx.labels?.event_kind == 'response.function_call_arguments.delta'
+  || ctx.labels?.event_kind == 'response.custom_tool_call_input.delta'
+)
+```
+
+`?.` is required: `event_kind` is **absent** on the most valuable events
+(`codex.user_prompt`, `codex.tool_result`, `response.completed`, …) and
+`null == '…'` is safely `false`, so they are kept.
+
+Why an **explicit allowlist, not `endsWith('.delta')`**: these three are confirmed
+against the OpenAI Responses API streaming spec as incremental fragments whose
+complete value lands on a terminal `.done` event — but there is **no documented
+universal guarantee** that *every* `.delta` event is a content-free pure increment,
+and the API has other / future `.delta` kinds (refusal, reasoning-summary, …). A
+wildcard would blindly drop unverified and future documents — the same
+"verify, don't assume" rule that forbids dropping an unproven-leaf span. A new
+`.delta` kind joins the list only after its content / reconstructability is
+verified.
+
+**No content is lost.** Codex's `codex_otel.log_only` / `trace_safe` export strips
+conversation content from these events entirely — the delta docs (and even the
+`.done` twins) carry only metadata + `duration_ms`. Per-turn token counts survive
+on `response.completed`; latency survives in metrics
+(`codex.turn.ttft.duration_ms`, `codex.turn.e2e_duration_ms`). **Metrics are not
+dropped** — they are the smallest stream and the only source of internal-runtime
+instruments (startup phases, MCP cache, sqlite, transport; see Metrics above).
+
 ## Content / privacy gates
 
 - **`otel.log_user_prompt`** (default `false`) — when `true`, the prompt **text**
