@@ -2950,6 +2950,34 @@
 <h3>Review highlights</h3>
 <p><code>_simulate</code> verified — a <code>codex_cli_rs</code> doc with <code>labels.prompt</code> → <code>[REDACTED]</code>; a doc lacking it → field not created; a <code>claude-code</code> doc → untouched. Pipeline PUT acknowledged. <strong>Live-Codex-turn confirmation is a human step</strong> — please run a real Codex turn with <code>log_user_prompt=true</code> and confirm the log_only prompt doc lands with <code>prompt</code> = <code>[REDACTED]</code>.</p>
 </section>
+
+<section>
+<h2>Characterize the Codex PostToolUse hook payload</h2>
+<p class="ts">Task: Add a stack-local <code>PostToolUse</code> capture hook (POSIX + PowerShell) under <code>components/agents/codex-cli/hooks/</code>, registered via <code>render-hooks.{sh,ps1}</code>, appending each raw stdin payload to <code>.codex/hook-captures/tool-call.ndjson</code> (fire-and-forget, no ES, always exit 0).</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li>Modelled the new <code>capture-tool-call.{sh,ps1}</code> on the <em>original</em> characterization version of <code>capture-user-prompt</code> (git <code>a1a9d9e</code>), not its current production form — the current one resolves identity and POSTs to Elasticsearch, which is explicitly out of scope here. Same contract: nothing to stdout, always exit 0, jq/ConvertFrom-Json happy path with a raw-verbatim degraded fallback.</li>
+  <li>The four extracted keys (<code>tool_name</code> / <code>tool_use_id</code> / <code>tool_input</code> / <code>tool_response</code>) are best-effort guesses using Claude Code's PostToolUse names; on a miss the field is <code>null</code> and the truth stays in <code>raw</code>. Documented this in the hook header — surfacing that mismatch is the whole purpose of the characterization hook.</li>
+  <li>Registered <code>PostToolUse</code> as a second event in <code>hooks.json</code> alongside the existing <code>UserPromptSubmit</code>, in both <code>render-hooks.sh</code> (heredoc) and <code>render-hooks.ps1</code> (ordered hashtable). Both reference the hook by absolute path with a <code>pwsh</code> <code>commandWindows</code> form, matching the existing entry.</li>
+  <li>Left the stack <code>setup.sh</code>/<code>.ps1</code> narration ("6/7 — UserPromptSubmit Agent Audit hook") untouched — the task scopes registration to <code>render-hooks</code>, which already runs from setup; the echo text is cosmetic and editing it was not required.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None mechanically. The <strong>actual</strong> Codex PostToolUse key names can only be confirmed by a live session — see Review highlights.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>Once the live capture confirms the real key names, a follow-up task can reshape the captured fields into the canonical <code>agent_audit</code> tool-result shape and deliver them to a <code>logs-agent_audit.tool_result-default</code> stream — the tool-call analogue of the existing user-prompt audit path.</p>
+
+<h3>Change summary</h3>
+<p>A Codex session launched from this stack now also runs a <code>PostToolUse</code> hook that records every completed tool call's raw payload (plus best-effort tool name / id / input / response) to a local <code>.codex/hook-captures/tool-call.ndjson</code> — a characterization probe to discover Codex's tool-call payload shape, with no effect on the session and no data leaving the box.</p>
+
+<h3>Review highlights</h3>
+<ul>
+  <li>Verified mechanically: synthetic <strong>shell-tool</strong> and <strong>MCP-tool</strong> payloads both capture all four fields; a non-JSON payload falls through to the raw-verbatim path; every case exits 0 with <strong>empty stdout</strong> (diagnostics on stderr); the PowerShell mirror behaves identically; both <code>render-hooks</code> scripts emit valid <code>hooks.json</code> with both <code>UserPromptSubmit</code> and <code>PostToolUse</code>.</li>
+  <li><strong>Live confirmation is a human step</strong>: launch a Codex session with <code>CODEX_HOME=&lt;stack&gt;/.codex</code>, run a real shell tool and a real MCP tool, then inspect <code>.codex/hook-captures/tool-call.ndjson</code> — compare each record's <code>raw</code> object against the four extracted fields to learn Codex's actual key names (any that come through <code>null</code> are named differently and live in <code>raw</code>).</li>
+</ul>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

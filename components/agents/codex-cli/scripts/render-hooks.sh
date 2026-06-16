@@ -2,13 +2,18 @@
 #
 # render-hooks.sh — write the Codex CLI agent's stack-local .codex/hooks.json.
 #
-# Registers the Agent Audit hook hooks/capture-user-prompt.{sh,ps1} on Codex's
-# `UserPromptSubmit` event into <target>/.codex/hooks.json, so a Codex session
-# launched with CODEX_HOME=<target>/.codex picks it up as user-level hooks config
-# — coexisting with the [otel] config.toml that render-config writes (Codex reads
-# hooks.json and config.toml side by side under CODEX_HOME). At run time the hook
-# delivers each submitted prompt to the local Agent Audit data stream using the
-# delivery config in .codex/agent-audit.toml (see render-agent-audit.sh).
+# Registers two hooks into <target>/.codex/hooks.json, so a Codex session
+# launched with CODEX_HOME=<target>/.codex picks them up as user-level hooks
+# config — coexisting with the [otel] config.toml that render-config writes
+# (Codex reads hooks.json and config.toml side by side under CODEX_HOME):
+#   * UserPromptSubmit -> hooks/capture-user-prompt.{sh,ps1} — the production
+#     Agent Audit hook; at run time it delivers each submitted prompt to the
+#     local Agent Audit data stream using the delivery config in
+#     .codex/agent-audit.toml (see render-agent-audit.sh).
+#   * PostToolUse -> hooks/capture-tool-call.{sh,ps1} — the tool-call
+#     CHARACTERIZATION hook; appends each raw PostToolUse payload to
+#     .codex/hook-captures/tool-call.ndjson (no Elasticsearch, fire-and-forget)
+#     to discover Codex's exact tool-call payload keys.
 #
 # The hook scripts are referenced by ABSOLUTE path (resolved from this
 # component): `command` for POSIX hosts and `commandWindows` (pwsh) for Windows.
@@ -27,12 +32,16 @@ COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 HOOKS_DIR="$COMPONENT_DIR/hooks"
 HOOK_SH="$HOOKS_DIR/capture-user-prompt.sh"
 HOOK_PS1="$HOOKS_DIR/capture-user-prompt.ps1"
+TOOL_SH="$HOOKS_DIR/capture-tool-call.sh"
+TOOL_PS1="$HOOKS_DIR/capture-tool-call.ps1"
 
 target=${1:-}
 [ -n "$target" ] || { echo "usage: render-hooks.sh <target-dir>" >&2; exit 2; }
 
 [ -f "$HOOK_SH" ]  || { echo "FAIL: hook not found: $HOOK_SH"  >&2; exit 1; }
 [ -f "$HOOK_PS1" ] || { echo "FAIL: hook not found: $HOOK_PS1" >&2; exit 1; }
+[ -f "$TOOL_SH" ]  || { echo "FAIL: hook not found: $TOOL_SH"  >&2; exit 1; }
+[ -f "$TOOL_PS1" ] || { echo "FAIL: hook not found: $TOOL_PS1" >&2; exit 1; }
 
 out="$target/.codex/hooks.json"
 if [ -e "$out" ]; then
@@ -55,6 +64,19 @@ cat > "$out" <<JSON
             "commandWindows": "pwsh -NoProfile -File $HOOK_PS1",
             "timeout": 10,
             "statusMessage": "delivering UserPromptSubmit audit document"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$TOOL_SH",
+            "commandWindows": "pwsh -NoProfile -File $TOOL_PS1",
+            "timeout": 10,
+            "statusMessage": "capturing PostToolUse payload"
           }
         ]
       }
