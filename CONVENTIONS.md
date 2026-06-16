@@ -7,7 +7,8 @@ How code is written in this project. Read before implementing.
 This is an infrastructure / demo repository, not an application codebase. The "code" is container orchestration and glue scripting.
 
 - **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up` (the unit of delivery is a running stack, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
-- **POSIX shell (`sh`/`bash`)** — smoke tests, health waits, and verification queries under each stack's `scripts/`. Keep scripts portable and dependency-light (`curl`, `jq`).
+- **POSIX shell (`sh`/`bash`)** — smoke tests, health waits, and verification queries under each stack's `scripts/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean.
+- **PowerShell (`pwsh`)** — each `.sh` script ships a `.ps1` mirror with identical behaviour for Windows hosts; keep the pair in sync and `PSScriptAnalyzer`-clean.
 
 ## Test Pattern
 
@@ -19,17 +20,42 @@ There is no unit-test framework here. "Tests" are smoke / integration checks wri
 
 ## Lint / Format / Test Commands
 
-The commands below must pass before a task is marked complete in `PRD.md`. Run from the repository root.
+The commands below must pass before a task is marked complete in `PRD.md`. Run from the repository root. **Where a formatter/linter is installed, run format → lint and fix every finding before completing the task** — the format step applies fixes in place; remaining lint findings are fixed by hand. Each tool is skipped silently if absent.
+
+**1. Validate compose files** — required gate, always available with Docker.
 
 ```sh
-# Validate every stack's compose file (required gate — always available with Docker).
 for d in stacks/*/; do (cd "$d" && docker compose config -q); done
+```
 
-# Lint shell scripts if shellcheck is installed (skipped silently if absent).
-command -v shellcheck >/dev/null 2>&1 && find stacks -name '*.sh' -print0 | xargs -0 -r shellcheck
+```powershell
+Get-ChildItem stacks -Directory | ForEach-Object { Push-Location $_; docker compose config -q; Pop-Location }
+```
 
-# Run any stack smoke tests that exist (each must exit 0).
+**2. Format → lint scripts** — run if the tools are installed; fix every finding.
+
+```sh
+command -v shfmt      >/dev/null 2>&1 && find stacks components -name '*.sh' -print0 | xargs -0 -r shfmt -w
+command -v shellcheck >/dev/null 2>&1 && find stacks components -name '*.sh' -print0 | xargs -0 -r shellcheck
+```
+
+```powershell
+if (Get-Module -ListAvailable PSScriptAnalyzer) {
+  Get-ChildItem -Recurse stacks, components -Filter *.ps1 | ForEach-Object {
+    Set-Content -Path $_.FullName -Value (Invoke-Formatter -ScriptDefinition (Get-Content -Raw $_.FullName))
+    Invoke-ScriptAnalyzer -Path $_.FullName
+  }
+}
+```
+
+**3. Run smoke tests** — each must exit 0. Smoke tests are POSIX `sh`; on Windows run them under bash.
+
+```sh
 for f in stacks/*/scripts/smoke-test.sh; do [ -x "$f" ] && "$f"; done
+```
+
+```powershell
+Get-ChildItem stacks/*/scripts/smoke-test.sh | ForEach-Object { bash $_.FullName }
 ```
 
 ## Commit Messages
