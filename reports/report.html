@@ -2905,6 +2905,29 @@
 <h3>Review highlights</h3>
 <p>Imported cleanly into the live Kibana (<code>success: true</code>, 2 objects, 0 errors); the stored description reads back as the shortened one-liner.</p>
 </section>
+
+<section>
+<h2>Redact Codex CLI tool I/O at ingest (<code>logs-apm.app@custom</code>)</h2>
+<p class="ts">Task: Append two <code>set</code> processors to <code>logs-drop.pipeline.json</code> that replace <code>labels.arguments</code> / <code>labels.output</code> on Codex's <code>codex.tool_result</code> log_only twin with <code>[REDACTED]</code>.</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li>Used the exact processor bodies and <code>if</code> conditions specified in the task (service-gated on <code>codex_cli_rs</code>, null-guarded so docs lacking the field are left alone). No script change — <code>setup-logs-drop.{sh,ps1}</code> already PUT this file verbatim; re-running the existing script activated the new processors.</li>
+  <li>Note the redaction <code>if</code> is field-presence-based, not <code>event_name</code>-based, so it also redacts <code>labels.arguments</code> on any other <code>codex_cli_rs</code> doc that carries it (e.g. a <code>response.completed</code> doc in the regression probe). That matches the task's literal condition and is the safer posture for a redaction net — confirmed acceptable.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None — the companion user-prompt redaction is already the next open task.</p>
+
+<h3>Change summary</h3>
+<p>Codex CLI's sensitive tool command lines (<code>labels.arguments</code>) and stdout (<code>labels.output</code>) are now replaced with <code>[REDACTED]</code> at ingest, so they never persist in Elasticsearch; the trace_safe metadata twin (sizes, success, duration) is untouched, and other agents are unaffected.</p>
+
+<h3>Review highlights</h3>
+<p><code>_simulate</code> verified — a <code>codex_cli_rs</code> tool_result twin → both fields <code>[REDACTED]</code>; a doc lacking them → fields not created; a <code>claude-code</code> doc → untouched. The existing <code>.delta</code> drop still fires (regression checked). Pipeline PUT acknowledged. <strong>Live-Codex-turn confirmation is a human step</strong> — please run a real Codex turn and confirm a tool_result log_only doc lands with <code>arguments</code>/<code>output</code> = <code>[REDACTED]</code>.</p>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
