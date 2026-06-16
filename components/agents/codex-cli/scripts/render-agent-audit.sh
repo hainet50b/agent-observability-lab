@@ -21,16 +21,22 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/agent-audit.template.toml"
 
 es_url=${1:-}
 target=${2:-}
-[ -n "$es_url" ] && [ -n "$target" ] || { echo "usage: render-agent-audit.sh <es-url> <target-dir>" >&2; exit 2; }
+if [ -z "$es_url" ] || [ -z "$target" ]; then
+  echo "usage: render-agent-audit.sh <es-url> <target-dir>" >&2
+  exit 2
+fi
 out="$target/.codex/agent-audit.toml"
 
-[ -f "$TEMPLATE" ] || { echo "FAIL: template not found: $TEMPLATE" >&2; exit 1; }
+[ -f "$TEMPLATE" ] || {
+  echo "FAIL: template not found: $TEMPLATE" >&2
+  exit 1
+}
 
 if [ -e "$out" ]; then
   echo "kept existing $out (delete to regenerate)"

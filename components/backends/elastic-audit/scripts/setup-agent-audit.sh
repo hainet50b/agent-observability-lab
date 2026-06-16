@@ -48,15 +48,21 @@ ES_URL=${ES_URL:-http://localhost:9200}
 
 # Resolve and enter the component root (parent of this scripts/ directory) so the
 # elasticsearch/ path resolves regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$COMPONENT_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
-command -v curl >/dev/null 2>&1 || skip "curl not found"
-command -v jq   >/dev/null 2>&1 || skip "jq not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
 
 # provision <template-name> <data-stream> <template-file>
 # Installs the index template, creates the data stream if absent, and syncs the
@@ -72,7 +78,7 @@ provision() {
     -H 'Content-Type: application/json' --data "@$template_file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
+  echo "$body" | jq . 2> /dev/null || echo "$body"
   case "$code" in 2*) : ;; *) fail "PUT _index_template/$template returned HTTP $code (expected 2xx)" ;; esac
   [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index template PUT not acknowledged"
   echo "[setup] index template '$template' installed ✓"
@@ -86,7 +92,7 @@ provision() {
     result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_data_stream/$data_stream") || fail "request to Elasticsearch failed"
     code=$(echo "$result" | tail -n1)
     body=$(echo "$result" | sed '$d')
-    echo "$body" | jq . 2>/dev/null || echo "$body"
+    echo "$body" | jq . 2> /dev/null || echo "$body"
     case "$code" in 2*) : ;; *) fail "PUT _data_stream/$data_stream returned HTTP $code (expected 2xx)" ;; esac
     [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "data stream create not acknowledged"
     echo "[setup] data stream '$data_stream' created ✓"
@@ -103,7 +109,7 @@ provision() {
     -H 'Content-Type: application/json' --data "$mappings") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
+  echo "$body" | jq . 2> /dev/null || echo "$body"
   case "$code" in 2*) : ;; *) fail "PUT $data_stream/_mapping returned HTTP $code (expected 2xx)" ;; esac
   [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "data stream mapping update not acknowledged"
   echo "[setup] mapping synced onto '$data_stream' ✓"

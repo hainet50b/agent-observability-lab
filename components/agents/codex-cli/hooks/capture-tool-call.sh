@@ -57,8 +57,8 @@
 
 set -u
 
-log()   { echo "[capture-tool-call] $*" >&2; }
-done0() { exit 0; }   # every path is success — never block the tool call
+log() { echo "[capture-tool-call] $*" >&2; }
+done0() { exit 0; } # every path is success — never block the tool call
 
 # The tool-call audit stream is fixed here (the config's data_stream names the
 # user_prompt stream — see header).
@@ -70,44 +70,59 @@ config_file=${CODEX_AGENT_AUDIT_CONFIG:-${CODEX_HOME:-$HOME/.codex}/agent-audit.
 # agent-audit.toml are unique across the [elasticsearch] / [audit] sections, so a
 # section-agnostic lookup is unambiguous. Comments live on their own lines.
 toml_get() {
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$config_file" 2>/dev/null \
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$config_file" 2> /dev/null \
     | head -n1 \
     | sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
 
 # The canonical document is JSON; shaping arbitrary tool I/O safely needs jq.
-command -v jq   >/dev/null 2>&1 || { log "jq unavailable — cannot shape audit document; skipping"; done0; }
-command -v curl >/dev/null 2>&1 || { log "curl unavailable — cannot deliver audit document; skipping"; done0; }
+command -v jq > /dev/null 2>&1 || {
+  log "jq unavailable — cannot shape audit document; skipping"
+  done0
+}
+command -v curl > /dev/null 2>&1 || {
+  log "curl unavailable — cannot deliver audit document; skipping"
+  done0
+}
 
-[ -f "$config_file" ] || { log "no delivery config at $config_file — skipping (run setup.sh)"; done0; }
+[ -f "$config_file" ] || {
+  log "no delivery config at $config_file — skipping (run setup.sh)"
+  done0
+}
 
 es_url=$(toml_get url)
 api_key=$(toml_get api_key)
 timeout_ms=$(toml_get timeout_ms)
 mode=$(toml_get mode)
 
-[ -n "$es_url" ] || { log "config missing url — skipping"; done0; }
+[ -n "$es_url" ] || {
+  log "config missing url — skipping"
+  done0
+}
 
 # timeout_ms (default 300) -> curl --max-time seconds, pure-shell (no awk/bc).
-case "$timeout_ms" in ''|*[!0-9]*) timeout_ms=300 ;; esac
+case "$timeout_ms" in '' | *[!0-9]*) timeout_ms=300 ;; esac
 max_time=$(printf '%d.%03d' "$((timeout_ms / 1000))" "$((timeout_ms % 1000))")
 
 payload=$(cat)
-[ -n "$payload" ] || { log "empty stdin — nothing to capture"; done0; }
+[ -n "$payload" ] || {
+  log "empty stdin — nothing to capture"
+  done0
+}
 
-ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2> /dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Best-effort runtime identity (Codex's payload has none).
-user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
+user_name=${USER:-${USERNAME:-$(id -un 2> /dev/null || echo "")}}
 # user.id is the domain-qualified workstation login (whoami: DOMAIN\user on
 # Windows, the bare login on POSIX where no domain source exists). Empty -> null.
-user_id=$(whoami 2>/dev/null || echo "")
+user_id=$(whoami 2> /dev/null || echo "")
 
 # Best-effort runtime host (ECS host.hostname/host.name). Codex's payload has
 # none; use the OS hostname. host.name and host.hostname are the same value here
 # (best-effort — ECS permits it); a richer source could split FQDN vs short name.
 host_hostname=${HOSTNAME:-}
-[ -n "$host_hostname" ] || host_hostname=$(hostname 2>/dev/null || echo "")
+[ -n "$host_hostname" ] || host_hostname=$(hostname 2> /dev/null || echo "")
 [ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
 host_name=$host_hostname
 
@@ -121,7 +136,7 @@ codex_home=${CODEX_HOME:-$HOME/.codex}
 auth_file="$codex_home/auth.json"
 identity='{"account_id":null,"account_email":null,"account_name":null,"org_id":null,"org_name":null}'
 if [ -f "$auth_file" ]; then
-  parsed=$(jq -c '
+  if parsed=$(jq -c '
       def b64urldec:
         (gsub("-";"+") | gsub("_";"/"))
         | (length % 4) as $m
@@ -139,9 +154,11 @@ if [ -f "$auth_file" ]; then
           account_name: ($claims.name // null),
           org_id: ($org.id // null),
           org_name: ($org.title // null)
-        }' "$auth_file" 2>/dev/null) \
-    && [ -n "$parsed" ] && identity=$parsed \
-    || log "could not parse provider identity from $auth_file — account/organization stay null"
+        }' "$auth_file" 2> /dev/null) && [ -n "$parsed" ]; then
+    identity=$parsed
+  else
+    log "could not parse provider identity from $auth_file — account/organization stay null"
+  fi
 fi
 
 # Reshape raw Codex payload -> canonical agent_audit.tool_call document. tool_input
@@ -153,8 +170,8 @@ fi
 # trail still records that a tool call of that size occurred.
 record=$(printf '%s' "$payload" \
   | jq -c --arg ts "$ts" --arg uname "$user_name" --arg uid "$user_id" --arg mode "$mode" \
-      --arg hname "$host_name" --arg hhost "$host_hostname" --argjson id "$identity" \
-      '($mode == "plaintext") as $plain
+    --arg hname "$host_name" --arg hhost "$host_hostname" --argjson id "$identity" \
+    '($mode == "plaintext") as $plain
        | (if (.tool_input // null)   == null then null else (.tool_input   | tojson) end) as $in
        | (if (.tool_response // null) == null then null else (.tool_response | tojson) end) as $out
        | {
@@ -172,21 +189,27 @@ record=$(printf '%s' "$payload" \
             output: { text: (if $plain then $out else null end), encrypted_text: null, length: (($out // "") | length) }
           }
         }
-      }' 2>/dev/null) \
-  || { log "payload not valid JSON — cannot shape audit document; skipping"; done0; }
+      }' 2> /dev/null) \
+  || {
+    log "payload not valid JSON — cannot shape audit document; skipping"
+    done0
+  }
 
 # POST to the data stream's _doc endpoint (auto op_type=create for data streams).
 es_target="${es_url%/}/${DATA_STREAM}/_doc"
-curl_args=(-s -o /dev/null -w '%{http_code}' --max-time "$max_time" \
+curl_args=(-s -o /dev/null -w '%{http_code}' --max-time "$max_time"
   -X POST "$es_target" -H 'Content-Type: application/json')
 [ -n "$api_key" ] && curl_args+=(-H "Authorization: ApiKey $api_key")
 curl_args+=(--data-binary @-)
 
-http_code=$(printf '%s' "$record" | curl "${curl_args[@]}" 2>/dev/null) \
-  || { log "POST to $es_target failed (curl error) — tool call proceeds uncaptured"; done0; }
+http_code=$(printf '%s' "$record" | curl "${curl_args[@]}" 2> /dev/null) \
+  || {
+    log "POST to $es_target failed (curl error) — tool call proceeds uncaptured"
+    done0
+  }
 
 case "$http_code" in
   2*) log "indexed 1 audit document -> $es_target (HTTP $http_code)" ;;
-  *)  log "index returned HTTP $http_code (audit doc not stored) — tool call unaffected" ;;
+  *) log "index returned HTTP $http_code (audit doc not stored) — tool call unaffected" ;;
 esac
 done0

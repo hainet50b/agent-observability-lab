@@ -49,19 +49,25 @@ SERVICE_NAME=aol-smoke-test
 
 # Resolve and enter the stack root (parent of this scripts/ directory) so
 # `docker compose` finds docker-compose.yml regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$STACK_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
 # --- Preconditions ---------------------------------------------------------
-command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
-command -v curl   >/dev/null 2>&1 || skip "curl not found"
-command -v jq     >/dev/null 2>&1 || skip "jq not found"
-command -v base64 >/dev/null 2>&1 || skip "base64 not found"
-docker info >/dev/null 2>&1        || skip "docker daemon not reachable; nothing to smoke-test"
+command -v docker > /dev/null 2>&1 || skip "docker CLI not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v base64 > /dev/null 2>&1 || skip "base64 not found"
+docker info > /dev/null 2>&1 || skip "docker daemon not reachable; nothing to smoke-test"
 
 # --- Arrange ---------------------------------------------------------------
 echo "[arrange] bringing the stack up (docker compose up -d)…"
@@ -70,14 +76,20 @@ docker compose up -d
 wait_healthy() {
   cname=$1 tries=${2:-60}
   for _ in $(seq 1 "$tries"); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2>/dev/null || echo "")
-    [ "$status" = healthy ] && { echo "[arrange] $cname healthy"; return 0; }
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2> /dev/null || echo "")
+    [ "$status" = healthy ] && {
+      echo "[arrange] $cname healthy"
+      return 0
+    }
     sleep 5
   done
   return 1
 }
 for c in aol-elasticsearch aol-kibana aol-apm-server; do
-  wait_healthy "$c" 60 || { docker compose ps; fail "$c did not become healthy"; }
+  wait_healthy "$c" 60 || {
+    docker compose ps
+    fail "$c did not become healthy"
+  }
 done
 
 # --- Act -------------------------------------------------------------------
@@ -108,8 +120,8 @@ post_otlp() {
 }
 
 post_otlp /v1/metrics "$metrics_payload"
-post_otlp /v1/logs    "$logs_payload"
-post_otlp /v1/traces  "$traces_payload"
+post_otlp /v1/logs "$logs_payload"
+post_otlp /v1/traces "$traces_payload"
 
 # --- Assert ----------------------------------------------------------------
 es_count() {
@@ -135,8 +147,8 @@ assert_landed() {
 
 echo "[assert] querying Elasticsearch for the synthetic documents…"
 assert_landed "metrics" "metrics-apm*"
-assert_landed "events"  "logs-apm*"
-assert_landed "traces"  "traces-apm*"
+assert_landed "events" "logs-apm*"
+assert_landed "traces" "traces-apm*"
 
 # --- Discover (informational, never fails) ---------------------------------
 discover() {

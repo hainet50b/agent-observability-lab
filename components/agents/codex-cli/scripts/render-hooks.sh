@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 HOOKS_DIR="$COMPONENT_DIR/hooks"
 HOOK_SH="$HOOKS_DIR/capture-user-prompt.sh"
@@ -37,12 +37,27 @@ TOOL_SH="$HOOKS_DIR/capture-tool-call.sh"
 TOOL_PS1="$HOOKS_DIR/capture-tool-call.ps1"
 
 target=${1:-}
-[ -n "$target" ] || { echo "usage: render-hooks.sh <target-dir>" >&2; exit 2; }
+[ -n "$target" ] || {
+  echo "usage: render-hooks.sh <target-dir>" >&2
+  exit 2
+}
 
-[ -f "$HOOK_SH" ]  || { echo "FAIL: hook not found: $HOOK_SH"  >&2; exit 1; }
-[ -f "$HOOK_PS1" ] || { echo "FAIL: hook not found: $HOOK_PS1" >&2; exit 1; }
-[ -f "$TOOL_SH" ]  || { echo "FAIL: hook not found: $TOOL_SH"  >&2; exit 1; }
-[ -f "$TOOL_PS1" ] || { echo "FAIL: hook not found: $TOOL_PS1" >&2; exit 1; }
+[ -f "$HOOK_SH" ] || {
+  echo "FAIL: hook not found: $HOOK_SH" >&2
+  exit 1
+}
+[ -f "$HOOK_PS1" ] || {
+  echo "FAIL: hook not found: $HOOK_PS1" >&2
+  exit 1
+}
+[ -f "$TOOL_SH" ] || {
+  echo "FAIL: hook not found: $TOOL_SH" >&2
+  exit 1
+}
+[ -f "$TOOL_PS1" ] || {
+  echo "FAIL: hook not found: $TOOL_PS1" >&2
+  exit 1
+}
 
 out="$target/.codex/hooks.json"
 if [ -e "$out" ]; then
@@ -53,7 +68,7 @@ fi
 mkdir -p "$target/.codex"
 
 # POSIX absolute paths carry no JSON-special characters, so a heredoc is safe.
-cat > "$out" <<JSON
+cat > "$out" << JSON
 {
   "hooks": {
     "UserPromptSubmit": [

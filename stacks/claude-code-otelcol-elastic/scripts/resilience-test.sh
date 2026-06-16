@@ -46,19 +46,25 @@ SERVICE_NAME=aol-resilience-test
 
 # Resolve and enter the stack root (parent of this scripts/ directory) so
 # `docker compose` finds docker-compose.yml regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$STACK_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
 # --- Preconditions ---------------------------------------------------------
-command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
-command -v curl   >/dev/null 2>&1 || skip "curl not found"
-command -v jq     >/dev/null 2>&1 || skip "jq not found"
-command -v base64 >/dev/null 2>&1 || skip "base64 not found"
-docker info >/dev/null 2>&1        || skip "docker daemon not reachable; nothing to test"
+command -v docker > /dev/null 2>&1 || skip "docker CLI not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v base64 > /dev/null 2>&1 || skip "base64 not found"
+docker info > /dev/null 2>&1 || skip "docker daemon not reachable; nothing to test"
 
 # --- Arrange ---------------------------------------------------------------
 echo "[arrange] bringing the stack up (docker compose up -d)…"
@@ -67,14 +73,20 @@ docker compose up -d
 wait_healthy() {
   cname=$1 tries=${2:-60}
   for _ in $(seq 1 "$tries"); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2>/dev/null || echo "")
-    [ "$status" = healthy ] && { echo "[arrange] $cname healthy"; return 0; }
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2> /dev/null || echo "")
+    [ "$status" = healthy ] && {
+      echo "[arrange] $cname healthy"
+      return 0
+    }
     sleep 5
   done
   return 1
 }
 for c in aol-elasticsearch aol-kibana aol-apm-server; do
-  wait_healthy "$c" 60 || { docker compose ps; fail "$c did not become healthy"; }
+  wait_healthy "$c" 60 || {
+    docker compose ps
+    fail "$c did not become healthy"
+  }
 done
 
 # The Collector (contrib image) ships no healthcheck — poll its OTLP/HTTP port
@@ -82,7 +94,7 @@ done
 # exiting 0 means the port is accepting connections.
 wait_collector() {
   for _ in $(seq 1 30); do
-    if curl -s -o /dev/null "$OTEL_COLLECTOR_URL/" 2>/dev/null; then
+    if curl -s -o /dev/null "$OTEL_COLLECTOR_URL/" 2> /dev/null; then
       echo "[arrange] otel-collector accepting OTLP on $OTEL_COLLECTOR_URL"
       return 0
     fi
@@ -90,7 +102,10 @@ wait_collector() {
   done
   return 1
 }
-wait_collector || { docker compose ps; fail "otel-collector did not start accepting connections"; }
+wait_collector || {
+  docker compose ps
+  fail "otel-collector did not start accepting connections"
+}
 
 es_count() {
   curl -s "$ES_URL/logs-apm*/_count?ignore_unavailable=true&allow_no_indices=true" \
@@ -126,7 +141,10 @@ echo "[act] Collector accepted and queued the probe -> HTTP $code"
 echo "[act] 3/4 waiting for the batch to flush to disk, then restarting otel-collector…"
 sleep 8
 docker compose restart otel-collector
-wait_collector || { docker compose ps; fail "otel-collector did not come back after restart"; }
+wait_collector || {
+  docker compose ps
+  fail "otel-collector did not come back after restart"
+}
 
 # Sanity: with the backend still down, nothing can have reached ES yet.
 mid=$(es_count)
@@ -135,7 +153,10 @@ echo "[act] confirmed: probe not in ES during the outage (count still $mid)"
 
 echo "[act] 4/4 starting apm-server and waiting for it to recover…"
 docker compose start apm-server
-wait_healthy aol-apm-server 60 || { docker compose ps; fail "apm-server did not become healthy after restart"; }
+wait_healthy aol-apm-server 60 || {
+  docker compose ps
+  fail "apm-server did not become healthy after restart"
+}
 
 # --- Assert ----------------------------------------------------------------
 echo "[assert] waiting for the queued probe to drain into Elasticsearch…"

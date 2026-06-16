@@ -24,18 +24,24 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/settings.template.json"
 
 endpoint=${1:-}
 target=${2:-}
-[ -n "$endpoint" ] && [ -n "$target" ] || { echo "usage: render-settings.sh <otlp-endpoint> <target-dir>" >&2; exit 2; }
+if [ -z "$endpoint" ] || [ -z "$target" ]; then
+  echo "usage: render-settings.sh <otlp-endpoint> <target-dir>" >&2
+  exit 2
+fi
 audit=${PROMPTS_AUDIT_ES_URL:-http://localhost:9200}
 hook="$COMPONENT_DIR/hooks/capture-prompt.sh"
 out="$target/.claude/settings.local.json"
 
-[ -f "$TEMPLATE" ] || { echo "FAIL: template not found: $TEMPLATE" >&2; exit 1; }
+[ -f "$TEMPLATE" ] || {
+  echo "FAIL: template not found: $TEMPLATE" >&2
+  exit 1
+}
 
 if [ -e "$out" ]; then
   echo "kept existing $out (delete to regenerate)"
@@ -44,8 +50,8 @@ fi
 
 mkdir -p "$target/.claude"
 sed -e "s#@@OTLP_ENDPOINT@@#$endpoint#" \
-    -e "s#@@PROMPTS_AUDIT_ES_URL@@#$audit#" \
-    -e "s#@@HOOK_COMMAND@@#$hook#" \
-    "$TEMPLATE" > "$out"
+  -e "s#@@PROMPTS_AUDIT_ES_URL@@#$audit#" \
+  -e "s#@@HOOK_COMMAND@@#$hook#" \
+  "$TEMPLATE" > "$out"
 
 echo "wrote $out"

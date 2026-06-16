@@ -19,7 +19,7 @@
 set -euo pipefail
 
 OTLP_ENDPOINT=http://localhost:4318
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 C="$SCRIPT_DIR/../../../components"
 

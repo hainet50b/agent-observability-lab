@@ -38,7 +38,7 @@
 set -euo pipefail
 
 ES_URL=${ES_URL:-http://localhost:9200}
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 C="$SCRIPT_DIR/../../../components"
 

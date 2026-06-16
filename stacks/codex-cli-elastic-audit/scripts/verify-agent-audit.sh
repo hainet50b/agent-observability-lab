@@ -38,26 +38,32 @@ DATA_STREAM=logs-agent_audit.user_prompt-default
 
 # Resolve the stack root (parent of this scripts/ dir) and the repo root, so the
 # component hook and the stack's .codex/ are found regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd -- "$STACK_DIR/../.." && pwd)
 HOOK="$REPO_ROOT/components/agents/codex-cli/hooks/capture-user-prompt.sh"
 CODEX_HOME_DIR="$STACK_DIR/.codex"
 cd "$STACK_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
 # --- Preconditions ---------------------------------------------------------
-command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
-command -v curl   >/dev/null 2>&1 || skip "curl not found"
-command -v jq     >/dev/null 2>&1 || skip "jq not found"
-docker info >/dev/null 2>&1        || skip "docker daemon not reachable; nothing to verify"
+command -v docker > /dev/null 2>&1 || skip "docker CLI not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
+docker info > /dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
-[ -f "$CODEX_HOME_DIR/hooks.json" ]       || skip "no .codex/hooks.json — run scripts/setup.sh first"
+[ -f "$CODEX_HOME_DIR/hooks.json" ] || skip "no .codex/hooks.json — run scripts/setup.sh first"
 [ -f "$CODEX_HOME_DIR/agent-audit.toml" ] || skip "no .codex/agent-audit.toml — run scripts/setup.sh first"
 # Confirm the hook is actually registered on UserPromptSubmit (configured state).
-jq -e '.hooks.UserPromptSubmit[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" >/dev/null 2>&1 \
+jq -e '.hooks.UserPromptSubmit[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" > /dev/null 2>&1 \
   || fail "no UserPromptSubmit command registered in .codex/hooks.json"
 
 # --- Arrange ---------------------------------------------------------------
@@ -67,13 +73,19 @@ docker compose up -d
 wait_healthy() {
   cname=$1 tries=${2:-60}
   for _ in $(seq 1 "$tries"); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2>/dev/null || echo "")
-    [ "$status" = healthy ] && { echo "[arrange] $cname healthy"; return 0; }
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2> /dev/null || echo "")
+    [ "$status" = healthy ] && {
+      echo "[arrange] $cname healthy"
+      return 0
+    }
     sleep 5
   done
   return 1
 }
-wait_healthy aol-elasticsearch 60 || { docker compose ps; fail "aol-elasticsearch did not become healthy"; }
+wait_healthy aol-elasticsearch 60 || {
+  docker compose ps
+  fail "aol-elasticsearch did not become healthy"
+}
 
 # --- Act -------------------------------------------------------------------
 cid="aol-verify-$(date +%s)-$$"
@@ -133,9 +145,9 @@ echo "[assert] host enrichment present (host.hostname=$hhost) ✓"
 
 # Identity schema (SPEC update): provider account/organization envelope present,
 # and user.email gone.
-echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' >/dev/null \
+echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' > /dev/null \
   || fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
-echo "$src" | jq -e '(.user | has("email")) | not' >/dev/null \
+echo "$src" | jq -e '(.user | has("email")) | not' > /dev/null \
   || fail "audit document still carries user.email — identity schema not applied"
 echo "[assert] identity schema applied (account/organization present, no user.email) ✓"
 

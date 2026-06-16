@@ -3065,6 +3065,38 @@
       <li>Worth a skim: the new <code>stacks/codex-cli-elastic-audit/README.md</code> Quick Tour and the audit/telemetry cross-links added to <code>codex-cli-elastic/README.md</code>.</li>
     </ul>
   </section>
+  <section>
+    <h2>Format shell scripts with shfmt and clear the SC1007 / SC2015 shellcheck findings</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>shfmt / shellcheck were not installed on this host</strong> (neither on PATH; no Go/scoop/choco). Rather than hand-emulate <code>shfmt</code>'s output and guess whether the diff is empty, I downloaded the pinned release binaries (<code>shfmt v3.10.0</code>, <code>shellcheck v0.10.0</code>) into <code>~/.local/bin</code> and ran the real tools, so the gate is genuinely verified, not asserted.</li>
+      <li><strong>Scope = our scripts only.</strong> Ran the tools over the 26 <code>*.sh</code> under <code>stacks/</code> and <code>components/</code>, excluding the ~30 vendored third-party plugin scripts under <code>stacks/codex-cli-elastic/.codex/.tmp/plugins/</code> — captured artifacts, not ours to reformat.</li>
+      <li><strong>SC1007</strong> (24×) was the single uniform idiom <code>SCRIPT_DIR=$(CDPATH= cd -- …)</code>; fixed with one sed pass to <code>CDPATH='' cd</code> (the explicit empty-string assignment shellcheck wants).</li>
+      <li><strong>SC2015</strong> (7×) came in two shapes. Four were usage guards <code>[ -n "$a" ] &amp;&amp; [ -n "$b" ] || { usage; exit 2; }</code> → rewritten as <code>if [ -z "$a" ] || [ -z "$b" ]; then … fi</code> (negated condition, no spurious else). Two were the provider-identity parse <code>parsed=$(jq …) &amp;&amp; [ -n "$parsed" ] &amp;&amp; identity=$parsed || log …</code> → rewritten as a proper <code>if parsed=$(jq …) &amp;&amp; [ -n "$parsed" ]; then identity=$parsed; else log …; fi</code>, which also removes the real A&amp;&amp;B||C bug (the log could previously fire even when the assignment succeeded). PRD estimated "~2" SC2015; the live count was 7 — all fixed.</li>
+      <li>Re-ran <code>shfmt -w</code> after the hand edits so the rewritten <code>if</code> blocks were normalized by the formatter rather than by my indentation.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The two tool binaries live in <code>~/.local/bin</code> (outside the repo), not committed or referenced in CONVENTIONS — a contributor on a clean host still has to install <code>shfmt</code>/<code>shellcheck</code> themselves.</li>
+      <li>The full smoke-test gate runs against live Docker stacks; this change is whitespace + control-flow-only, so I verified non-destructiveness with <code>bash -n</code> on all 26 scripts and <code>docker compose config -q</code> on all four stacks (both clean) rather than spinning every stack up.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Consider recording the <code>shfmt</code>/<code>shellcheck</code> (and <code>PSScriptAnalyzer</code>) versions / install method in <code>CONVENTIONS.md</code> so the format/lint gate is reproducible across hosts.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>All 26 of our shell scripts are now <code>shfmt</code>-formatted (2-space, indented <code>case</code>, spaced redirects, expanded one-line guards) and <code>shellcheck</code>-clean — the <code>CDPATH=</code> empty-assignment warnings and the misleading <code>A &amp;&amp; B || C</code> chains are gone, with the identity-parse rewrite also fixing a latent logic bug.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified:</strong> <code>shfmt -d</code> is empty and <code>shellcheck</code> reports no findings across all 26 scripts; <code>bash -n</code> passes on each; all four stacks pass <code>docker compose config -q</code>.</li>
+      <li>Worth a look: the SC2015 rewrites in <code>components/agents/codex-cli/hooks/capture-user-prompt.sh</code> and <code>capture-tool-call.sh</code> — the new <code>if … then identity=$parsed; else log …; fi</code> changes behavior slightly on purpose (the fail-open log no longer fires when the parse actually succeeded).</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

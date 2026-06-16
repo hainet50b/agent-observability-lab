@@ -38,26 +38,32 @@ DATA_STREAM=logs-agent_audit.tool_call-default
 
 # Resolve the stack root (parent of this scripts/ dir) and the repo root, so the
 # component hook and the stack's .codex/ are found regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd -- "$STACK_DIR/../.." && pwd)
 HOOK="$REPO_ROOT/components/agents/codex-cli/hooks/capture-tool-call.sh"
 CODEX_HOME_DIR="$STACK_DIR/.codex"
 cd "$STACK_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
 # --- Preconditions ---------------------------------------------------------
-command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
-command -v curl   >/dev/null 2>&1 || skip "curl not found"
-command -v jq     >/dev/null 2>&1 || skip "jq not found"
-docker info >/dev/null 2>&1        || skip "docker daemon not reachable; nothing to verify"
+command -v docker > /dev/null 2>&1 || skip "docker CLI not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
+docker info > /dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
-[ -f "$CODEX_HOME_DIR/hooks.json" ]       || skip "no .codex/hooks.json — run scripts/setup.sh first"
+[ -f "$CODEX_HOME_DIR/hooks.json" ] || skip "no .codex/hooks.json — run scripts/setup.sh first"
 [ -f "$CODEX_HOME_DIR/agent-audit.toml" ] || skip "no .codex/agent-audit.toml — run scripts/setup.sh first"
 # Confirm the hook is actually registered on PostToolUse (configured state).
-jq -e '.hooks.PostToolUse[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" >/dev/null 2>&1 \
+jq -e '.hooks.PostToolUse[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" > /dev/null 2>&1 \
   || fail "no PostToolUse command registered in .codex/hooks.json"
 
 # --- Arrange ---------------------------------------------------------------
@@ -67,13 +73,19 @@ docker compose up -d
 wait_healthy() {
   cname=$1 tries=${2:-60}
   for _ in $(seq 1 "$tries"); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2>/dev/null || echo "")
-    [ "$status" = healthy ] && { echo "[arrange] $cname healthy"; return 0; }
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2> /dev/null || echo "")
+    [ "$status" = healthy ] && {
+      echo "[arrange] $cname healthy"
+      return 0
+    }
     sleep 5
   done
   return 1
 }
-wait_healthy aol-elasticsearch 60 || { docker compose ps; fail "aol-elasticsearch did not become healthy"; }
+wait_healthy aol-elasticsearch 60 || {
+  docker compose ps
+  fail "aol-elasticsearch did not become healthy"
+}
 
 # --- Act -------------------------------------------------------------------
 cid="aol-verify-tc-$(date +%s)-$$"
@@ -131,11 +143,11 @@ src=$(curl -s "$ES_URL/$DATA_STREAM/_search?ignore_unavailable=true&allow_no_ind
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) tool=\(.agent_audit.tool_call.tool.name) call_id=\(.agent_audit.tool_call.tool.call_id) input.length=\(.agent_audit.tool_call.input.length) output.length=\(.agent_audit.tool_call.output.length)"'
 
 # event.action / dataset must be the tool-call variant.
-[ "$(echo "$src" | jq -r '.event.action')"  = tool-call ]              || fail "event.action is not 'tool-call'"
-[ "$(echo "$src" | jq -r '.event.dataset')" = agent_audit.tool_call ]  || fail "event.dataset is not 'agent_audit.tool_call'"
+[ "$(echo "$src" | jq -r '.event.action')" = tool-call ] || fail "event.action is not 'tool-call'"
+[ "$(echo "$src" | jq -r '.event.dataset')" = agent_audit.tool_call ] || fail "event.dataset is not 'agent_audit.tool_call'"
 
 # Tool identity present.
-[ "$(echo "$src" | jq -r '.agent_audit.tool_call.tool.name // empty')"    = Bash ]             || fail "tool.name not captured"
+[ "$(echo "$src" | jq -r '.agent_audit.tool_call.tool.name // empty')" = Bash ] || fail "tool.name not captured"
 [ "$(echo "$src" | jq -r '.agent_audit.tool_call.tool.call_id // empty')" = call_verify_0001 ] || fail "tool.call_id not captured (tool_use_id mapping)"
 
 # Heterogeneous tool I/O serialized to a JSON STRING into .text (plaintext mode), with
@@ -158,7 +170,7 @@ hhost=$(echo "$src" | jq -r '.host.hostname // empty')
 [ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
 uid=$(echo "$src" | jq -r '.user.id // empty')
 [ -n "$uid" ] || fail "audit document missing user.id — identity derivation not applied"
-echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' >/dev/null \
+echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' > /dev/null \
   || fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
 echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, account/organization envelope) ✓"
 

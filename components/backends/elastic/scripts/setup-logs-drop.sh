@@ -44,15 +44,21 @@ PIPELINE_FILE=elasticsearch/logs-drop.pipeline.json
 
 # Resolve and enter the component root (parent of this scripts/ directory) so the
 # elasticsearch/ path resolves regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$COMPONENT_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
-command -v curl >/dev/null 2>&1 || skip "curl not found"
-command -v jq   >/dev/null 2>&1 || skip "jq not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
 
 # The pipeline body (a drop that fires only on Codex CLI streaming-delta docs;
 # other producers and events fall through unchanged) is the single source of
@@ -66,7 +72,7 @@ result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_ingest/pipeline/$PIPELINE"
 code=$(echo "$result" | tail -n1)
 body=$(echo "$result" | sed '$d')
 
-echo "$body" | jq . 2>/dev/null || echo "$body"
+echo "$body" | jq . 2> /dev/null || echo "$body"
 
 case "$code" in
   2*) : ;;

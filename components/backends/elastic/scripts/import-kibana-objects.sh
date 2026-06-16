@@ -25,15 +25,21 @@ KIBANA_URL=${KIBANA_URL:-http://localhost:5601}
 
 # Resolve and enter the component root (parent of this scripts/ directory) so the
 # kibana/ NDJSON paths resolve regardless of the caller's cwd.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$COMPONENT_DIR"
 
-skip() { echo "SKIP: $*"; exit 0; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+skip() {
+  echo "SKIP: $*"
+  exit 0
+}
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
-command -v curl >/dev/null 2>&1 || skip "curl not found"
-command -v jq   >/dev/null 2>&1 || skip "jq not found"
+command -v curl > /dev/null 2>&1 || skip "curl not found"
+command -v jq > /dev/null 2>&1 || skip "jq not found"
 
 # The cross-agent assets this backend owns: the AI Agents — Traces data view
 # (traces-apm-agents_*). Agent-specific data views / saved searches / dashboards
