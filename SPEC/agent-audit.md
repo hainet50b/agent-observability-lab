@@ -62,7 +62,7 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
     },
     "conversation_id": "...",
     "turn_id": "...",
-    "prompt": {
+    "user_prompt": {
       "text": "...",
       "encrypted_text": null,
       "length": 123
@@ -77,7 +77,7 @@ Field ownership:
 - ECS user fields: `user.id` and `user.name` identify the workstation/business login identity on a best-effort basis. `user.id` is the domain-qualified login (`whoami`: `DOMAIN\user` on Windows, the bare login on POSIX where no domain source exists) and `user.name` is the short login name. `user.email` is not used because it is not available consistently from local hook scripts across platforms. Access to the audit data stream is restricted instead. See [Identity derivation](#identity-derivation).
 - ECS host fields: `host.name` and `host.hostname` are populated on a best-effort basis per runtime.
 - Custom audit fields: `agent_audit.*`.
-- `agent_audit.prompt.text` carries plaintext in the lab and is searchable. Production-oriented audit flows may set it to `null` and populate `agent_audit.prompt.encrypted_text` with application-encrypted prompt content instead.
+- `agent_audit.user_prompt.text` carries plaintext in the lab and is searchable. Production-oriented audit flows may set it to `null` and populate `agent_audit.user_prompt.encrypted_text` with application-encrypted prompt content instead.
 - `agent_audit.agent.*` describes the AI agent application, not the ECS collecting agent.
 - `agent_audit.agent.account.*` describes the AI agent provider account when available; it is read from the agent's local credential store (for Codex CLI, `$CODEX_HOME/auth.json` — see [Identity derivation](#identity-derivation)).
 - `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it, and is read from the same local credential store (see [Identity derivation](#identity-derivation)).
@@ -136,9 +136,9 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 
 - Audit data stream mappings are strict by default. Unexpected fields should fail indexing rather than silently expanding the audit schema.
 - `user.id`, `user.name`, `host.name`, `host.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id`, and `agent_audit.turn_id` are mapped as `keyword` where applicable.
-- `agent_audit.prompt.text` is mapped as searchable `text` in the lab.
-- `agent_audit.prompt.encrypted_text` is mapped as `keyword` with `index: false`; encrypted prompt bodies are stored but not searchable.
-- `agent_audit.prompt.length` is mapped as `long`.
+- `agent_audit.user_prompt.text` is mapped as searchable `text` in the lab.
+- `agent_audit.user_prompt.encrypted_text` is mapped as `keyword` with `index: false`; encrypted prompt bodies are stored but not searchable.
+- `agent_audit.user_prompt.length` is mapped as `long`.
 - `agent_audit.tool_call.tool.name` and `.tool.call_id` are mapped as `keyword`.
 - `agent_audit.tool_call.input.text` and `.output.text` are mapped as **`wildcard`**, not `keyword` (a tool output over Lucene's ~32 KB term limit would reject the whole document) and not `text` (the audit need is substring / regexp over machine-generated JSON, not word relevance). The prompt body stays `text` because it is natural language — mapping follows data nature, so the two streams differ deliberately.
 - `agent_audit.tool_call.input.encrypted_text` and `.output.encrypted_text` are mapped as `keyword` with `index: false`.
@@ -174,4 +174,4 @@ timeout_ms = 300
 mode = "plaintext"
 ```
 
-`audit.mode` controls prompt body handling. The lab starts with `plaintext`, which populates `agent_audit.prompt.text`. Production-oriented flows may add an encrypted mode that sets `agent_audit.prompt.text` to `null` and populates `agent_audit.prompt.encrypted_text`.
+`audit.mode` controls prompt body handling. The lab starts with `plaintext`, which populates `agent_audit.user_prompt.text`. Production-oriented flows may add an encrypted mode that sets `agent_audit.user_prompt.text` to `null` and populates `agent_audit.user_prompt.encrypted_text`.
