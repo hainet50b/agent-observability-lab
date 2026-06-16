@@ -24,6 +24,10 @@ logs-agent_audit.tool_call-default
 
 `agent.*` is not used for AI-agent identity in direct audit documents. In ECS, `agent.*` primarily describes the software agent that collects or ships an event, so using it for Codex CLI / Claude Code risks semantic confusion. AI-agent identity belongs under the custom `agent_audit.*` namespace instead.
 
+## Where this runs
+
+The audit data streams are provisioned (strict templates + data streams) and viewed (cross-agent Kibana data views / saved searches) by the **`elastic-audit`** backend — Elasticsearch + Kibana, **no APM Server**, since audit is a direct hook → Elasticsearch write that never uses the OTLP / APM path. It is composed by `<agent>-elastic-audit` stacks (e.g. `codex-cli-elastic-audit`), separate from the telemetry backend (`elastic` / `codex-cli-elastic`): same local Elasticsearch technology, but a separate compose project, separate volumes, and a separate agent home (whose `.codex` carries only `agent-audit.toml` + `hooks.json`, no `[otel]` config). The split keeps each stack's load-bearing set legible; the two stacks are alternatives, not run simultaneously.
+
 ## User prompt documents
 
 User prompt audit documents in `logs-agent_audit.user_prompt-default` use this canonical shape:
