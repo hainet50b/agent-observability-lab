@@ -56,7 +56,7 @@
             },
             "conversation_id": { "type": "keyword" },
             "turn_id":         { "type": "keyword" },
-            "prompt": {
+            "user_prompt": {
               "properties": {
                 "text":           { "type": "text" },
                 "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },

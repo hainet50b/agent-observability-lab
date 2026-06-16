@@ -24,7 +24,7 @@
 #   .session_id  -> agent_audit.conversation_id   (Codex's session is the convo)
 #   .turn_id     -> agent_audit.turn_id
 #   .model       -> agent_audit.agent.model
-#   .prompt      -> agent_audit.prompt.text  (+ .length = its character count)
+#   .prompt      -> agent_audit.user_prompt.text  (+ .length = its character count)
 #   agent.provider/name are constants ("openai" / "codex-cli").
 #   user.* is the workstation login identity, best-effort: user.id is the
 #   domain-qualified login from `whoami` (DOMAIN\user on Windows, the bare login on
@@ -156,7 +156,7 @@ record=$(printf '%s' "$payload" \
           agent: { provider: "openai", name: "codex-cli", model: (.model // null), account: { id: $id.account_id, name: $id.account_name, email: $id.account_email }, organization: { id: $id.org_id, name: $id.org_name } },
           conversation_id: (.session_id // null),
           turn_id: (.turn_id // null),
-          prompt: { text: (if $plain then $p else null end), encrypted_text: null, length: (($p // "") | length) }
+          user_prompt: { text: (if $plain then $p else null end), encrypted_text: null, length: (($p // "") | length) }
         }
       }' 2>/dev/null) \
   || { log "payload not valid JSON — cannot shape audit document; skipping"; done0; }

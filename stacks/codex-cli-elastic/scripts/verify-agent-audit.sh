@@ -126,7 +126,7 @@ src=$(curl -s "$ES_URL/$DATA_STREAM/_search?ignore_unavailable=true&allow_no_ind
   -H 'Content-Type: application/json' \
   --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" \
   | jq -c '.hits.hits[0]._source')
-echo "$src" | jq -r '"[assert] document: action=\(.event.action) host.name=\(.host.name) host.hostname=\(.host.hostname) provider=\(.agent_audit.agent.provider) model=\(.agent_audit.agent.model) prompt.length=\(.agent_audit.prompt.length)"'
+echo "$src" | jq -r '"[assert] document: action=\(.event.action) host.name=\(.host.name) host.hostname=\(.host.hostname) provider=\(.agent_audit.agent.provider) model=\(.agent_audit.agent.model) user_prompt.length=\(.agent_audit.user_prompt.length)"'
 hhost=$(echo "$src" | jq -r '.host.hostname // empty')
 [ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
 echo "[assert] host enrichment present (host.hostname=$hhost) ✓"

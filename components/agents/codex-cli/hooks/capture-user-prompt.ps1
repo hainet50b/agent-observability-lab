@@ -15,7 +15,7 @@
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
-#   .model -> agent_audit.agent.model            .prompt  -> agent_audit.prompt.text
+#   .model -> agent_audit.agent.model            .prompt  -> agent_audit.user_prompt.text
 #   agent.provider/name are constants; prompt.length is the prompt's char count.
 #   user.* is the workstation login identity, best-effort: user.id is the
 #   domain-qualified login from `whoami` (DOMAIN\user on Windows, bare login on
@@ -180,7 +180,7 @@ try {
             }
             conversation_id = $rawObj.session_id
             turn_id         = $rawObj.turn_id
-            prompt = [ordered]@{
+            user_prompt = [ordered]@{
                 text           = $textField
                 encrypted_text = $null
                 length         = $promptLen

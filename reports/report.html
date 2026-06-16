@@ -3006,6 +3006,32 @@
     <li><strong>Please confirm the create_doc decision</strong> (above) is the intended posture for the security-disabled lab, or whether a real scoped role/api-key should be introduced for both audit streams.</li>
   </ul>
 </section>
+
+<section>
+  <h2>Rename Agent Audit user-prompt field agent_audit.prompt.* → agent_audit.user_prompt.*</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Implementation-follows-spec rename.</strong> <code>SPEC/agent-audit.md</code> already documents the field as <code>agent_audit.user_prompt.*</code> (matching the <code>user_prompt</code> dataset name); this task brings the four implementation surfaces in line — the strict template, both hook document builders, the saved-search columns, and the verify display lines.</li>
+    <li><strong>Touched only the field name, nothing structural.</strong> The mapping types (text / keyword-no-index / long), the plaintext/encrypted gate, and the verify assertions are unchanged — only the JSON path segment <code>prompt</code> → <code>user_prompt</code>.</li>
+    <li><strong>Data-stream recreation left as the documented operator step.</strong> The live <code>logs-agent_audit.user_prompt-default</code> stream holds 16 real captured prompts under the old <code>prompt.*</code> mapping. Re-running <code>setup-agent-audit</code> adds <code>user_prompt.*</code> to the live strict mapping (additive, idempotent) so the renamed hook indexes cleanly; the stale <code>prompt.*</code> (and a legacy <code>user.email</code>) mapping entries only disappear on a stream recreate, which the task scopes out as an operator step. Pre-rename docs keep the old field — acceptable in the lab.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <p>The live stream's strict mapping now carries both <code>agent_audit.prompt.*</code> (16 historical docs) and <code>agent_audit.user_prompt.*</code> (new docs). To get a single clean schema, an operator can <code>DELETE</code> and re-create the data stream (out of scope here). No functional impact: new captures use <code>user_prompt.*</code>.</p>
+
+  <h3>Next PRD suggestions</h3>
+  <p>None — the tool-call schema was already <code>agent_audit.tool_call.*</code>, so this rename completes the naming alignment with the SPEC's dataset names.</p>
+
+  <h3>Change summary</h3>
+  <p>The user-prompt audit field is now <code>agent_audit.user_prompt.text</code> / <code>.length</code> (was <code>agent_audit.prompt.*</code>), matching the <code>user_prompt</code> data-stream/dataset name, across the strict mapping, the Codex hooks, the Kibana saved search, and the verification script.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li><strong>Verified live</strong>: re-ran <code>setup-agent-audit.sh</code> (mapping sync added <code>user_prompt.*</code>), then <code>verify-agent-audit.sh</code> PASSed with the renamed field (<code>user_prompt.length=31</code>); Kibana re-import returned <code>success: true</code> for all 4 objects with the new columns; compose-config and smoke-test still pass.</li>
+    <li><strong>Operator follow-up</strong>: recreate <code>logs-agent_audit.user_prompt-default</code> when convenient to drop the now-unused <code>prompt.*</code> / <code>user.email</code> mapping entries.</li>
+  </ul>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
