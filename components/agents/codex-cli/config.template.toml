@@ -1,36 +1,21 @@
-# Codex CLI telemetry — OpenTelemetry (OTLP/HTTP) into the Elastic stack.
-#
-# Agent-owned [otel] template. scripts/render-config.{sh,ps1} fill the
-# OTLP-endpoint placeholder below (the stack's OTLP base, e.g. http://localhost:8200
-# for the direct path) and write the result to <stack>/.codex/config.toml. Point
-# Codex at it with CODEX_HOME (see the stack README, "Point a Codex session").
-#
-# IMPORTANT — why CODEX_HOME and not a repo-local .codex/: Codex IGNORES [otel]
-# keys in a project-local .codex/config.toml (otel is honoured only as user-level
-# config, i.e. $CODEX_HOME/config.toml) and prints a startup warning. So the
-# supported per-project mechanism is CODEX_HOME=<stack>/.codex, which makes this
-# rendered file the user-level config without touching the real ~/.codex.
-#
-# Verified against the openai/codex Rust config parser (codex-rs/config/src/types.rs):
-#   - `exporter`         is the LOGS exporter    (default: none)
-#   - `trace_exporter`   is the TRACES exporter  (default: none)
-#   - `metrics_exporter` is the METRICS exporter (default: STATSIG — so it MUST be
-#                        set explicitly to ship metrics via OTLP instead of Statsig)
-#   - otlp-http `protocol` is REQUIRED ("binary" = protobuf, the wire format the
-#     APM Server decodes; "json" also accepted) — omitting it is a parse error.
-#   - each `endpoint` must carry its full /v1/<signal> path; Codex does NOT append it.
-#   - `metrics_exporter` is a relatively recent addition; on an older `codex` it may
-#     be absent (metrics then hardwired to Statsig). Check `codex --version`.
+# docs:   https://developers.openai.com/codex/config-reference
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/types.rs (OtelConfigToml)
 
 [otel]
 environment = "dev"
-log_user_prompt = false   # do not log prompt text (also the default)
+log_user_prompt = false
 
-# Logs → APM Server OTLP/HTTP
-exporter = { otlp-http = { endpoint = "@@OTLP_ENDPOINT@@/v1/logs", protocol = "binary" } }
+[otel.exporter.otlp-http]
+endpoint = "@@OTLP_ENDPOINT@@/v1/logs"
+protocol = "binary"
+headers = {}
 
-# Traces → APM Server OTLP/HTTP
-trace_exporter = { otlp-http = { endpoint = "@@OTLP_ENDPOINT@@/v1/traces", protocol = "binary" } }
+[otel.trace_exporter.otlp-http]
+endpoint = "@@OTLP_ENDPOINT@@/v1/traces"
+protocol = "binary"
+headers = {}
 
-# Metrics → APM Server OTLP/HTTP (overrides Codex's default "statsig" exporter)
-metrics_exporter = { otlp-http = { endpoint = "@@OTLP_ENDPOINT@@/v1/metrics", protocol = "binary" } }
+[otel.metrics_exporter.otlp-http]
+endpoint = "@@OTLP_ENDPOINT@@/v1/metrics"
+protocol = "binary"
+headers = {}
