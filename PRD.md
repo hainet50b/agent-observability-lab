@@ -549,7 +549,7 @@ Each task is one concern. Tasks are processed in order subject to their dependen
   - `{ "set": { "field": "labels.output", "value": "[REDACTED]", "override": true, "if": "ctx.service?.name == 'codex_cli_rs' && ctx.labels?.output != null" } }`
 
   No script change — the existing `setup-logs-drop.{sh,ps1}` PUTs this file. Verify via `_simulate` (a `codex_cli_rs` tool_result twin → both fields `[REDACTED]`; a doc lacking them → fields not created; a non-`codex_cli_rs` doc → untouched) and a live Codex turn.
-- [ ] **Redact Codex CLI user-prompt text in `logs-apm.app@custom`** — append a `set` processor to `components/backends/elastic/elasticsearch/logs-drop.pipeline.json` replacing the prompt text on `codex.user_prompt`'s log_only twin with `[REDACTED]` (safety net even with `log_user_prompt` off), and extend the file `description` to mention it:
+- [x] **Redact Codex CLI user-prompt text in `logs-apm.app@custom`** — append a `set` processor to `components/backends/elastic/elasticsearch/logs-drop.pipeline.json` replacing the prompt text on `codex.user_prompt`'s log_only twin with `[REDACTED]` (safety net even with `log_user_prompt` off), and extend the file `description` to mention it:
   - `{ "set": { "field": "labels.prompt", "value": "[REDACTED]", "override": true, "if": "ctx.service?.name == 'codex_cli_rs' && ctx.labels?.prompt != null" } }`
 
   No script change — the existing `setup-logs-drop.{sh,ps1}` PUTs this file. Verify via `_simulate` (a `codex_cli_rs` doc with `labels.prompt` → `[REDACTED]`; a doc lacking it → field not created; a non-`codex_cli_rs` doc → untouched) and a live Codex turn.

@@ -2928,6 +2928,28 @@
 <h3>Review highlights</h3>
 <p><code>_simulate</code> verified — a <code>codex_cli_rs</code> tool_result twin → both fields <code>[REDACTED]</code>; a doc lacking them → fields not created; a <code>claude-code</code> doc → untouched. The existing <code>.delta</code> drop still fires (regression checked). Pipeline PUT acknowledged. <strong>Live-Codex-turn confirmation is a human step</strong> — please run a real Codex turn and confirm a tool_result log_only doc lands with <code>arguments</code>/<code>output</code> = <code>[REDACTED]</code>.</p>
 </section>
+
+<section>
+<h2>Redact Codex CLI user-prompt text at ingest (<code>logs-apm.app@custom</code>)</h2>
+<p class="ts">Task: Append a <code>set</code> processor to <code>logs-drop.pipeline.json</code> that replaces <code>labels.prompt</code> on Codex's <code>codex.user_prompt</code> log_only twin with <code>[REDACTED]</code> — a safety net even with <code>log_user_prompt</code> off.</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li>Used the exact processor body and <code>if</code> condition from the task, appended after the two tool-I/O redactions. No script change — the existing <code>setup-logs-drop.{sh,ps1}</code> PUT the file; re-running it activated the new processor.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None — this was the last open task in the PRD.</p>
+
+<h3>Change summary</h3>
+<p>Codex CLI user-prompt text (<code>labels.prompt</code>) is now replaced with <code>[REDACTED]</code> at ingest, so prompt content never persists in Elasticsearch even if <code>log_user_prompt</code> is turned on; other agents and other event types are unaffected.</p>
+
+<h3>Review highlights</h3>
+<p><code>_simulate</code> verified — a <code>codex_cli_rs</code> doc with <code>labels.prompt</code> → <code>[REDACTED]</code>; a doc lacking it → field not created; a <code>claude-code</code> doc → untouched. Pipeline PUT acknowledged. <strong>Live-Codex-turn confirmation is a human step</strong> — please run a real Codex turn with <code>log_user_prompt=true</code> and confirm the log_only prompt doc lands with <code>prompt</code> = <code>[REDACTED]</code>.</p>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
