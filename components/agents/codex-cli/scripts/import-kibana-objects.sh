@@ -40,8 +40,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 # Data views FIRST, then the saved searches — the saved searches reference the
 # data views (codex-cli-events / codex-cli-metrics / codex-cli-traces), so those

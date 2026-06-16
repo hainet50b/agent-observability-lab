@@ -68,7 +68,7 @@ fi
 mkdir -p "$target/.codex"
 
 # POSIX absolute paths carry no JSON-special characters, so a heredoc is safe.
-cat > "$out" << JSON
+cat >"$out" <<JSON
 {
   "hooks": {
     "UserPromptSubmit": [

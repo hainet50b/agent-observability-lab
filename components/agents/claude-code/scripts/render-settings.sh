@@ -52,6 +52,6 @@ mkdir -p "$target/.claude"
 sed -e "s#@@OTLP_ENDPOINT@@#$endpoint#" \
   -e "s#@@PROMPTS_AUDIT_ES_URL@@#$audit#" \
   -e "s#@@HOOK_COMMAND@@#$hook#" \
-  "$TEMPLATE" > "$out"
+  "$TEMPLATE" >"$out"
 
 echo "wrote $out"

@@ -63,17 +63,17 @@ config_file=${CODEX_AGENT_AUDIT_CONFIG:-${CODEX_HOME:-$HOME/.codex}/agent-audit.
 # agent-audit.toml are unique across the [elasticsearch] / [audit] sections, so a
 # section-agnostic lookup is unambiguous. Comments live on their own lines.
 toml_get() {
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$config_file" 2> /dev/null \
-    | head -n1 \
-    | sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$config_file" 2>/dev/null |
+    head -n1 |
+    sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
 
 # The canonical document is JSON; shaping arbitrary prompt text safely needs jq.
-command -v jq > /dev/null 2>&1 || {
+command -v jq >/dev/null 2>&1 || {
   log "jq unavailable — cannot shape audit document; skipping"
   done0
 }
-command -v curl > /dev/null 2>&1 || {
+command -v curl >/dev/null 2>&1 || {
   log "curl unavailable — cannot deliver audit document; skipping"
   done0
 }
@@ -104,19 +104,19 @@ payload=$(cat)
   done0
 }
 
-ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2> /dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Best-effort runtime identity (Codex's payload has none).
-user_name=${USER:-${USERNAME:-$(id -un 2> /dev/null || echo "")}}
+user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
 # user.id is the domain-qualified workstation login (whoami: DOMAIN\user on
 # Windows, the bare login on POSIX where no domain source exists). Empty -> null.
-user_id=$(whoami 2> /dev/null || echo "")
+user_id=$(whoami 2>/dev/null || echo "")
 
 # Best-effort runtime host (ECS host.hostname/host.name). Codex's payload has
 # none; use the OS hostname. host.name and host.hostname are the same value here
 # (best-effort — ECS permits it); a richer source could split FQDN vs short name.
 host_hostname=${HOSTNAME:-}
-[ -n "$host_hostname" ] || host_hostname=$(hostname 2> /dev/null || echo "")
+[ -n "$host_hostname" ] || host_hostname=$(hostname 2>/dev/null || echo "")
 [ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
 host_name=$host_hostname
 
@@ -148,7 +148,7 @@ if [ -f "$auth_file" ]; then
           account_name: ($claims.name // null),
           org_id: ($org.id // null),
           org_name: ($org.title // null)
-        }' "$auth_file" 2> /dev/null) && [ -n "$parsed" ]; then
+        }' "$auth_file" 2>/dev/null) && [ -n "$parsed" ]; then
     identity=$parsed
   else
     log "could not parse provider identity from $auth_file — account/organization stay null"
@@ -159,8 +159,8 @@ fi
 # plaintext mode prompt.text carries the prompt; any other mode nulls it (sealing
 # into encrypted_text is a later increment) — prompt.length is the true char count
 # regardless, so the audit trail still records that a prompt of that size occurred.
-record=$(printf '%s' "$payload" \
-  | jq -c --arg ts "$ts" --arg uname "$user_name" --arg uid "$user_id" --arg mode "$mode" \
+record=$(printf '%s' "$payload" |
+  jq -c --arg ts "$ts" --arg uname "$user_name" --arg uid "$user_id" --arg mode "$mode" \
     --arg hname "$host_name" --arg hhost "$host_hostname" --argjson id "$identity" \
     '($mode == "plaintext") as $plain
        | (.prompt // null) as $p
@@ -175,8 +175,8 @@ record=$(printf '%s' "$payload" \
           turn_id: (.turn_id // null),
           user_prompt: { text: (if $plain then $p else null end), encrypted_text: null, length: (($p // "") | length) }
         }
-      }' 2> /dev/null) \
-  || {
+      }' 2>/dev/null) ||
+  {
     log "payload not valid JSON — cannot shape audit document; skipping"
     done0
   }
@@ -188,14 +188,14 @@ curl_args=(-s -o /dev/null -w '%{http_code}' --max-time "$max_time"
 [ -n "$api_key" ] && curl_args+=(-H "Authorization: ApiKey $api_key")
 curl_args+=(--data-binary @-)
 
-http_code=$(printf '%s' "$record" | curl "${curl_args[@]}" 2> /dev/null) \
-  || {
+http_code=$(printf '%s' "$record" | curl "${curl_args[@]}" 2>/dev/null) ||
+  {
     log "POST to $es_target failed (curl error) — prompt proceeds uncaptured"
     done0
   }
 
 case "$http_code" in
-  2*) log "indexed 1 audit document -> $es_target (HTTP $http_code)" ;;
-  *) log "index returned HTTP $http_code (audit doc not stored) — prompt unaffected" ;;
+2*) log "indexed 1 audit document -> $es_target (HTTP $http_code)" ;;
+*) log "index returned HTTP $http_code (audit doc not stored) — prompt unaffected" ;;
 esac
 done0

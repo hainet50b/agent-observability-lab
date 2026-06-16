@@ -55,16 +55,16 @@ fail() {
 }
 
 # --- Preconditions ---------------------------------------------------------
-command -v docker > /dev/null 2>&1 || skip "docker CLI not found"
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
-docker info > /dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
+command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
+docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
 [ -f "$CODEX_HOME_DIR/hooks.json" ] || skip "no .codex/hooks.json — run scripts/setup.sh first"
 [ -f "$CODEX_HOME_DIR/agent-audit.toml" ] || skip "no .codex/agent-audit.toml — run scripts/setup.sh first"
 # Confirm the hook is actually registered on PostToolUse (configured state).
-jq -e '.hooks.PostToolUse[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" > /dev/null 2>&1 \
-  || fail "no PostToolUse command registered in .codex/hooks.json"
+jq -e '.hooks.PostToolUse[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" >/dev/null 2>&1 ||
+  fail "no PostToolUse command registered in .codex/hooks.json"
 
 # --- Arrange ---------------------------------------------------------------
 echo "[arrange] bringing the stack up (docker compose up -d)…"
@@ -73,7 +73,7 @@ docker compose up -d
 wait_healthy() {
   cname=$1 tries=${2:-60}
   for _ in $(seq 1 "$tries"); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2> /dev/null || echo "")
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2>/dev/null || echo "")
     [ "$status" = healthy ] && {
       echo "[arrange] $cname healthy"
       return 0
@@ -118,8 +118,8 @@ printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" || true
 es_count_cid() {
   curl -s "$ES_URL/$DATA_STREAM/_count?ignore_unavailable=true&allow_no_indices=true" \
     -H 'Content-Type: application/json' \
-    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" \
-    | jq -r '.count // 0'
+    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
+    jq -r '.count // 0'
 }
 
 echo "[assert] querying $DATA_STREAM for the audit document…"
@@ -138,8 +138,8 @@ done
 # Fetch the landed document once for the informational line and the field assertions.
 src=$(curl -s "$ES_URL/$DATA_STREAM/_search?ignore_unavailable=true&allow_no_indices=true" \
   -H 'Content-Type: application/json' \
-  --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" \
-  | jq -c '.hits.hits[0]._source')
+  --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
+  jq -c '.hits.hits[0]._source')
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) tool=\(.agent_audit.tool_call.tool.name) call_id=\(.agent_audit.tool_call.tool.call_id) input.length=\(.agent_audit.tool_call.input.length) output.length=\(.agent_audit.tool_call.output.length)"'
 
 # event.action / dataset must be the tool-call variant.
@@ -170,8 +170,8 @@ hhost=$(echo "$src" | jq -r '.host.hostname // empty')
 [ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
 uid=$(echo "$src" | jq -r '.user.id // empty')
 [ -n "$uid" ] || fail "audit document missing user.id — identity derivation not applied"
-echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' > /dev/null \
-  || fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
+echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' >/dev/null ||
+  fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
 echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, account/organization envelope) ✓"
 
 if [ -f "$CODEX_HOME_DIR/auth.json" ]; then
@@ -186,8 +186,8 @@ fi
 echo "[cleanup] removing the synthetic verification document…"
 curl -s -X POST "$ES_URL/$DATA_STREAM/_delete_by_query?refresh=true&ignore_unavailable=true" \
   -H 'Content-Type: application/json' \
-  --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" \
-  | jq -r '"[cleanup] deleted \(.deleted // 0) document(s)"'
+  --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
+  jq -r '"[cleanup] deleted \(.deleted // 0) document(s)"'
 
 echo
 echo "PASS: Codex PostToolUse hook -> $DATA_STREAM delivery verified."

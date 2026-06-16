@@ -44,6 +44,6 @@ if [ -e "$out" ]; then
 fi
 
 mkdir -p "$target/.codex"
-sed -e "s#@@ES_URL@@#$es_url#" "$TEMPLATE" > "$out"
+sed -e "s#@@ES_URL@@#$es_url#" "$TEMPLATE" >"$out"
 
 echo "wrote $out"

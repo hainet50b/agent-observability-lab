@@ -60,11 +60,11 @@ fail() {
 }
 
 # --- Preconditions ---------------------------------------------------------
-command -v docker > /dev/null 2>&1 || skip "docker CLI not found"
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
-command -v base64 > /dev/null 2>&1 || skip "base64 not found"
-docker info > /dev/null 2>&1 || skip "docker daemon not reachable; nothing to test"
+command -v docker >/dev/null 2>&1 || skip "docker CLI not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
+command -v base64 >/dev/null 2>&1 || skip "base64 not found"
+docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to test"
 
 # --- Arrange ---------------------------------------------------------------
 echo "[arrange] bringing the stack up (docker compose up -d)…"
@@ -73,7 +73,7 @@ docker compose up -d
 wait_healthy() {
   cname=$1 tries=${2:-60}
   for _ in $(seq 1 "$tries"); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2> /dev/null || echo "")
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$cname" 2>/dev/null || echo "")
     [ "$status" = healthy ] && {
       echo "[arrange] $cname healthy"
       return 0
@@ -94,7 +94,7 @@ done
 # exiting 0 means the port is accepting connections.
 wait_collector() {
   for _ in $(seq 1 30); do
-    if curl -s -o /dev/null "$OTEL_COLLECTOR_URL/" 2> /dev/null; then
+    if curl -s -o /dev/null "$OTEL_COLLECTOR_URL/" 2>/dev/null; then
       echo "[arrange] otel-collector accepting OTLP on $OTEL_COLLECTOR_URL"
       return 0
     fi
@@ -110,8 +110,8 @@ wait_collector || {
 es_count() {
   curl -s "$ES_URL/logs-apm*/_count?ignore_unavailable=true&allow_no_indices=true" \
     -H 'Content-Type: application/json' \
-    --data "{\"query\":{\"term\":{\"service.name\":\"$SERVICE_NAME\"}}}" \
-    | jq -r '.count // 0'
+    --data "{\"query\":{\"term\":{\"service.name\":\"$SERVICE_NAME\"}}}" |
+    jq -r '.count // 0'
 }
 
 baseline=$(es_count)

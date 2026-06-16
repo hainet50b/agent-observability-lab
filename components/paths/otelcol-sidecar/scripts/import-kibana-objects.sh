@@ -39,8 +39,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 # Data view first — the Health dashboard references the otelcol-sidecar-metrics
 # data view, so it must be imported before the dashboard.

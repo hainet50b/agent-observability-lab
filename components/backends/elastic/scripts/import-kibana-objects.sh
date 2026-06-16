@@ -38,8 +38,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 # The cross-agent assets this backend owns: the AI Agents — Traces data view
 # (traces-apm-agents_*). Agent-specific data views / saved searches / dashboards

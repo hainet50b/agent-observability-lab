@@ -56,8 +56,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 [ -f "$INDEX_FILE" ] || fail "index mapping not found: $COMPONENT_DIR/$INDEX_FILE"
 
@@ -76,11 +76,11 @@ result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/$INDEX" \
 code=$(echo "$result" | tail -n1)
 body=$(echo "$result" | sed '$d')
 
-echo "$body" | jq . 2> /dev/null || echo "$body"
+echo "$body" | jq . 2>/dev/null || echo "$body"
 
 case "$code" in
-  2*) : ;;
-  *) fail "PUT /$INDEX returned HTTP $code (expected 2xx)" ;;
+2*) : ;;
+*) fail "PUT /$INDEX returned HTTP $code (expected 2xx)" ;;
 esac
 
 acknowledged=$(echo "$body" | jq -r '.acknowledged // false')

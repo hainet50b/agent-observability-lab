@@ -42,11 +42,11 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 1
 fi
 
-command -v claude > /dev/null 2>&1 || {
+command -v claude >/dev/null 2>&1 || {
   echo "error: 'claude' CLI not found on PATH." >&2
   exit 1
 }
-command -v jq > /dev/null 2>&1 || {
+command -v jq >/dev/null 2>&1 || {
   echo "error: 'jq' not found on PATH." >&2
   exit 1
 }
@@ -61,7 +61,7 @@ for ((i = 1; i <= MAX_ITERATIONS; i++)); do
 
   # Rotate report.html before the iteration if it exceeds the threshold.
   if [[ -f "$REPORT_FILE" ]]; then
-    size=$(wc -c < "$REPORT_FILE")
+    size=$(wc -c <"$REPORT_FILE")
     if ((size > ROTATE_BYTES)); then
       ts=$(date -u +%Y%m%dT%H%M%SZ)
       mv "$REPORT_FILE" "$REPORTS_DIR/report-$ts.html"

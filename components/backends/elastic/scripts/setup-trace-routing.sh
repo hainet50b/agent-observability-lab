@@ -55,8 +55,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 # The pipeline body (a reroute that fires only on Claude Code spans; other
 # producers fall through unchanged and stay in traces-apm-default) is the single
@@ -70,11 +70,11 @@ result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_ingest/pipeline/$PIPELINE"
 code=$(echo "$result" | tail -n1)
 body=$(echo "$result" | sed '$d')
 
-echo "$body" | jq . 2> /dev/null || echo "$body"
+echo "$body" | jq . 2>/dev/null || echo "$body"
 
 case "$code" in
-  2*) : ;;
-  *) fail "PUT _ingest/pipeline/$PIPELINE returned HTTP $code (expected 2xx)" ;;
+2*) : ;;
+*) fail "PUT _ingest/pipeline/$PIPELINE returned HTTP $code (expected 2xx)" ;;
 esac
 
 acknowledged=$(echo "$body" | jq -r '.acknowledged // false')

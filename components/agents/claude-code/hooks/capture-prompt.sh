@@ -47,11 +47,11 @@ log() { echo "[capture-prompt] $*" >&2; }
 done0() { exit 0; } # every exit path is success — never block the prompt
 
 # Dependencies: degrade gracefully rather than break the session.
-command -v curl > /dev/null 2>&1 || {
+command -v curl >/dev/null 2>&1 || {
   log "curl not found — skipping audit"
   done0
 }
-command -v awk > /dev/null 2>&1 || {
+command -v awk >/dev/null 2>&1 || {
   log "awk not found — skipping audit"
   done0
 }
@@ -89,13 +89,13 @@ session_id=$(json_get "$payload" session_id)
 user_email=""
 organization=""
 if [ -f "$CLAUDE_CONFIG" ]; then
-  claude=$(cat "$CLAUDE_CONFIG" 2> /dev/null || true)
+  claude=$(cat "$CLAUDE_CONFIG" 2>/dev/null || true)
   user_email=$(json_get "$claude" emailAddress)
   organization=$(json_get "$claude" organizationName)
 fi
 
-hostname=$(hostname 2> /dev/null || echo "${HOSTNAME:-unknown}")
-ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2> /dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+hostname=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
+ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # All values are already JSON-escaped (lifted verbatim) or simple scalars, so the
 # document is assembled with printf alone — no jq needed to build it.

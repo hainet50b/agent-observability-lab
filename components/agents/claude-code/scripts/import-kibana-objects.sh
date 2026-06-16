@@ -40,8 +40,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 # Data views BEFORE saved searches BEFORE the dashboard — the saved searches and
 # the dashboard reference the data views (claude-code-events /

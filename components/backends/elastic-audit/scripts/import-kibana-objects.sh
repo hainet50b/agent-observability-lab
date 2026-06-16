@@ -38,8 +38,8 @@ fail() {
   exit 1
 }
 
-command -v curl > /dev/null 2>&1 || skip "curl not found"
-command -v jq > /dev/null 2>&1 || skip "jq not found"
+command -v curl >/dev/null 2>&1 || skip "curl not found"
+command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 # The Agent Audit assets this backend owns: the Agent Audit — User Prompts and
 # Agent Audit — Tool Calls data views + saved searches (the cross-agent hook->ES
