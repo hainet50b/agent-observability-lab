@@ -2883,6 +2883,28 @@
   <li><code>_simulate</code> verified — <strong>traces</strong>: <code>codex_cli_rs</code> <code>receiving</code>/<code>handle_responses</code> DROPPED; other <code>codex_cli_rs</code> spans still reroute to <code>traces-apm-agents_codex_cli_rs</code>; <code>claude-code</code> and <code>cce-smoke-test</code> unaffected. <strong>logs</strong>: the three listed <code>.delta</code> kinds DROPPED; <code>response.completed</code>, <code>codex.user_prompt</code> (no <code>event_kind</code>), an unlisted <code>.delta</code>, and a <code>claude-code</code> delta all KEPT. Smoke test PASSES.</li>
 </ul>
 </section>
+
+<section>
+<h2>Shorten the Agent Audit — User Prompts saved-search description</h2>
+<p class="ts">Task: Replace the long multi-sentence <code>attributes.description</code> on <code>agent-audit-user-prompts-search</code> with a concise one-liner; touch nothing else.</p>
+
+<h3>Judgement points</h3>
+<ul>
+  <li>No real choice — the task supplied the exact replacement string. Edited only <code>attributes.description</code>; the <code>title</code>, <code>id</code>, <code>columns</code>, <code>sort</code>, <code>references</code>, and the data-view object are byte-identical.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None.</p>
+
+<h3>Change summary</h3>
+<p>The Agent Audit — User Prompts saved search now shows a one-line description in Discover (was a ~900-char paragraph), matching the brevity of the Codex CLI searches.</p>
+
+<h3>Review highlights</h3>
+<p>Imported cleanly into the live Kibana (<code>success: true</code>, 2 objects, 0 errors); the stored description reads back as the shortened one-liner.</p>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
