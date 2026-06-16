@@ -2849,6 +2849,40 @@
 <h3>Review highlights</h3>
 <p>Verified live: the saved Conversations ES|QL run through the ES _query API now returns llm_requests &gt; 0 for all 6 conversations (59, 12, 9, 6, 2, 1) where 5 of 6 were previously 0; import is clean (15 objects, references resolved).</p>
 </section>
+
+<section>
+<h2>Codex CLI ingest drops — traces (<code>receiving</code>/<code>handle_responses</code>) + logs streaming-delta</h2>
+<time>2026-06-16</time>
+
+<h3>Judgement points</h3>
+<ul>
+  <li><strong>Wired the new <code>setup-logs-drop</code> into the stack bootstrap.</strong> The trace drop rides inside the existing <code>traces-apm@custom</code> pipeline, which <code>setup.sh</code>/<code>setup.ps1</code> already install (step 1), so it activates automatically once the pipeline is re-PUT. For the logs drop to be symmetric — active after a normal <code>setup</code> run rather than dead code — I added it as a new step (<code>2/7</code>, grouped with the other backend ingest pipeline) and renumbered the remaining steps in both <code>setup.sh</code> and <code>setup.ps1</code>. The PRD task listed exact deliverables (pipeline JSON + the two scripts) but not the wiring; I judged an unwired setup script to be incomplete implementation, and <code>setup.*</code> is implementation glue (Ralph-owned), not a spec file.</li>
+  <li><strong>Logs drop body lives in its own file</strong> <code>elasticsearch/logs-drop.pipeline.json</code>, mirroring the externalized <code>trace-routing.pipeline.json</code> single-source-of-truth pattern that the two <code>setup-logs-drop.{sh,ps1}</code> scripts read and PUT — no inline JSON duplicated across the bash/PowerShell pair.</li>
+  <li><strong>Conditions taken verbatim from the SPEC.</strong> Both drops are gated on <code>ctx.service?.name == 'codex_cli_rs'</code> (the pipelines are shared across all producers) and use null-safe <code>ctx.labels?.event_kind</code> / <code>ctx.span?.name</code>. The logs drop is an explicit three-value allowlist, not <code>endsWith('.delta')</code>, exactly as the SPEC's "verify, don't assume" rule requires. The trace drop is the first processor, before the two reroutes, so dropped spans never reach routing.</li>
+</ul>
+
+<h3>Unresolved / workarounds</h3>
+<ul>
+  <li><strong>Live-Codex-turn verification could not be automated here.</strong> The Codex CLI binary is not on this environment's PATH and a real turn needs interactive ChatGPT auth + network, which can't be driven headlessly. Both pipelines are instead proven conclusively via <code>_simulate</code> (matrix in Review highlights) and are installed live on the running stack, so the human's next real Codex turn <em>is</em> the live check. Baselines captured for that check: <code>logs-apm.app.codex_cli_rs*</code> currently holds <strong>116,925</strong> of the three <code>.delta</code> docs, and traces hold <strong>176,870</strong> <code>codex_cli_rs</code> <code>receiving</code>/<code>handle_responses</code> spans — both should stop growing on turns taken after the pipelines were installed (pre-existing docs are not removed retroactively).</li>
+</ul>
+
+<h3>Next PRD suggestions</h3>
+<ul>
+  <li>The codex-cli-elastic stack <code>README.md</code> Layout / Quick Tour does not list the new <code>elasticsearch/logs-drop.pipeline.json</code> or <code>setup-logs-drop.{sh,ps1}</code>, and <code>setup.*</code> is now 7 steps (was 6). README is spec-layer (human-owned), so I left it untouched — a follow-up could refresh it.</li>
+  <li>A later task could add a one-shot data-stream cleanup helper (or document the manual step) to remove the pre-drop high-volume <code>.delta</code> / <code>receiving</code> docs already in the streams.</li>
+  <li>When a new Codex <code>.delta</code> <code>event_kind</code> (e.g. <code>response.reasoning_summary_text.delta</code>, currently kept) is verified content-free / reconstructable, add it to the logs-drop allowlist.</li>
+</ul>
+
+<h3>Change summary</h3>
+<p>Codex CLI's two dominant telemetry firehoses are now dropped at ingest: the per-SSE-chunk <code>receiving</code>/<code>handle_responses</code> trace spans (~94% of spans) and the three streaming-delta event docs (~91% of events). Other agents and the smoke-test probe are untouched, and no analytical content is lost (token counts survive on <code>response.completed</code>, latency in metrics). <code>scripts/setup.sh</code> now installs both drops automatically.</p>
+
+<h3>Review highlights</h3>
+<ul>
+  <li>Confirm the decision to <strong>wire <code>setup-logs-drop</code> into <code>setup.{sh,ps1}</code></strong> (step 2/7) matches intent — it was not explicitly in the task's deliverable list.</li>
+  <li>Please run a real Codex turn at your convenience to close the live-turn verification against the baselines above.</li>
+  <li><code>_simulate</code> verified — <strong>traces</strong>: <code>codex_cli_rs</code> <code>receiving</code>/<code>handle_responses</code> DROPPED; other <code>codex_cli_rs</code> spans still reroute to <code>traces-apm-agents_codex_cli_rs</code>; <code>claude-code</code> and <code>cce-smoke-test</code> unaffected. <strong>logs</strong>: the three listed <code>.delta</code> kinds DROPPED; <code>response.completed</code>, <code>codex.user_prompt</code> (no <code>event_kind</code>), an unlisted <code>.delta</code>, and a <code>claude-code</code> delta all KEPT. Smoke test PASSES.</li>
+</ul>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

@@ -1,0 +1,6 @@
+{
+  "description": "Elastic backend: drop the three verified high-volume Codex CLI streaming-delta event docs (service.name=codex_cli_rs only) — response.output_text.delta, response.function_call_arguments.delta, response.custom_tool_call_input.delta. These are content-free incremental fragments (the complete value lands on the terminal .done event; Codex's export strips conversation content from them entirely), together ~91% of the event/log_only stream. `?.` is required: event_kind is absent on the valuable events (codex.user_prompt, codex.tool_result, response.completed, …) and null == '…' is safely false, so they are kept. Explicit allowlist, not endsWith('.delta'): a wildcard would blindly drop unverified/future .delta kinds (refusal, reasoning-summary, …) — a new kind joins only after its reconstructability is verified.",
+  "processors": [
+    { "drop": { "if": "ctx.service?.name == 'codex_cli_rs' && (ctx.labels?.event_kind == 'response.output_text.delta' || ctx.labels?.event_kind == 'response.function_call_arguments.delta' || ctx.labels?.event_kind == 'response.custom_tool_call_input.delta')" } }
+  ]
+}

@@ -1,6 +1,7 @@
 {
-  "description": "Elastic backend: route per-agent trace spans to dedicated traces-apm-agents_<agent> data streams (claude-code -> agents_claude_code, codex_cli_rs -> agents_codex_cli_rs); other producers fall through and stay in traces-apm-default",
+  "description": "Elastic backend: (1) drop the high-volume Codex CLI streaming leaf/intermediate spans `receiving`+`handle_responses` (service.name=codex_cli_rs only, before the reroutes so dropped spans never reach routing); (2) route per-agent trace spans to dedicated traces-apm-agents_<agent> data streams (claude-code -> agents_claude_code, codex_cli_rs -> agents_codex_cli_rs); other producers fall through and stay in traces-apm-default",
   "processors": [
+    { "drop": { "if": "ctx.service?.name == 'codex_cli_rs' && (ctx.span?.name == 'receiving' || ctx.span?.name == 'handle_responses')" } },
     { "reroute": { "if": "ctx.service?.name == 'claude-code'", "namespace": "agents_claude_code" } },
     { "reroute": { "if": "ctx.service?.name == 'codex_cli_rs'", "namespace": "agents_codex_cli_rs" } }
   ]
