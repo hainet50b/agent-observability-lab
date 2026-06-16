@@ -10,10 +10,11 @@
 #     Agent Audit hook; at run time it delivers each submitted prompt to the
 #     local Agent Audit data stream using the delivery config in
 #     .codex/agent-audit.toml (see render-agent-audit.sh).
-#   * PostToolUse -> hooks/capture-tool-call.{sh,ps1} — the tool-call
-#     CHARACTERIZATION hook; appends each raw PostToolUse payload to
-#     .codex/hook-captures/tool-call.ndjson (no Elasticsearch, fire-and-forget)
-#     to discover Codex's exact tool-call payload keys.
+#   * PostToolUse -> hooks/capture-tool-call.{sh,ps1} — the production Agent
+#     Audit tool-call hook; at run time it delivers each completed tool call to
+#     the local Agent Audit data stream `logs-agent_audit.tool_call-default`
+#     using the same .codex/agent-audit.toml delivery config (see
+#     render-agent-audit.sh).
 #
 # The hook scripts are referenced by ABSOLUTE path (resolved from this
 # component): `command` for POSIX hosts and `commandWindows` (pwsh) for Windows.
@@ -76,7 +77,7 @@ cat > "$out" <<JSON
             "command": "$TOOL_SH",
             "commandWindows": "pwsh -NoProfile -File $TOOL_PS1",
             "timeout": 10,
-            "statusMessage": "capturing PostToolUse payload"
+            "statusMessage": "delivering PostToolUse audit document"
           }
         ]
       }

@@ -2978,6 +2978,34 @@
   <li><strong>Live confirmation is a human step</strong>: launch a Codex session with <code>CODEX_HOME=&lt;stack&gt;/.codex</code>, run a real shell tool and a real MCP tool, then inspect <code>.codex/hook-captures/tool-call.ndjson</code> — compare each record's <code>raw</code> object against the four extracted fields to learn Codex's actual key names (any that come through <code>null</code> are named differently and live in <code>raw</code>).</li>
 </ul>
 </section>
+
+<section>
+  <h2>Implement the Codex tool-call audit hook (logs-agent_audit.tool_call-default)</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Promoted the characterization hook to production audit in place.</strong> The previous task left <code>capture-tool-call.{sh,ps1}</code> as a probe that appended raw payloads to a local NDJSON. Rather than add a parallel script, I rewrote those two files to clone the proven <code>capture-user-prompt</code> audit flow — same TOML-config read, same fail-open contract, same local identity derivation — so the two audit hooks stay structurally identical and easy to maintain together.</li>
+    <li><strong>Stream name hard-coded in the hook, not read from config.</strong> The shared <code>agent-audit.toml</code>'s <code>data_stream</code> key names the <em>user_prompt</em> stream, so the tool-call hook reads only <code>url</code>/<code>api_key</code>/<code>timeout_ms</code>/<code>mode</code> from it and fixes <code>DATA_STREAM=logs-agent_audit.tool_call-default</code> in the script (as the task directed, "stream name in the script").</li>
+    <li><strong>Heterogeneous tool I/O serialized to one scalar.</strong> Codex's <code>tool_input</code> is an object and <code>tool_response</code> is a string (shell) or object (MCP) — confirmed against the prior task's live captures. Each side is serialized to a JSON string (jq <code>tojson</code> / PowerShell <code>ConvertTo-Json</code>) into <code>.text</code> with <code>.length</code> the char count, so the strict mapping sees exactly one field per side. <code>.text</code> is mapped <strong>wildcard</strong> (not keyword: avoids Lucene's ~32 KB term-limit document rejection on large tool output; not text: the audit need is substring/regexp over machine JSON), per SPEC.</li>
+    <li><strong>create_doc scope:</strong> the lab runs security-disabled and no role/api-key infrastructure exists for the user_prompt stream either, so I provisioned the tool_call stream identically (template + data stream + mapping sync) — the hook ingests via the stream's <code>_doc</code> endpoint (op_type=create) — and documented the intended <code>create_doc</code> production privilege in the setup-script header rather than inventing a role that contradicts the established posture.</li>
+    <li><strong>Refactored both setup scripts to a single provisioning routine</strong> called once per stream, instead of duplicating ~60 lines, keeping the user_prompt behaviour byte-identical.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <p>Nothing blocking. The "create_doc scope on it" wording in the task could be read as creating a security role; I read it as the production-intent privilege and matched the existing security-disabled provisioning instead — flagged below for the human to confirm.</p>
+
+  <h3>Next PRD suggestions</h3>
+  <p>The pending field-rename task (<code>agent_audit.prompt.*</code> → <code>agent_audit.user_prompt.*</code>) does not touch the tool-call schema (already <code>agent_audit.tool_call.*</code>), so no follow-up is needed there. A later increment could add an encrypted <code>audit.mode</code> that nulls <code>.text</code> and populates the reserved <code>.encrypted_text</code> on both audit streams at once.</p>
+
+  <h3>Change summary</h3>
+  <p>A Codex session launched from this stack now records every completed tool call — the tool name, call id, and the serialized input arguments and output — as a strict audit document in a new local <code>logs-agent_audit.tool_call-default</code> Elasticsearch data stream, alongside the existing user-prompt audit. A new "Agent Audit — Tool Calls" Kibana data view and saved search browse them.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li><strong>Verified live end-to-end</strong> on the running stack: <code>setup-agent-audit.sh</code> provisioned the strict template + data stream; a synthetic <code>PostToolUse</code> payload (object input + string response) through the real hook landed one document (HTTP 201) with <code>event.action=tool-call</code>, the tool identity, both bodies serialized to <code>.text</code> with correct lengths, and the full identity envelope (user.id, host.hostname, provider account.id from auth.json); the strict mapping accepted it (cwd/transcript_path/permission_mode dropped). Kibana import returned <code>success: true</code> for all 4 objects; smoke-test still PASS.</li>
+    <li><strong>Please confirm the create_doc decision</strong> (above) is the intended posture for the security-disabled lab, or whether a real scoped role/api-key should be introduced for both audit streams.</li>
+  </ul>
+</section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

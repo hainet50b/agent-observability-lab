@@ -9,9 +9,9 @@
 #   * UserPromptSubmit -> hooks/capture-user-prompt.{sh,ps1} — production Agent
 #     Audit hook; delivers each submitted prompt to the local Agent Audit data
 #     stream using the delivery config in .codex/agent-audit.toml.
-#   * PostToolUse -> hooks/capture-tool-call.{sh,ps1} — tool-call
-#     CHARACTERIZATION hook; appends each raw PostToolUse payload to
-#     .codex/hook-captures/tool-call.ndjson to discover Codex's tool-call keys.
+#   * PostToolUse -> hooks/capture-tool-call.{sh,ps1} — production Agent Audit
+#     tool-call hook; delivers each completed tool call to the local Agent Audit
+#     data stream logs-agent_audit.tool_call-default using .codex/agent-audit.toml.
 # hooks.json is gitignored.
 #
 # ConvertTo-Json escapes the Windows backslash paths correctly. Written as UTF-8
@@ -71,7 +71,7 @@ $config = [ordered]@{
                         command        = $ToolSh
                         commandWindows = "pwsh -NoProfile -File $ToolPs1"
                         timeout        = 10
-                        statusMessage  = 'capturing PostToolUse payload'
+                        statusMessage  = 'delivering PostToolUse audit document'
                     }
                 )
             }

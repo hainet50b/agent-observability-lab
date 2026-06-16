@@ -1,79 +1,232 @@
 #!/usr/bin/env pwsh
-# capture-tool-call.ps1 — Codex CLI PostToolUse characterization hook
+# capture-tool-call.ps1 — Codex CLI PostToolUse audit hook
 # (PowerShell mirror of capture-tool-call.sh; same .sh/.ps1 pairing as the
 # repo's other scripts). See that file's header for the full rationale. In
-# short: fires once per completed tool call, appends the RAW stdin payload plus
-# best-effort extracted `tool_name` / `tool_use_id` / `tool_input` /
-# `tool_response` to a stack-local NDJSON capture file, to discover the exact
-# Codex PostToolUse payload keys. CHARACTERIZATION ONLY — no POST, no audit
-# stream, no sealing.
+# short: fires once per completed tool call, reshapes Codex's raw PostToolUse
+# payload into the canonical `agent_audit.tool_call` document defined in
+# SPEC/agent-audit.md, and POSTs it straight to the local Agent Audit data stream
+# `logs-agent_audit.tool_call-default` (direct-to-Elasticsearch, independent of
+# the OTLP/APM pipeline). No sealing: lab `mode = "plaintext"` stores the tool I/O
+# in plaintext (a future encrypted mode nulls .text and uses .encrypted_text).
+# (Sibling of capture-user-prompt.ps1, the UserPromptSubmit audit hook.)
+#
+# Delivery config is read at run time from agent-audit.toml's [elasticsearch] /
+# [audit] blocks (url / api_key / timeout_ms / audit.mode). The data stream is NOT
+# read from config (that key names the user_prompt stream) — the tool-call stream
+# is fixed below. Config path:
+#   $env:CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.toml
+#
+# Field mapping (Codex raw payload -> canonical document):
+#   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
+#   .model -> agent_audit.agent.model
+#   .tool_name   -> agent_audit.tool_call.tool.name
+#   .tool_use_id -> agent_audit.tool_call.tool.call_id (per-call id; join key to the
+#                   OTLP trace_safe codex.tool_result `call_id`)
+#   .tool_input  -> agent_audit.tool_call.input  (serialized to a JSON STRING into
+#                   .text, .length = char count; Codex's tool_input is heterogeneous,
+#                   so it is serialized to one scalar — the strict mapping must not
+#                   see arbitrary nested keys)
+#   .tool_response -> agent_audit.tool_call.output (same serialize-to-.text treatment)
+#   agent.provider/name are constants. user.* / host.* / account.* / organization.*
+#   are derived exactly as capture-user-prompt.ps1 (workstation login via whoami;
+#   provider identity read LOCALLY, no network, from $CODEX_HOME/auth.json claims).
+#   cwd / transcript_path / permission_mode are dropped (not part of the strict
+#   audit schema; cwd is PII). No success/exit field: tool_response is opaque.
 #
 # CONTRACT — must never disturb the Codex session:
 #   * Writes NOTHING to stdout (hook-event stdout can be injected into the model
-#     context). Diagnostics go to stderr via [Console]::Error so they never
-#     reach stdout.
-#   * ALWAYS exits 0 (best-effort). Bad payload / unwritable path / any error
-#     leaves the tool call unblocked.
-#
-# Capture file: $env:CODEX_HOOK_CAPTURE_FILE, else
-#   ${CODEX_HOME:-$HOME/.codex}/hook-captures/tool-call.ndjson
+#     context). Diagnostics go to stderr via [Console]::Error so they never reach
+#     stdout.
+#   * ALWAYS exits 0 (fail-open). Bad payload / missing config / unreachable
+#     Elasticsearch / any error leaves the tool call unblocked; the POST uses a
+#     very short timeout so an unavailable destination never delays the session.
 
 $ErrorActionPreference = 'Stop'
 
 function Log($m) { [Console]::Error.WriteLine("[capture-tool-call] $m") }
 
+# Read a flat TOML scalar by key, unquoted. Keys are unique across the
+# [elasticsearch] / [audit] sections, so a section-agnostic lookup is unambiguous.
+function Get-TomlValue($lines, $key) {
+    foreach ($line in $lines) {
+        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") {
+            $v = $Matches[1]
+            if ($v -match '^"(.*)"$' -or $v -match "^'(.*)'$") { return $Matches[1] }
+            return $v
+        }
+    }
+    return $null
+}
+
+# Decode a base64url string (JWT segment) to its UTF-8 text. Translates the
+# url-safe alphabet back to standard base64 and restores padding.
+function ConvertFrom-Base64Url($s) {
+    $t = $s.Replace('-', '+').Replace('_', '/')
+    switch ($t.Length % 4) { 2 { $t += '==' } 3 { $t += '=' } }
+    return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($t))
+}
+
+# Best-effort AI-agent PROVIDER identity from $CODEX_HOME/auth.json (no network).
+# Returns an object with account_id/account_email/account_name/org_id/org_name;
+# any missing file/claim leaves that field $null. Never throws (fail-open).
+function Get-CodexProviderIdentity($codexHome) {
+    $r = [ordered]@{ account_id = $null; account_email = $null; account_name = $null; org_id = $null; org_name = $null }
+    try {
+        $authFile = Join-Path $codexHome 'auth.json'
+        if (-not (Test-Path -LiteralPath $authFile)) { return $r }
+        $auth = Get-Content -Raw -LiteralPath $authFile | ConvertFrom-Json
+        $r.account_id = $auth.tokens.account_id
+        $idt = $auth.tokens.id_token
+        if ($idt) {
+            $parts = ([string]$idt).Split('.')
+            if ($parts.Length -ge 2) {
+                $claims = ConvertFrom-Base64Url $parts[1] | ConvertFrom-Json
+                $r.account_email = $claims.email
+                $r.account_name  = $claims.name
+                $orgs = $claims.'https://api.openai.com/auth'.organizations
+                if ($orgs) {
+                    $org = $orgs | Where-Object { $_.is_default -eq $true } | Select-Object -First 1
+                    if (-not $org) { $org = $orgs | Select-Object -First 1 }
+                    if ($org) { $r.org_id = $org.id; $r.org_name = $org.title }
+                }
+            }
+        }
+    } catch { }
+    return $r
+}
+
+# Serialize a heterogeneous Codex tool field (object or string) to a JSON STRING,
+# mirroring jq's `tojson`: a string becomes a quoted JSON string, an object becomes
+# compact JSON. $null stays $null (the field was absent).
+function ConvertTo-JsonText($value) {
+    if ($null -eq $value) { return $null }
+    return ($value | ConvertTo-Json -Compress -Depth 50)
+}
+
+# The tool-call audit stream is fixed here (the config's data_stream names the
+# user_prompt stream — see header).
+$DataStream = 'logs-agent_audit.tool_call-default'
+
 try {
-    $captureFile = if ($env:CODEX_HOOK_CAPTURE_FILE) {
-        $env:CODEX_HOOK_CAPTURE_FILE
+    $configFile = if ($env:CODEX_AGENT_AUDIT_CONFIG) {
+        $env:CODEX_AGENT_AUDIT_CONFIG
     } else {
         $base = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-        Join-Path $base 'hook-captures/tool-call.ndjson'
+        Join-Path $base 'agent-audit.toml'
     }
+
+    if (-not (Test-Path -LiteralPath $configFile)) {
+        Log "no delivery config at $configFile — skipping (run setup.ps1)"; exit 0
+    }
+
+    $cfgLines  = Get-Content -LiteralPath $configFile
+    $esUrl     = Get-TomlValue $cfgLines 'url'
+    $apiKey    = Get-TomlValue $cfgLines 'api_key'
+    $timeoutMs = Get-TomlValue $cfgLines 'timeout_ms'
+    $mode      = Get-TomlValue $cfgLines 'mode'
+
+    if (-not $esUrl) { Log 'config missing url — skipping'; exit 0 }
+
+    $timeoutSec = 0.3
+    if ($timeoutMs -match '^\d+$') { $timeoutSec = [int]$timeoutMs / 1000.0 }
 
     $raw = [Console]::In.ReadToEnd()
     if (-not $raw) { Log 'empty stdin — nothing to capture'; exit 0 }
 
-    $dir = Split-Path -Parent $captureFile
-    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $rawObj = $null
+    try { $rawObj = $raw | ConvertFrom-Json } catch {
+        Log 'payload not valid JSON — cannot shape audit document; skipping'; exit 0
     }
 
     $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 
-    $rawObj = $null
-    try { $rawObj = $raw | ConvertFrom-Json } catch { Log 'payload not valid JSON — capturing raw text' }
+    # Best-effort runtime identity (Codex's payload has none).
+    $userName = if ($env:USER) { $env:USER } elseif ($env:USERNAME) { $env:USERNAME } else { [Environment]::UserName }
+    if (-not $userName) { $userName = $null }
+    # user.id is the domain-qualified workstation login (whoami: DOMAIN\user on
+    # Windows, bare login on POSIX). Empty -> null.
+    $userId = try { ([string](& whoami) 2>$null).Trim() } catch { $null }
+    if (-not $userId) { $userId = $null }
 
-    if ($null -ne $rawObj) {
-        $record = [ordered]@{
-            captured_at   = $ts
-            hook          = 'codex.PostToolUse'
-            tool_name     = $rawObj.tool_name
-            tool_use_id   = $rawObj.tool_use_id
-            tool_input    = $rawObj.tool_input
-            tool_response = $rawObj.tool_response
-            raw           = $rawObj
+    # Best-effort AI-agent PROVIDER identity from $CODEX_HOME/auth.json (no network).
+    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+    $ident = Get-CodexProviderIdentity $codexHome
+
+    # Best-effort runtime host (ECS host.hostname/host.name). name == hostname here
+    # (best-effort); a richer source could split FQDN vs short name.
+    $hostName = try { [System.Net.Dns]::GetHostName() } catch { $null }
+    if (-not $hostName) { $hostName = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { $null } }
+
+    # tool_input / tool_response are heterogeneous JSON — serialize each to a JSON
+    # STRING so the strict mapping sees one scalar per side.
+    $inText  = ConvertTo-JsonText $rawObj.tool_input
+    $outText = ConvertTo-JsonText $rawObj.tool_response
+    $inLen   = if ($null -ne $inText)  { ([string]$inText).Length }  else { 0 }
+    $outLen  = if ($null -ne $outText) { ([string]$outText).Length } else { 0 }
+
+    # plaintext mode carries .text; any other mode nulls it (sealing into
+    # encrypted_text is a later increment). length is the true char count regardless.
+    $plain        = ($mode -eq 'plaintext')
+    $inTextField  = if ($plain) { $inText }  else { $null }
+    $outTextField = if ($plain) { $outText } else { $null }
+
+    # Reshape raw Codex payload -> canonical agent_audit.tool_call document.
+    $record = [ordered]@{
+        '@timestamp' = $ts
+        event = [ordered]@{
+            action  = 'tool-call'
+            created = $ts
+            dataset = 'agent_audit.tool_call'
+            kind    = 'event'
         }
-    } else {
-        $record = [ordered]@{
-            captured_at   = $ts
-            hook          = 'codex.PostToolUse'
-            tool_name     = $null
-            tool_use_id   = $null
-            tool_input    = $null
-            tool_response = $null
-            raw_text      = $raw
+        user = [ordered]@{
+            id   = $userId
+            name = $userName
+        }
+        host = [ordered]@{
+            name     = $hostName
+            hostname = $hostName
+        }
+        agent_audit = [ordered]@{
+            agent = [ordered]@{
+                provider     = 'openai'
+                name         = 'codex-cli'
+                model        = $rawObj.model
+                account      = [ordered]@{ id = $ident.account_id; name = $ident.account_name; email = $ident.account_email }
+                organization = [ordered]@{ id = $ident.org_id; name = $ident.org_name }
+            }
+            conversation_id = $rawObj.session_id
+            turn_id         = $rawObj.turn_id
+            tool_call = [ordered]@{
+                tool   = [ordered]@{ name = $rawObj.tool_name; call_id = $rawObj.tool_use_id }
+                input  = [ordered]@{ text = $inTextField;  encrypted_text = $null; length = $inLen }
+                output = [ordered]@{ text = $outTextField; encrypted_text = $null; length = $outLen }
+            }
         }
     }
 
-    # Append as UTF-8 WITHOUT a BOM so multi-byte tool I/O is not corrupted and
-    # no BOM is injected mid-file on Windows PowerShell 5.1.
-    $line  = ($record | ConvertTo-Json -Compress -Depth 20) + "`n"
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($line)
-    $fs = [System.IO.File]::Open($captureFile, [System.IO.FileMode]::Append,
-        [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-    try { $fs.Write($bytes, 0, $bytes.Length) } finally { $fs.Dispose() }
+    # POST to the data stream's _doc endpoint (auto op_type=create for data
+    # streams). Send a UTF-8 byte body so multi-byte tool I/O is not mangled by
+    # Windows PowerShell 5.1 (the fleet default).
+    $json    = $record | ConvertTo-Json -Compress -Depth 50
+    $bytes   = [System.Text.Encoding]::UTF8.GetBytes($json)
+    # .NET's HTTP client resolves `localhost` to IPv6 (::1) first and connects
+    # serially, stalling ~2s before falling back to IPv4 — which blows the short
+    # timeout_ms and makes every POST to the local lab stack fail (the bash hook's
+    # curl avoids this via IPv4 preference). Rewrite a bare localhost host to
+    # 127.0.0.1 so delivery behaves like curl. Any other host is left untouched.
+    $esBase  = ($esUrl.TrimEnd('/')) -replace '://localhost([:/]|$)', '://127.0.0.1$1'
+    $esTarget = $esBase + '/' + $DataStream + '/_doc'
+    $headers = @{ 'Content-Type' = 'application/json' }
+    if ($apiKey) { $headers['Authorization'] = "ApiKey $apiKey" }
 
-    Log "captured 1 record -> $captureFile"
+    try {
+        Invoke-RestMethod -Method Post -Uri $esTarget -Headers $headers `
+            -Body $bytes -TimeoutSec $timeoutSec | Out-Null
+        Log "indexed 1 audit document -> $esTarget"
+    } catch {
+        Log "POST to $esTarget failed ($_) — tool call proceeds uncaptured"
+    }
 }
 catch {
     Log "capture failed ($_) — tool call proceeds uncaptured"
