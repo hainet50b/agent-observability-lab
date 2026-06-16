@@ -41,9 +41,10 @@ command -v shellcheck >/dev/null 2>&1 && find stacks components -name '*.sh' -pr
 
 ```powershell
 if (Get-Module -ListAvailable PSScriptAnalyzer) {
+  $settings = 'PSScriptAnalyzerSettings.psd1'
   Get-ChildItem -Recurse stacks, components -Filter *.ps1 | ForEach-Object {
-    Set-Content -Path $_.FullName -Value (Invoke-Formatter -ScriptDefinition (Get-Content -Raw $_.FullName))
-    Invoke-ScriptAnalyzer -Path $_.FullName
+    Set-Content -Path $_.FullName -Value (Invoke-Formatter -Settings $settings -ScriptDefinition (Get-Content -Raw $_.FullName))
+    Invoke-ScriptAnalyzer -Settings $settings -Path $_.FullName
   }
 }
 ```
