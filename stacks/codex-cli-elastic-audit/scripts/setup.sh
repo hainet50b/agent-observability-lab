@@ -5,8 +5,9 @@
 # The audit counterpart to codex-cli-elastic/scripts/setup.sh. Run once after
 # `docker compose up -d` (when Elasticsearch + Kibana are healthy). This stack is
 # the DIRECT Agent Audit path only (hook → Elasticsearch); there is no OTLP / APM
-# telemetry here, so there is NO render-config step (no .codex/config.toml). The
-# post-up bootstrap steps:
+# telemetry here (no [otel] / render-config) — the only .codex/config.toml content
+# is the Elasticsearch MCP server, rendered by render-mcp. The post-up bootstrap
+# steps:
 #   1. backend — provision the Agent Audit data streams
 #      (logs-agent_audit.user_prompt-default and logs-agent_audit.tool_call-default)
 #      + their strict index templates, per SPEC/agent-audit.md. Agent-cross-cutting,
@@ -45,8 +46,9 @@ C="$SCRIPT_DIR/../../../components"
 echo "[setup] 1/4 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
 "$C/backends/elastic-audit/scripts/setup-agent-audit.sh" "$@"
 
-echo "[setup] 2/4 — Agent Audit delivery config (.codex/agent-audit.toml, local ES defaults)"
+echo "[setup] 2/4 — agent config: .codex/agent-audit.toml (audit delivery) + .codex/config.toml (Elasticsearch MCP)"
 "$C/agents/codex-cli/scripts/render-agent-audit.sh" "$ES_URL" "$STACK_DIR"
+"$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
 
 echo "[setup] 3/4 — UserPromptSubmit + PostToolUse Agent Audit hooks (.codex/hooks.json, ES delivery)"
 "$C/agents/codex-cli/scripts/render-hooks.sh" "$STACK_DIR"

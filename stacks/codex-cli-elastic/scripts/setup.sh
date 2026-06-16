@@ -12,7 +12,8 @@
 #   2. backend — logs-drop ingest pipeline (logs-apm.app@custom) dropping the
 #      three verified high-volume Codex CLI streaming-delta event docs, per
 #      SPEC/codex-cli-telemetry.md "Volume reduction (ingest drops)".
-#   3. agent — render .codex/config.toml (Codex [otel] telemetry config) from the
+#   3. agent — render .codex/config.toml (Codex [otel] telemetry config + the local
+#      Elasticsearch MCP server, via render-mcp) from the agent-owned templates
 #      agent-owned template, so a Codex session launched with
 #      CODEX_HOME=<stack>/.codex emits into the stack without touching the user's
 #      ~/.codex (a repo-local .codex/config.toml is ignored for [otel] — CODEX_HOME
@@ -45,8 +46,9 @@ echo "[setup] 1/4 — trace-routing ingest pipeline"
 echo "[setup] 2/4 — logs-drop ingest pipeline (logs-apm.app@custom)"
 "$C/backends/elastic/scripts/setup-logs-drop.sh" "$@"
 
-echo "[setup] 3/4 — local Codex session config (.codex/config.toml, [otel] telemetry)"
+echo "[setup] 3/4 — Codex session config (.codex/config.toml: [otel] telemetry + Elasticsearch MCP)"
 "$C/agents/codex-cli/scripts/render-config.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
+"$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
 
 echo "[setup] 4/4 — Kibana saved objects (1/2): backend cross-agent AI Agents — Traces view"
 "$C/backends/elastic/scripts/import-kibana-objects.sh" "$@"

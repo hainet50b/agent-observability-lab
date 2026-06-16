@@ -9,7 +9,8 @@
 # receiving+handle_responses)  2) logs-drop pipeline (logs-apm.app@custom) dropping
 # the three verified high-volume Codex CLI streaming-delta event docs per
 # SPEC/codex-cli-telemetry.md "Volume reduction (ingest drops)"  3) render
-# .codex/config.toml ([otel] telemetry config) from the agent-owned template, so a
+# .codex/config.toml ([otel] telemetry config + the local Elasticsearch MCP server
+# via render-mcp) from the agent-owned templates, so a
 # Codex session launched with CODEX_HOME=<stack>/.codex emits into the stack
 # without touching the user's ~/.codex (a repo-local .codex/config.toml is ignored
 # for [otel]; CODEX_HOME is the supported per-project mechanism)  4) import the
@@ -47,9 +48,12 @@ function Invoke-Step {
 Invoke-Step -Label '1/4 - trace-routing ingest pipeline' -Path (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') -StepArgs $es
 Invoke-Step -Label '2/4 - logs-drop ingest pipeline (logs-apm.app@custom)' `
     -Path (Join-Path $C 'backends/elastic/scripts/setup-logs-drop.ps1') -StepArgs $es
-Invoke-Step -Label '3/4 - local Codex session config (.codex/config.toml, [otel] telemetry)' `
+Invoke-Step -Label '3/4 - Codex session config: [otel] telemetry (.codex/config.toml)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-config.ps1') `
     -StepArgs @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
+Invoke-Step -Label '3/4 - Codex session config: Elasticsearch MCP (.codex/config.toml)' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `
+    -StepArgs @{ TargetDir = $StackDir }
 Invoke-Step -Label '4/4 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
     -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs @{}
 Invoke-Step -Label '4/4 - Kibana saved objects (2/2): Codex agent data views + saved searches' `

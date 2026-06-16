@@ -4,8 +4,9 @@
 # PowerShell mirror of setup.sh. The audit counterpart to codex-cli-elastic's
 # setup.ps1. Run once after `docker compose up -d` (Elasticsearch + Kibana
 # healthy). This stack is the DIRECT Agent Audit path only (hook → Elasticsearch);
-# there is no OTLP / APM telemetry, so there is NO render-config step (no
-# .codex/config.toml). Steps: 1) provision the Agent Audit data streams
+# there is no OTLP / APM telemetry (no [otel] / render-config) — the only
+# .codex/config.toml content is the Elasticsearch MCP server (render-mcp). Steps:
+# 1) provision the Agent Audit data streams
 # (logs-agent_audit.user_prompt-default + logs-agent_audit.tool_call-default) +
 # their strict index templates per SPEC/agent-audit.md (agent-cross-cutting,
 # elastic-audit-backend-owned)  2) render .codex/agent-audit.toml (the Agent Audit
@@ -48,9 +49,12 @@ function Invoke-Step {
 
 Invoke-Step -Label '1/4 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)' `
     -Path (Join-Path $C 'backends/elastic-audit/scripts/setup-agent-audit.ps1') -StepArgs $es
-Invoke-Step -Label '2/4 - Agent Audit delivery config (.codex/agent-audit.toml, local ES defaults)' `
+Invoke-Step -Label '2/4 - agent config: agent-audit.toml (audit delivery)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-agent-audit.ps1') `
     -StepArgs @{ EsUrl = $EsUrlLocal; TargetDir = $StackDir }
+Invoke-Step -Label '2/4 - agent config: config.toml (Elasticsearch MCP)' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `
+    -StepArgs @{ TargetDir = $StackDir }
 Invoke-Step -Label '3/4 - UserPromptSubmit + PostToolUse Agent Audit hooks (.codex/hooks.json, ES delivery)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-hooks.ps1') `
     -StepArgs @{ TargetDir = $StackDir }
