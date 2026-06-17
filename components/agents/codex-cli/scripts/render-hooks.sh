@@ -22,7 +22,7 @@ user_prompt_sh="$hooks_dir/capture-user-prompt.sh"
 user_prompt_ps1="$hooks_dir/capture-user-prompt.ps1"
 tool_call_sh="$hooks_dir/capture-tool-call.sh"
 tool_call_ps1="$hooks_dir/capture-tool-call.ps1"
-template="$component_dir/hooks.template.toml"
+template="$component_dir/templates/hooks.template.toml"
 
 for hook in "$user_prompt_sh" "$user_prompt_ps1" "$tool_call_sh" "$tool_call_ps1"; do
   [ -f "$hook" ] || {

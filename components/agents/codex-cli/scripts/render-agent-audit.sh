@@ -18,7 +18,7 @@ fi
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
-template="$component_dir/agent-audit.template.conf"
+template="$component_dir/templates/agent-audit.template.conf"
 
 [ -f "$template" ] || {
   echo "FAIL: template not found: $template" >&2

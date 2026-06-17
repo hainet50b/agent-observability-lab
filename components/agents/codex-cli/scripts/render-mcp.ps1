@@ -14,7 +14,7 @@ if ((Test-Path -LiteralPath $config) -and (Select-String -LiteralPath $config -S
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-$Template = Join-Path $ComponentDir 'mcp.template.toml'
+$Template = Join-Path (Join-Path $ComponentDir 'templates') 'mcp.template.toml'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -30,3 +30,4 @@ if (Test-Path -LiteralPath $config) {
     $combined = $block
 }
 [System.IO.File]::WriteAllText($config, $combined, [System.Text.UTF8Encoding]::new($false))
+

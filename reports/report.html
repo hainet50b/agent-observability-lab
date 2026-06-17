@@ -3284,6 +3284,33 @@
       <li><strong>Verified live against the running Kibana (:5601):</strong> the <code>.sh</code> importer imported <code>claude-code</code> (1 cross-agent + 3 data views + 18 saved searches + 1 dashboard), <code>codex-cli</code> (1 + 3 + 15), and <code>claude-code otelcol-sidecar</code> (1 + 3 + 18 + 1 + 1 + 1) — every file <code>success: true</code>, references resolved; the <code>.ps1</code> mirror reproduced the <code>claude-code</code> import identically. Gates: all four stacks pass <code>docker compose config -q</code>; <code>shfmt -d</code> empty + <code>shellcheck</code> clean on touched <code>*.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on touched <code>*.ps1</code>; <code>find components/agents components/paths -name 'import-kibana-objects.*' -o -type d -name kibana</code> returns nothing; the live <code>codex-cli-elastic</code> smoke test still reaches PASS.</li>
     </ul>
   </section>
+  <section>
+    <h2>Group the Codex agent's render-input templates under <code>components/agents/codex-cli/templates/</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Nested <code>Join-Path</code> in the <code>.ps1</code> scripts.</strong> To add the <code>templates/</code> segment I used <code>Join-Path (Join-Path $ComponentDir 'templates') '&lt;name&gt;'</code> rather than the PS7 multi-segment form <code>Join-Path $ComponentDir 'templates' '&lt;name&gt;'</code>. The nested form keeps each call to two positional args, matching the existing <code>Join-Path</code> style in these scripts and staying clear of any positional-parameter lint surprises. <code>Invoke-ScriptAnalyzer</code> is clean.</li>
+      <li><strong>No stack change needed (confirmed, not assumed).</strong> The render scripts self-locate (<code>component_dir</code> / <code>$ComponentDir</code> from the script path) and the stacks only ever invoke <code>render-*</code>, never the templates directly — verified by grepping: the only references to the template basenames are the eight <code>template=</code> / <code>$Template</code> assignments I edited.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The <code>claude-code</code> agent component does not have the same loose-template situation (its render input is a single settings template), but if it grows more inputs the same <code>templates/</code> grouping would keep its root role-clean too.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The four Codex render-input templates (<code>otel.template.toml</code>, <code>mcp.template.toml</code>, <code>hooks.template.toml</code>, <code>agent-audit.template.conf</code>) moved from the component root into a new <code>templates/</code> directory, so the component root is now three single-role dirs — <code>scripts/</code> (build tooling), <code>hooks/</code> (runtime), <code>templates/</code> (render inputs). Each <code>render-*</code> script now reads its template from <code>templates/</code>; the <code>.template</code> infix is preserved so a template never shares a basename with its rendered output.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified functionally for both shells:</strong> running all four <code>render-*.sh</code> and all four <code>render-*.ps1</code> into a fresh temp dir produced an identical <code>.codex/config.toml</code> (1861 bytes — <code>[otel]</code> + <code>[[hooks.UserPromptSubmit]]</code>/<code>[[hooks.PostToolUse]]</code> + <code>[mcp_servers.elasticsearch]</code>) and <code>agent-audit.conf</code> (523 bytes), with <strong>zero unresolved <code>@@</code> placeholders</strong>. Gates: <code>shfmt -d</code> empty + <code>shellcheck</code> clean on the four touched <code>*.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on the four touched <code>*.ps1</code>; all four stacks pass <code>docker compose config -q</code>.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

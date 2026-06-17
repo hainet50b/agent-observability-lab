@@ -19,7 +19,7 @@ $UserPromptSh = Join-Path $HooksDir 'capture-user-prompt.sh'
 $UserPromptPs1 = Join-Path $HooksDir 'capture-user-prompt.ps1'
 $ToolCallSh = Join-Path $HooksDir 'capture-tool-call.sh'
 $ToolCallPs1 = Join-Path $HooksDir 'capture-tool-call.ps1'
-$Template = Join-Path $ComponentDir 'hooks.template.toml'
+$Template = Join-Path (Join-Path $ComponentDir 'templates') 'hooks.template.toml'
 
 foreach ($h in @($UserPromptSh, $UserPromptPs1, $ToolCallSh, $ToolCallPs1)) {
     if (-not (Test-Path -LiteralPath $h -PathType Leaf)) {
@@ -46,3 +46,4 @@ if (Test-Path -LiteralPath $config) {
     $combined = $block
 }
 [System.IO.File]::WriteAllText($config, $combined, [System.Text.UTF8Encoding]::new($false))
+

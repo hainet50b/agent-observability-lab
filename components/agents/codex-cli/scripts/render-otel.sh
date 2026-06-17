@@ -18,7 +18,7 @@ fi
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
-template="$component_dir/otel.template.toml"
+template="$component_dir/templates/otel.template.toml"
 
 [ -f "$template" ] || {
   echo "FAIL: template not found: $template" >&2
