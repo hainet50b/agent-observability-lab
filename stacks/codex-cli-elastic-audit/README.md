@@ -34,8 +34,9 @@ the sibling [`codex-cli-elastic`](../codex-cli-elastic/) stack instead.
 Telemetry and audit are composed as **separate stacks** — not for physical
 isolation (the lab is single-node) but to keep each stack's load-bearing set
 legible. This stack's compose visibly carries **no APM Server**, and its agent
-home (`.codex`) holds **only** the audit config (`agent-audit.toml` + `hooks.json`,
-no `[otel]` `config.toml`). The two stacks own separate Compose projects, volumes,
+home (`.codex`) carries `config.toml` (the inline `[hooks]` audit-hook registrations
+plus the Elasticsearch MCP) and `agent-audit.conf` (the hook delivery config), with
+no `[otel]` telemetry. The two stacks own separate Compose projects, volumes,
 and agent homes. See [`../../SPEC/agent-audit.md`](../../SPEC/agent-audit.md)
 "Where this runs".
 
@@ -78,8 +79,8 @@ Kibana is then at <http://localhost:5601>. The two backend services
 local Elasticsearch as the telemetry stack, **minus APM Server**. `scripts/setup.sh`
 runs the post-up bootstrap in one shot — it provisions the two Agent Audit data
 streams and their strict index templates, renders the hook delivery config to
-`.codex/agent-audit.toml` and registers the audit hooks in `.codex/hooks.json`
-(both in this directory), and imports the Agent Audit Kibana **data views** and
+`.codex/agent-audit.conf` and registers the audit hooks as inline `[hooks]` in
+`.codex/config.toml` (both in this directory), and imports the Agent Audit Kibana **data views** and
 **saved searches**. Steps are idempotent / create-if-absent, so re-run it any
 time. Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the
 Kibana URL with `KIBANA_URL`.
@@ -87,10 +88,11 @@ Kibana URL with `KIBANA_URL`.
 ### 2. Point a Codex session at the stack
 
 `scripts/setup.sh` (step 1) wrote a self-contained Codex home at
-`stacks/codex-cli-elastic-audit/.codex/` (gitignored) carrying **only** the audit
-config — `agent-audit.toml` (the hooks' Elasticsearch delivery config) and
-`hooks.json` (the `UserPromptSubmit` + `PostToolUse` registrations). There is no
-`[otel]` `config.toml` — this stack does no telemetry. Launch Codex with
+`stacks/codex-cli-elastic-audit/.codex/` (gitignored) carrying the audit
+config — `agent-audit.conf` (the hooks' Elasticsearch delivery config) and
+`config.toml` (the `UserPromptSubmit` + `PostToolUse` hook registrations as inline
+`[hooks]`, plus the Elasticsearch MCP). There is no `[otel]` config — this stack
+does no telemetry. Launch Codex with
 **`CODEX_HOME`** pointed at it so the hooks are picked up as user-level config:
 
 ```sh
@@ -186,7 +188,7 @@ codex-cli-elastic-audit/
 ├─ docker-compose.yml                     # thin composition: `include:`s the elastic-audit backend component
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh                            # bootstrap: audit streams + hook config + hooks.json + Kibana import
+   ├─ setup.sh                            # bootstrap: audit streams + config.toml (hooks + MCP) + agent-audit.conf + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
    ├─ verify-agent-audit.sh               # UserPromptSubmit -> user_prompt stream verification
    ├─ verify-agent-audit.ps1              # PowerShell mirror
@@ -201,6 +203,6 @@ NDJSON, and the audit setup / import scripts live in
 (`hooks/capture-user-prompt.{sh,ps1}`, `hooks/capture-tool-call.{sh,ps1}`), the
 hook delivery-config template, and the render scripts live in
 `../../components/agents/codex-cli/`. `scripts/setup.sh` renders the delivery
-config into this directory's gitignored `.codex/agent-audit.toml`, registers the
-stack-local hooks in `.codex/hooks.json`, provisions the audit data streams, and
+config into this directory's gitignored `.codex/agent-audit.conf`, registers the
+stack-local hooks as inline `[hooks]` in `.codex/config.toml`, provisions the audit data streams, and
 imports those Kibana objects.
