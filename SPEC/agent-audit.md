@@ -121,7 +121,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 - `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
 - `agent_audit.tool_call.tool.name` ← Codex `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP trace_safe `codex.tool_result` `call_id`).
 - `agent_audit.tool_call.input` ← `tool_input`, `.output` ← `tool_response`. Both Codex fields are heterogeneous JSON (an object for MCP tools; a string or object for shell tools), so the sender **serializes each to a JSON string** into `.text`, with `.length` the character count. The strict mapping then sees one scalar per side, not the tool's arbitrary nested keys.
-- `capture.tool_call.content = plaintext` populates `.text`; `encrypted` nulls it and reserves `.encrypted_text` (the same gate as the prompt body, set per stream — see [Delivery and authorization](#delivery-and-authorization)).
+- `capture.tool_call.content = plaintext` populates `.text`; `redacted` writes a `[REDACTED]` marker; `encrypted` nulls it and reserves `.encrypted_text` — all keep the true `.length`, set per stream (the same gate as the prompt body — see [Delivery and authorization](#delivery-and-authorization)).
 - No success / exit field — Codex's `tool_response` is opaque and not reliably parseable across tools.
 - Source is Codex `PostToolUse` **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`, `agent.model` ← `model`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict).
 
@@ -168,7 +168,7 @@ Hook delivery configuration lives in a hook-specific file rather than Codex's na
 Unlike Codex's `config.toml` (which Codex itself parses, so it must be TOML), this file is read **only by the capture hook scripts**, which must run on every employee workstation with **zero external dependencies** — no `jq`, no TOML parser. So the format is a flat `key=value` file (`.conf`) that both consumers parse natively: POSIX shells with a pure-`read` loop and PowerShell with the built-in `ConvertFrom-StringData`. `#` comment lines are ignored by both, dotted keys carry the structure, and values are untyped strings the hook interprets. `render-agent-audit.{sh,ps1}` fills `elasticsearch.url` from the stack's Elasticsearch base URL.
 
 ```ini
-# capture.<stream>: enabled (true|false), content (plaintext|encrypted)
+# capture.<stream>: enabled (true|false), content (plaintext|redacted|encrypted)
 capture.user_prompt.enabled=true
 capture.user_prompt.content=plaintext
 capture.tool_call.enabled=true
@@ -182,7 +182,7 @@ elasticsearch.data_stream.user_prompt=logs-agent_audit.user_prompt-default
 elasticsearch.data_stream.tool_call=logs-agent_audit.tool_call-default
 ```
 
-Two layers are kept distinct: `capture.<stream>.*` is the **backend-agnostic capture posture** (whether to capture the stream, and how its body is stored), while `elasticsearch.*` is the **backend** — a shared connection plus a per-stream `data_stream` mapping. `content` is a per-stream enum: `plaintext` populates the body's `.text`; `encrypted` sets `.text` to `null` and populates `.encrypted_text` (encryption itself is not yet built — `plaintext` is the lab default). `enabled = false` skips capture for that stream entirely.
+Two layers are kept distinct: `capture.<stream>.*` is the **backend-agnostic capture posture** (whether to capture the stream, and how its body is stored), while `elasticsearch.*` is the **backend** — a shared connection plus a per-stream `data_stream` mapping. `content` is a per-stream enum: `plaintext` populates the body's `.text`; `redacted` puts a fixed `[REDACTED]` marker in `.text` (the true `.length` is still recorded and `.encrypted_text` stays `null`) so the delivery path — identity, routing, strict mapping, landing — can be verified without exposing prompt / tool content; `encrypted` sets `.text` to `null` and populates `.encrypted_text` (encryption itself is not yet built). `plaintext` is the lab default; `enabled = false` skips capture for that stream entirely.
 
 **The config path is injected, not discovered.** The capture hooks take the config location as an explicit `--config <abs path>` argument (`-Config` on Windows); `render-hooks` substitutes the stack's absolute `agent-audit.conf` path into the hook `command` it writes to `config.toml`. A shipped hook does **no** ambient discovery — it never infers its config from the working directory, `CODEX_HOME`, or `$HOME`. This keeps delivery deterministic regardless of how Codex was launched, and prevents a stray project-local `.codex/agent-audit.conf` from silently redirecting or disabling audit (discovery → injection; see [`threat-model.md`](threat-model.md)). With no `--config`, the hook fail-open-skips. (`CODEX_HOME` is still consulted for the agent's own `auth.json` — the provider-identity source — which is the agent's credential store, not our config.)
 
