@@ -3162,6 +3162,36 @@
       <li>Worth a glance: the single-quoted-literal-string choice in <code>hooks.template.toml</code> is the load-bearing decision for Windows path safety.</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Rename <code>config.template.toml</code> → <code>otel.template.toml</code> and <code>render-config.{sh,ps1}</code> → <code>render-otel.{sh,ps1}</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Used <code>git mv</code></strong> for all three renames (template + the two scripts) so history follows the files rather than appearing as delete+add.</li>
+      <li><strong>Scope discipline on the "comment refresh".</strong> The PRD flagged stale <code>render-config</code> mentions in <code>render-agent-audit.{sh,ps1}</code> and both audit-stack <code>setup.{sh,ps1}</code> comments. Only <code>render-agent-audit.sh</code> and the two audit <code>setup</code> headers actually contained the string (the <code>.ps1</code> of render-agent-audit did not), so I touched exactly those. The single live caller pair — <code>stacks/codex-cli-elastic/scripts/setup.{sh,ps1}</code> step 3 — now invokes <code>render-otel</code>.</li>
+      <li><strong>Collateral accuracy fix.</strong> The <code>render-agent-audit.sh</code> comment also said the file sits "beside the config.toml / hooks.json that render-config / render-hooks write." Since the prior task removed <code>hooks.json</code> (hooks are now inline in <code>config.toml</code>), I corrected the whole clause to "beside the config.toml that render-otel / render-hooks write" rather than leave a half-updated comment.</li>
+      <li><strong>Left PRD history and <code>reports/report.html</code> untouched</strong> as instructed — the remaining <code>render-config</code> matches there are immutable history.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>To run the smoke test I had to <code>docker rm</code> two <em>exited</em> <code>aol-elasticsearch</code>/<code>aol-kibana</code> containers left over from the sibling <code>codex-cli-elastic-audit</code> project (the stacks intentionally share container names, so only one runs at a time). They were stopped, not active — no running stack or session was disrupted. The smoke test then created fresh <code>codex-cli-elastic</code> containers and left them running (normal smoke-test behavior).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — this clears the open task list. The renamed <code>otel.template.toml</code> now reads as exactly what it is (the <code>[otel]</code> block), which should make the upcoming managed-config stacks easier to reason about alongside <code>hooks.template.toml</code> and <code>mcp.template.toml</code>.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex OTel renderer and its template are renamed to say what they do — <code>render-otel.{sh,ps1}</code> + <code>otel.template.toml</code> — with the one live caller and the stale comments updated to match. Pure rename, no behavior change.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified:</strong> <code>render-otel.sh</code> and <code>render-otel.ps1</code> both render an identical <code>[otel]</code> <code>config.toml</code> with the endpoint substituted; <code>grep</code> finds no live (non-history) <code>render-config</code>/<code>config.template.toml</code> reference; all four stacks pass <code>docker compose config -q</code>; <code>shfmt -d</code> empty + <code>shellcheck</code> clean and <code>PSScriptAnalyzer</code> clean on touched scripts; and <code>codex-cli-elastic/scripts/smoke-test.sh</code> reaches <strong>PASS</strong> (all three OTLP probes 200, metrics/logs/traces assertions green).</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

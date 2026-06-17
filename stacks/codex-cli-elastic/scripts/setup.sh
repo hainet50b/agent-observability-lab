@@ -47,7 +47,7 @@ echo "[setup] 2/4 — logs-drop ingest pipeline (logs-apm.app@custom)"
 "$C/backends/elastic/scripts/setup-logs-drop.sh" "$@"
 
 echo "[setup] 3/4 — Codex session config (.codex/config.toml: [otel] telemetry + Elasticsearch MCP)"
-"$C/agents/codex-cli/scripts/render-config.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
+"$C/agents/codex-cli/scripts/render-otel.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
 "$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
 
 echo "[setup] 4/4 — Kibana saved objects (1/2): backend cross-agent AI Agents — Traces view"

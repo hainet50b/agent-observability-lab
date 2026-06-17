@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath $config) {
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-$Template = Join-Path $ComponentDir 'config.template.toml'
+$Template = Join-Path $ComponentDir 'otel.template.toml'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"

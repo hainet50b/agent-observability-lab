@@ -5,8 +5,8 @@
 #
 # Fills the single @@ES_URL@@ placeholder in the agent-owned template
 # ../agent-audit.template.toml with the stack's Elasticsearch base URL and writes
-# the result to <target>/.codex/agent-audit.toml, beside the config.toml / hooks.json
-# that render-config / render-hooks write under CODEX_HOME=<target>/.codex. The
+# the result to <target>/.codex/agent-audit.toml, beside the config.toml that
+# render-otel / render-hooks write under CODEX_HOME=<target>/.codex. The
 # UserPromptSubmit hook reads this file to deliver captured prompts to the local
 # Agent Audit data stream (see ../../../SPEC/agent-audit.md). This script only
 # GENERATES the delivery config — wiring the hook to read and POST it is separate.

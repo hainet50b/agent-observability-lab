@@ -49,7 +49,7 @@ Invoke-Step -Label '1/4 - trace-routing ingest pipeline' -Path (Join-Path $C 'ba
 Invoke-Step -Label '2/4 - logs-drop ingest pipeline (logs-apm.app@custom)' `
     -Path (Join-Path $C 'backends/elastic/scripts/setup-logs-drop.ps1') -StepArgs $es
 Invoke-Step -Label '3/4 - Codex session config: [otel] telemetry (.codex/config.toml)' `
-    -Path (Join-Path $C 'agents/codex-cli/scripts/render-config.ps1') `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-otel.ps1') `
     -StepArgs @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
 Invoke-Step -Label '3/4 - Codex session config: Elasticsearch MCP (.codex/config.toml)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `

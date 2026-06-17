@@ -5,7 +5,7 @@ otlp_endpoint=${1:-}
 target_dir=${2:-}
 
 if [ -z "$otlp_endpoint" ] || [ -z "$target_dir" ]; then
-  echo "Usage: render-config.sh <otlp-endpoint> <target-dir>" >&2
+  echo "Usage: render-otel.sh <otlp-endpoint> <target-dir>" >&2
   exit 2
 fi
 
@@ -18,7 +18,7 @@ fi
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
-template="$component_dir/config.template.toml"
+template="$component_dir/otel.template.toml"
 
 [ -f "$template" ] || {
   echo "FAIL: template not found: $template" >&2

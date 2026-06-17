@@ -4,7 +4,7 @@
 # PowerShell mirror of setup.sh. The audit counterpart to codex-cli-elastic's
 # setup.ps1. Run once after `docker compose up -d` (Elasticsearch + Kibana
 # healthy). This stack is the DIRECT Agent Audit path only (hook → Elasticsearch);
-# there is no OTLP / APM telemetry (no [otel] / render-config) — the only
+# there is no OTLP / APM telemetry (no [otel] / render-otel) — the only
 # .codex/config.toml content is the Elasticsearch MCP server (render-mcp). Steps:
 # 1) provision the Agent Audit data streams
 # (logs-agent_audit.user_prompt-default + logs-agent_audit.tool_call-default) +

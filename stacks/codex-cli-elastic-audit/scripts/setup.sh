@@ -5,7 +5,7 @@
 # The audit counterpart to codex-cli-elastic/scripts/setup.sh. Run once after
 # `docker compose up -d` (when Elasticsearch + Kibana are healthy). This stack is
 # the DIRECT Agent Audit path only (hook → Elasticsearch); there is no OTLP / APM
-# telemetry here (no [otel] / render-config) — the only .codex/config.toml content
+# telemetry here (no [otel] / render-otel) — the only .codex/config.toml content
 # is the Elasticsearch MCP server, rendered by render-mcp. The post-up bootstrap
 # steps:
 #   1. backend — provision the Agent Audit data streams
