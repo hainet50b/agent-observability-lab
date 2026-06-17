@@ -10,7 +10,7 @@
 #   Arrange — bring the stack up and wait for Elasticsearch (the audit destination)
 #             healthy. Require scripts/setup.sh to have rendered .codex/config.toml
 #             (carrying the inline [[hooks.PostToolUse]] registration) and
-#             .codex/agent-audit.toml (the hook's ES delivery config); SKIP with
+#             .codex/agent-audit.conf (the hook's ES delivery config); SKIP with
 #             guidance otherwise.
 #   Act     — feed a synthetic Codex PostToolUse payload (a unique session_id, an
 #             object tool_input and a string tool_response — the heterogeneous shapes
@@ -62,7 +62,7 @@ command -v jq >/dev/null 2>&1 || skip "jq not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
 [ -f "$CODEX_HOME_DIR/config.toml" ] || skip "no .codex/config.toml — run scripts/setup.sh first"
-[ -f "$CODEX_HOME_DIR/agent-audit.toml" ] || skip "no .codex/agent-audit.toml — run scripts/setup.sh first"
+[ -f "$CODEX_HOME_DIR/agent-audit.conf" ] || skip "no .codex/agent-audit.conf — run scripts/setup.sh first"
 # Confirm the hook is actually registered on PostToolUse (configured state):
 # the inline [[hooks.PostToolUse]] table is present in config.toml.
 grep -qF '[[hooks.PostToolUse]]' "$CODEX_HOME_DIR/config.toml" ||
@@ -112,7 +112,7 @@ payload=$(jq -nc --arg cid "$cid" '{
 }')
 
 # Run the configured hook with CODEX_HOME pointed at this stack's .codex so it reads
-# the rendered agent-audit.toml. The hook is fail-open (always exit 0); the assertion
+# the rendered agent-audit.conf. The hook is fail-open (always exit 0); the assertion
 # below — not this exit code — is the real signal.
 printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" || true
 

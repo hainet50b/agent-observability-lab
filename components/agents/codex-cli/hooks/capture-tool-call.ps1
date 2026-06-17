@@ -4,17 +4,19 @@
 # repo's other scripts). See that file's header for the full rationale. In
 # short: fires once per completed tool call, reshapes Codex's raw PostToolUse
 # payload into the canonical `agent_audit.tool_call` document defined in
-# SPEC/agent-audit.md, and POSTs it straight to the local Agent Audit data stream
-# `logs-agent_audit.tool_call-default` (direct-to-Elasticsearch, independent of
-# the OTLP/APM pipeline). No sealing: lab `mode = "plaintext"` stores the tool I/O
-# in plaintext (a future encrypted mode nulls .text and uses .encrypted_text).
+# SPEC/agent-audit.md, and POSTs it straight to the local Agent Audit tool-call data
+# stream (direct-to-Elasticsearch, independent of the OTLP/APM pipeline). No sealing:
+# content=plaintext stores the tool I/O in plaintext (a future encrypted mode nulls
+# .text and uses .encrypted_text).
 # (Sibling of capture-user-prompt.ps1, the UserPromptSubmit audit hook.)
 #
-# Delivery config is read at run time from agent-audit.toml's [elasticsearch] /
-# [audit] blocks (url / api_key / timeout_ms / audit.mode). The data stream is NOT
-# read from config (that key names the user_prompt stream) — the tool-call stream
-# is fixed below. Config path:
-#   $env:CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.toml
+# Delivery config is read at run time from the flat key=value agent-audit.conf (zero
+# external deps — ConvertFrom-StringData, no jq/TOML parser; see SPEC/agent-audit.md
+# "Delivery and authorization"). This hook reads only the tool_call stream's keys:
+# capture.tool_call.enabled (false => skip), capture.tool_call.content (plaintext =>
+# .text; encrypted => null, sealing TBD), plus the shared elasticsearch.url / .api_key
+# / .timeout_ms and the per-stream elasticsearch.data_stream.tool_call. Config path:
+#   $env:CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.conf
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
@@ -44,19 +46,6 @@
 $ErrorActionPreference = 'Stop'
 
 function Log($m) { [Console]::Error.WriteLine("[capture-tool-call] $m") }
-
-# Read a flat TOML scalar by key, unquoted. Keys are unique across the
-# [elasticsearch] / [audit] sections, so a section-agnostic lookup is unambiguous.
-function Get-TomlValue($lines, $key) {
-    foreach ($line in $lines) {
-        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") {
-            $v = $Matches[1]
-            if ($v -match '^"(.*)"$' -or $v -match "^'(.*)'$") { return $Matches[1] }
-            return $v
-        }
-    }
-    return $null
-}
 
 # Decode a base64url string (JWT segment) to its UTF-8 text. Translates the
 # url-safe alphabet back to standard base64 and restores padding.
@@ -103,29 +92,36 @@ function ConvertTo-JsonText($value) {
     return ($value | ConvertTo-Json -Compress -Depth 50)
 }
 
-# The tool-call audit stream is fixed here (the config's data_stream names the
-# user_prompt stream — see header).
-$DataStream = 'logs-agent_audit.tool_call-default'
-
 try {
+    $stream = 'tool_call'
     $configFile = if ($env:CODEX_AGENT_AUDIT_CONFIG) {
         $env:CODEX_AGENT_AUDIT_CONFIG
     } else {
         $base = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-        Join-Path $base 'agent-audit.toml'
+        Join-Path $base 'agent-audit.conf'
     }
 
     if (-not (Test-Path -LiteralPath $configFile)) {
         Log "no delivery config at $configFile — skipping (run setup.ps1)"; exit 0
     }
 
-    $cfgLines  = Get-Content -LiteralPath $configFile
-    $esUrl     = Get-TomlValue $cfgLines 'url'
-    $apiKey    = Get-TomlValue $cfgLines 'api_key'
-    $timeoutMs = Get-TomlValue $cfgLines 'timeout_ms'
-    $mode      = Get-TomlValue $cfgLines 'mode'
+    # Flat key=value config, parsed with the built-in ConvertFrom-StringData (no jq /
+    # TOML parser). Comment (#) and blank lines are ignored; dotted keys carry the
+    # structure. This hook reads only the tool_call stream's keys.
+    $cfg = Get-Content -Raw -LiteralPath $configFile | ConvertFrom-StringData
 
-    if (-not $esUrl) { Log 'config missing url — skipping'; exit 0 }
+    if ($cfg["capture.$stream.enabled"] -eq 'false') {
+        Log "capture.$stream.enabled=false — skipping (stream disabled)"; exit 0
+    }
+    $content    = $cfg["capture.$stream.content"]
+    $esUrl      = $cfg['elasticsearch.url']
+    $apiKey     = $cfg['elasticsearch.api_key']
+    $timeoutMs  = $cfg['elasticsearch.timeout_ms']
+    $DataStream = $cfg["elasticsearch.data_stream.$stream"]
+
+    if (-not $esUrl -or -not $DataStream) {
+        Log "config missing elasticsearch.url / data_stream.$stream — skipping"; exit 0
+    }
 
     $timeoutSec = 0.3
     if ($timeoutMs -match '^\d+$') { $timeoutSec = [int]$timeoutMs / 1000.0 }
@@ -164,9 +160,9 @@ try {
     $inLen   = if ($null -ne $inText)  { ([string]$inText).Length }  else { 0 }
     $outLen  = if ($null -ne $outText) { ([string]$outText).Length } else { 0 }
 
-    # plaintext mode carries .text; any other mode nulls it (sealing into
+    # content=plaintext carries .text; any other content nulls it (sealing into
     # encrypted_text is a later increment). length is the true char count regardless.
-    $plain        = ($mode -eq 'plaintext')
+    $plain        = ($content -eq 'plaintext')
     $inTextField  = if ($plain) { $inText }  else { $null }
     $outTextField = if ($plain) { $outText } else { $null }
 

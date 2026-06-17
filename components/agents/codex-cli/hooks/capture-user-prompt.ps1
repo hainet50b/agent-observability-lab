@@ -4,14 +4,17 @@
 # repo's other scripts). See that file's header for the full rationale. In
 # short: fires once per submitted prompt, reshapes Codex's raw hook payload into
 # the canonical `agent_audit.user_prompt` document defined in SPEC/agent-audit.md,
-# and POSTs it straight to the local Agent Audit data stream
-# `logs-agent_audit.user_prompt-default` (direct-to-Elasticsearch, independent of
-# the OTLP/APM pipeline). No sealing: lab `mode = "plaintext"` stores the prompt
-# text in plaintext (a future encrypted mode nulls text and uses encrypted_text).
+# and POSTs it straight to the local Agent Audit data stream (direct-to-Elasticsearch,
+# independent of the OTLP/APM pipeline). No sealing: content=plaintext stores the
+# prompt text in plaintext (a future encrypted mode nulls text and uses encrypted_text).
 #
-# Delivery config is read at run time from agent-audit.toml's [elasticsearch] /
-# [audit] blocks (url / data_stream / api_key / timeout_ms / audit.mode). Path:
-#   $env:CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.toml
+# Delivery config is read at run time from the flat key=value agent-audit.conf (zero
+# external deps — ConvertFrom-StringData, no jq/TOML parser; see SPEC/agent-audit.md
+# "Delivery and authorization"). This hook reads only the user_prompt stream's keys:
+# capture.user_prompt.enabled (false => skip), capture.user_prompt.content (plaintext
+# => .text; encrypted => null, sealing TBD), plus the shared elasticsearch.url /
+# .api_key / .timeout_ms and the per-stream elasticsearch.data_stream.user_prompt. Path:
+#   $env:CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.conf
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
@@ -42,19 +45,6 @@
 $ErrorActionPreference = 'Stop'
 
 function Log($m) { [Console]::Error.WriteLine("[capture-user-prompt] $m") }
-
-# Read a flat TOML scalar by key, unquoted. Keys are unique across the
-# [elasticsearch] / [audit] sections, so a section-agnostic lookup is unambiguous.
-function Get-TomlValue($lines, $key) {
-    foreach ($line in $lines) {
-        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") {
-            $v = $Matches[1]
-            if ($v -match '^"(.*)"$' -or $v -match "^'(.*)'$") { return $Matches[1] }
-            return $v
-        }
-    }
-    return $null
-}
 
 # Decode a base64url string (JWT segment) to its UTF-8 text. Translates the
 # url-safe alphabet back to standard base64 and restores padding.
@@ -94,26 +84,34 @@ function Get-CodexProviderIdentity($codexHome) {
 }
 
 try {
+    $stream = 'user_prompt'
     $configFile = if ($env:CODEX_AGENT_AUDIT_CONFIG) {
         $env:CODEX_AGENT_AUDIT_CONFIG
     } else {
         $base = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-        Join-Path $base 'agent-audit.toml'
+        Join-Path $base 'agent-audit.conf'
     }
 
     if (-not (Test-Path -LiteralPath $configFile)) {
         Log "no delivery config at $configFile — skipping (run setup.ps1)"; exit 0
     }
 
-    $cfgLines    = Get-Content -LiteralPath $configFile
-    $esUrl       = Get-TomlValue $cfgLines 'url'
-    $dataStream  = Get-TomlValue $cfgLines 'data_stream'
-    $apiKey      = Get-TomlValue $cfgLines 'api_key'
-    $timeoutMs   = Get-TomlValue $cfgLines 'timeout_ms'
-    $mode        = Get-TomlValue $cfgLines 'mode'
+    # Flat key=value config, parsed with the built-in ConvertFrom-StringData (no jq /
+    # TOML parser). Comment (#) and blank lines are ignored; dotted keys carry the
+    # structure. This hook reads only the user_prompt stream's keys.
+    $cfg = Get-Content -Raw -LiteralPath $configFile | ConvertFrom-StringData
+
+    if ($cfg["capture.$stream.enabled"] -eq 'false') {
+        Log "capture.$stream.enabled=false — skipping (stream disabled)"; exit 0
+    }
+    $content    = $cfg["capture.$stream.content"]
+    $esUrl      = $cfg['elasticsearch.url']
+    $apiKey     = $cfg['elasticsearch.api_key']
+    $timeoutMs  = $cfg['elasticsearch.timeout_ms']
+    $dataStream = $cfg["elasticsearch.data_stream.$stream"]
 
     if (-not $esUrl -or -not $dataStream) {
-        Log 'config missing url/data_stream — skipping'; exit 0
+        Log "config missing elasticsearch.url / data_stream.$stream — skipping"; exit 0
     }
 
     $timeoutSec = 0.3
@@ -149,9 +147,9 @@ try {
     $promptText = $rawObj.prompt
     $promptLen  = if ($null -ne $promptText) { ([string]$promptText).Length } else { 0 }
 
-    # plaintext mode carries prompt.text; any other mode nulls it (sealing into
+    # content=plaintext carries prompt.text; any other content nulls it (sealing into
     # encrypted_text is a later increment). length is the true char count regardless.
-    $textField = if ($mode -eq 'plaintext') { $promptText } else { $null }
+    $textField = if ($content -eq 'plaintext') { $promptText } else { $null }
 
     # Reshape raw Codex payload -> canonical agent_audit.user_prompt document.
     $record = [ordered]@{

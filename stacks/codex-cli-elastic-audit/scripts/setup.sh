@@ -12,7 +12,7 @@
 #      (logs-agent_audit.user_prompt-default and logs-agent_audit.tool_call-default)
 #      + their strict index templates, per SPEC/agent-audit.md. Agent-cross-cutting,
 #      so it lives in the elastic-audit backend.
-#   2. agent — render .codex/agent-audit.toml (the Agent Audit hooks' Elasticsearch
+#   2. agent — render .codex/agent-audit.conf (the Agent Audit hooks' Elasticsearch
 #      delivery config) from the agent-owned template, with this stack's local ES
 #      defaults (url = ES_URL, security-disabled so api_key empty; see
 #      SPEC/agent-audit.md). The hooks (step 3) read this file at run time for their
@@ -47,7 +47,7 @@ C="$SCRIPT_DIR/../../../components"
 echo "[setup] 1/4 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
 "$C/backends/elastic-audit/scripts/setup-agent-audit.sh" "$@"
 
-echo "[setup] 2/4 — agent config: .codex/agent-audit.toml (audit delivery)"
+echo "[setup] 2/4 — agent config: .codex/agent-audit.conf (audit delivery)"
 "$C/agents/codex-cli/scripts/render-agent-audit.sh" "$ES_URL" "$STACK_DIR"
 
 echo "[setup] 3/4 — .codex/config.toml: UserPromptSubmit + PostToolUse Agent Audit hooks (render-hooks), then Elasticsearch MCP appended (render-mcp)"

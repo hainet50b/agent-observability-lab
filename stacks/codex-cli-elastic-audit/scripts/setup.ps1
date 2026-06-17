@@ -9,7 +9,7 @@
 # 1) provision the Agent Audit data streams
 # (logs-agent_audit.user_prompt-default + logs-agent_audit.tool_call-default) +
 # their strict index templates per SPEC/agent-audit.md (agent-cross-cutting,
-# elastic-audit-backend-owned)  2) render .codex/agent-audit.toml (the Agent Audit
+# elastic-audit-backend-owned)  2) render .codex/agent-audit.conf (the Agent Audit
 # hooks' Elasticsearch delivery config) from the agent-owned template with this
 # stack's local ES defaults (url = -EsUrl, security-disabled so api_key empty; see
 # SPEC/agent-audit.md); the step-3 hooks read this at run time  3) register the
@@ -50,7 +50,7 @@ function Invoke-Step {
 
 Invoke-Step -Label '1/4 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)' `
     -Path (Join-Path $C 'backends/elastic-audit/scripts/setup-agent-audit.ps1') -StepArgs $es
-Invoke-Step -Label '2/4 - agent config: agent-audit.toml (audit delivery)' `
+Invoke-Step -Label '2/4 - agent config: agent-audit.conf (audit delivery)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-agent-audit.ps1') `
     -StepArgs @{ EsUrl = $EsUrlLocal; TargetDir = $StackDir }
 Invoke-Step -Label '3/4 - .codex/config.toml: UserPromptSubmit + PostToolUse Agent Audit hooks (render-hooks)' `

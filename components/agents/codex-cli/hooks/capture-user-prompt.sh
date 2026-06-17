@@ -6,19 +6,30 @@
 # Codex's `UserPromptSubmit` event (see ../scripts/render-hooks.sh and the stack
 # setup.sh/.ps1), this fires once per submitted prompt, reshapes Codex's raw hook
 # payload into the canonical `agent_audit.user_prompt` JSON document defined in
-# SPEC/agent-audit.md, and POSTs it straight to the local Agent Audit data stream
-# `logs-agent_audit.user_prompt-default`. Delivery is direct-to-Elasticsearch,
-# independent of the OTLP/APM pipeline. It does NOT seal/encrypt: in the lab's
-# `mode = "plaintext"` the prompt text is captured in plaintext (a future
-# encrypted mode nulls the text and populates encrypted_text — reserved field).
+# SPEC/agent-audit.md, and POSTs it straight to the local Agent Audit data stream.
+# Delivery is direct-to-Elasticsearch, independent of the OTLP/APM pipeline.
 #
-# Delivery config (read at run time, NOT hard-coded): the [elasticsearch] / [audit]
-# blocks of agent-audit.toml — `url`, `data_stream`, `api_key`, `timeout_ms`, and
-# `audit.mode` (see ../agent-audit.template.toml and SPEC/agent-audit.md). Path:
-#   $CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.toml
+# ZERO EXTERNAL DEPENDENCIES — the hook ships to every employee workstation, so it
+# uses only OS-base tools: `curl` (transport), `awk` (lifts JSON string values
+# without jq), `base64` (decodes the auth.json JWT segment). There is NO `jq` and
+# NO TOML parser: the delivery config is the flat key=value `.codex/agent-audit.conf`
+# (see ../agent-audit.template.conf and SPEC/agent-audit.md "Delivery and
+# authorization"), read by a pure-shell cfg_get loop, and the canonical JSON
+# document is assembled with printf from values lifted verbatim (already JSON-escaped)
+# or escaped here. If `base64` is absent only the provider identity degrades to null.
+#
+# Delivery config (read at run time from agent-audit.conf, NOT hard-coded) — this
+# hook reads only the `user_prompt` stream's keys:
+#   capture.user_prompt.enabled   — false => skip this stream (fail-open, no delivery)
+#   capture.user_prompt.content   — plaintext populates .text; encrypted leaves
+#                                    .text/.encrypted_text null (sealing not built yet)
+#   elasticsearch.url / .api_key / .timeout_ms          — shared connection
+#   elasticsearch.data_stream.user_prompt               — this stream's destination
+# Config path:
+#   $CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.conf
 # Launching Codex as `CODEX_HOME=<stack>/.codex codex` (this stack's mechanism)
-# makes that <stack>/.codex/agent-audit.toml — the hook process inherits CODEX_HOME
-# from the same environment that launched Codex, beside config.toml / hooks.json.
+# makes that <stack>/.codex/agent-audit.conf — the hook process inherits CODEX_HOME
+# from the same environment that launched Codex, beside config.toml.
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id  -> agent_audit.conversation_id   (Codex's session is the convo)
@@ -57,24 +68,129 @@ set -u
 log() { echo "[capture-user-prompt] $*" >&2; }
 done0() { exit 0; } # every path is success — never block the prompt
 
-config_file=${CODEX_AGENT_AUDIT_CONFIG:-${CODEX_HOME:-$HOME/.codex}/agent-audit.toml}
+STREAM=user_prompt
+config_file=${CODEX_AGENT_AUDIT_CONFIG:-${CODEX_HOME:-$HOME/.codex}/agent-audit.conf}
 
-# Read a flat (non-array, non-inline-table) TOML scalar by key, unquoted. Keys in
-# agent-audit.toml are unique across the [elasticsearch] / [audit] sections, so a
-# section-agnostic lookup is unambiguous. Comments live on their own lines.
-toml_get() {
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$config_file" 2>/dev/null |
-    head -n1 |
-    sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+# Read a flat key=value from agent-audit.conf, with a PURE-SHELL read loop — no jq,
+# no subprocess parser (the .conf is dotted-key key=value; comment lines start with
+# `#`). Splits on the FIRST `=` (so values may contain `=`); trims a trailing CR so
+# a CRLF checkout does not corrupt values. First match wins.
+cfg_get() {
+  _key=$1
+  while IFS='=' read -r _k _v || [ -n "$_k" ]; do
+    case $_k in
+    '#'*) continue ;;
+    esac
+    if [ "$_k" = "$_key" ]; then
+      printf '%s' "${_v%$'\r'}"
+      return 0
+    fi
+  done <"$config_file"
+  return 0
 }
 
-# The canonical document is JSON; shaping arbitrary prompt text safely needs jq.
-command -v jq >/dev/null 2>&1 || {
-  log "jq unavailable — cannot shape audit document; skipping"
-  done0
-}
+# Lift one JSON string value VERBATIM (still JSON-escaped, so it drops straight back
+# into our output JSON) without jq. Robust to embedded escaped quotes/backslashes.
+# Input JSON via $JSON, key via $KEY (through the environment, not -v, so backslashes
+# are not mangled). Empty when the key is absent or its value is not a string.
+AWK_GET='BEGIN{
+  s=ENVIRON["JSON"]; k="\"" ENVIRON["KEY"] "\":";
+  p=index(s,k); if(p==0) exit 0;
+  i=p+length(k); n=length(s);
+  while(i<=n){ c=substr(s,i,1); if(c==" "||c=="\t"||c=="\n"||c=="\r"){i++} else break }
+  if(i>n || substr(s,i,1)!="\"") exit 0;
+  i++; start=i;
+  while(i<=n){ ch=substr(s,i,1);
+    if(ch=="\\"){ i+=2; continue }
+    if(ch=="\""){ break }
+    i++ }
+  printf "%s", substr(s,start,i-start)
+}'
+json_get() { JSON=$1 KEY=$2 awk "$AWK_GET"; }
+
+# Count the logical characters of an already-escaped JSON string body (\uXXXX and
+# \X count as one), so .length is the decoded prompt's char count, not the escaped
+# byte count. Input via $ESC.
+AWK_STRLEN='BEGIN{
+  s=ENVIRON["ESC"]; n=length(s); i=1; c=0;
+  while(i<=n){ ch=substr(s,i,1);
+    if(ch=="\\"){ nx=substr(s,i+1,1); if(nx=="u"){i+=6}else{i+=2} c++; continue }
+    i++; c++ }
+  printf "%d", c
+}'
+strlen_esc() { ESC=$1 awk "$AWK_STRLEN"; }
+
+# Extract the raw JSON value of a key (any type) — used to pull the organizations
+# array out of the auth.json claims. Balanced over strings/objects/arrays. Input via
+# $JSON / $KEY. Empty when the key is absent.
+AWK_GET_RAW='BEGIN{
+  s=ENVIRON["JSON"]; k="\"" ENVIRON["KEY"] "\":";
+  p=index(s,k); if(p==0) exit 0;
+  i=p+length(k); n=length(s);
+  while(i<=n){ c=substr(s,i,1); if(c==" "||c=="\t"||c=="\n"||c=="\r"){i++} else break }
+  if(i>n) exit 0; start=i; c=substr(s,i,1);
+  if(c=="\""){ i++;
+    while(i<=n){ ch=substr(s,i,1);
+      if(ch=="\\"){i+=2; continue}
+      if(ch=="\""){i++; break}
+      i++ }
+    printf "%s", substr(s,start,i-start); exit 0 }
+  if(c=="{"||c=="["){ depth=0; instr=0;
+    while(i<=n){ ch=substr(s,i,1);
+      if(instr){ if(ch=="\\"){i+=2; continue} if(ch=="\""){instr=0} i++; continue }
+      if(ch=="\""){instr=1; i++; continue}
+      if(ch=="{"||ch=="["){depth++; i++; continue}
+      if(ch=="}"||ch=="]"){depth--; i++; if(depth==0) break; continue}
+      i++ }
+    printf "%s", substr(s,start,i-start); exit 0 }
+  while(i<=n){ ch=substr(s,i,1);
+    if(ch==","||ch=="}"||ch=="]"||ch==" "||ch=="\t"||ch=="\n"||ch=="\r") break; i++ }
+  printf "%s", substr(s,start,i-start)
+}'
+json_get_raw() { JSON=$1 KEY=$2 awk "$AWK_GET_RAW"; }
+
+# From an organizations array (raw JSON), pick the is_default entry (fallback: the
+# first) and print its "id" then "title" (escaped) on two lines. Input via $ORGS.
+AWK_ORG='function liftstr(str,key,   kk,p,ii,nn,c,out){
+    kk="\"" key "\":\""; p=index(str,kk); if(p==0) return "";
+    ii=p+length(kk); nn=length(str); out="";
+    while(ii<=nn){ c=substr(str,ii,1);
+      if(c=="\\"){ out=out c substr(str,ii+1,1); ii+=2; continue }
+      if(c=="\"") break;
+      out=out c; ii++ }
+    return out }
+  BEGIN{
+    s=ENVIRON["ORGS"]; n=length(s);
+    depth=0; instr=0; start=0; chosen=""; first="";
+    for(i=1;i<=n;i++){ ch=substr(s,i,1);
+      if(instr){ if(ch=="\\"){i++; continue} if(ch=="\""){instr=0} continue }
+      if(ch=="\""){instr=1; continue}
+      if(ch=="{"){ if(depth==0) start=i; depth++; continue }
+      if(ch=="}"){ depth--; if(depth==0){ obj=substr(s,start,i-start+1);
+          if(first=="") first=obj;
+          if(chosen=="" && index(obj,"\"is_default\":true")>0) chosen=obj } continue } }
+    obj=(chosen!="")?chosen:first;
+    print liftstr(obj,"id");
+    print liftstr(obj,"title") }'
+
+# Escape a raw (unescaped) shell string into a JSON string body.
+AWK_ESC='BEGIN{ s=ENVIRON["RAW"];
+  gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s);
+  gsub(/\n/,"\\n",s); gsub(/\t/,"\\t",s); gsub(/\r/,"\\r",s);
+  printf "%s", s }'
+jesc() { RAW=$1 awk "$AWK_ESC"; }
+
+# Emit a JSON value: a quoted string for an already-escaped value, else null.
+jv_esc() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf 'null'; fi; }
+# Emit a JSON value: a quoted, freshly-escaped string for a raw value, else null.
+jv_raw() { if [ -n "$1" ]; then printf '"%s"' "$(jesc "$1")"; else printf 'null'; fi; }
+
 command -v curl >/dev/null 2>&1 || {
   log "curl unavailable — cannot deliver audit document; skipping"
+  done0
+}
+command -v awk >/dev/null 2>&1 || {
+  log "awk unavailable — cannot shape audit document; skipping"
   done0
 }
 
@@ -83,14 +199,19 @@ command -v curl >/dev/null 2>&1 || {
   done0
 }
 
-es_url=$(toml_get url)
-data_stream=$(toml_get data_stream)
-api_key=$(toml_get api_key)
-timeout_ms=$(toml_get timeout_ms)
-mode=$(toml_get mode)
+enabled=$(cfg_get "capture.$STREAM.enabled")
+[ "$enabled" = false ] && {
+  log "capture.$STREAM.enabled=false — skipping (stream disabled)"
+  done0
+}
+content=$(cfg_get "capture.$STREAM.content")
+es_url=$(cfg_get elasticsearch.url)
+api_key=$(cfg_get elasticsearch.api_key)
+timeout_ms=$(cfg_get elasticsearch.timeout_ms)
+data_stream=$(cfg_get "elasticsearch.data_stream.$STREAM")
 
 if [ -z "$es_url" ] || [ -z "$data_stream" ]; then
-  log "config missing url/data_stream — skipping"
+  log "config missing elasticsearch.url / data_stream.$STREAM — skipping"
   done0
 fi
 
@@ -104,6 +225,16 @@ payload=$(cat)
   done0
 }
 
+prompt_esc=$(json_get "$payload" prompt)
+[ -n "$prompt_esc" ] || {
+  log "no prompt in payload — nothing to capture"
+  done0
+}
+session_esc=$(json_get "$payload" session_id)
+turn_esc=$(json_get "$payload" turn_id)
+model_esc=$(json_get "$payload" model)
+plen=$(strlen_esc "$prompt_esc")
+
 ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Best-effort runtime identity (Codex's payload has none).
@@ -112,74 +243,70 @@ user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
 # Windows, the bare login on POSIX where no domain source exists). Empty -> null.
 user_id=$(whoami 2>/dev/null || echo "")
 
-# Best-effort runtime host (ECS host.hostname/host.name). Codex's payload has
-# none; use the OS hostname. host.name and host.hostname are the same value here
-# (best-effort — ECS permits it); a richer source could split FQDN vs short name.
+# Best-effort runtime host (ECS host.hostname/host.name). Codex's payload has none;
+# use the OS hostname. host.name and host.hostname are the same value here.
 host_hostname=${HOSTNAME:-}
 [ -n "$host_hostname" ] || host_hostname=$(hostname 2>/dev/null || echo "")
 [ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
 host_name=$host_hostname
 
 # Best-effort AI-agent PROVIDER identity, read LOCALLY (no network) from
-# $CODEX_HOME/auth.json (Codex's ChatGPT-auth credential store). account.id is
-# .tokens.account_id; account.email/name and the organization come from the
-# id_token JWT's claims (payload = 2nd dot-segment, base64url-decoded via jq's
-# @base64d — NOT signature-verified, it is a local trusted file). Any missing
-# file/claim leaves that field null; API-key auth has no id_token, so all null.
+# $CODEX_HOME/auth.json. account.id is .tokens.account_id; account.email/name and the
+# organization come from the id_token JWT's claims (payload = 2nd dot-segment,
+# base64url-decoded — NOT signature-verified, a local trusted file). Any missing
+# file/claim/tool leaves that field empty -> null; API-key auth has no id_token.
 codex_home=${CODEX_HOME:-$HOME/.codex}
 auth_file="$codex_home/auth.json"
-identity='{"account_id":null,"account_email":null,"account_name":null,"org_id":null,"org_name":null}'
+acct_id="" acct_email="" acct_name="" org_id="" org_name=""
 if [ -f "$auth_file" ]; then
-  if parsed=$(jq -c '
-      def b64urldec:
-        (gsub("-";"+") | gsub("_";"/"))
-        | (length % 4) as $m
-        | (if $m > 0 then . + ("=" * (4 - $m)) else . end)
-        | @base64d;
-      (.tokens.account_id // null) as $acct
-      | (.tokens.id_token // "") as $idt
-      | ($idt | split(".")) as $parts
-      | (if ($parts | length) >= 2 then (try ($parts[1] | b64urldec | fromjson) catch {}) else {} end) as $claims
-      | (($claims["https://api.openai.com/auth"].organizations) // []) as $orgs
-      | (([$orgs[] | select(.is_default == true)][0]) // $orgs[0] // {}) as $org
-      | {
-          account_id: $acct,
-          account_email: ($claims.email // null),
-          account_name: ($claims.name // null),
-          org_id: ($org.id // null),
-          org_name: ($org.title // null)
-        }' "$auth_file" 2>/dev/null) && [ -n "$parsed" ]; then
-    identity=$parsed
-  else
-    log "could not parse provider identity from $auth_file — account/organization stay null"
+  auth=$(cat "$auth_file" 2>/dev/null || echo "")
+  acct_id=$(json_get "$auth" account_id)
+  id_token=$(json_get "$auth" id_token)
+  if [ -n "$id_token" ] && command -v base64 >/dev/null 2>&1; then
+    seg=$(printf '%s' "$id_token" | cut -d. -f2)
+    b64=$(printf '%s' "$seg" | tr '_-' '/+')
+    case $((${#b64} % 4)) in
+    2) b64="${b64}==" ;;
+    3) b64="${b64}=" ;;
+    esac
+    claims=$(printf '%s' "$b64" | base64 -d 2>/dev/null || echo "")
+    if [ -n "$claims" ]; then
+      acct_email=$(json_get "$claims" email)
+      acct_name=$(json_get "$claims" name)
+      orgs=$(json_get_raw "$claims" organizations)
+      if [ -n "$orgs" ]; then
+        {
+          IFS= read -r org_id
+          IFS= read -r org_name
+        } <<EOF
+$(ORGS="$orgs" awk "$AWK_ORG")
+EOF
+      fi
+    fi
   fi
 fi
 
-# Reshape raw Codex payload -> canonical agent_audit.user_prompt document. In
-# plaintext mode prompt.text carries the prompt; any other mode nulls it (sealing
-# into encrypted_text is a later increment) — prompt.length is the true char count
-# regardless, so the audit trail still records that a prompt of that size occurred.
-record=$(printf '%s' "$payload" |
-  jq -c --arg ts "$ts" --arg uname "$user_name" --arg uid "$user_id" --arg mode "$mode" \
-    --arg hname "$host_name" --arg hhost "$host_hostname" --argjson id "$identity" \
-    '($mode == "plaintext") as $plain
-       | (.prompt // null) as $p
-       | {
-        "@timestamp": $ts,
-        event: { action: "user-prompt", created: $ts, dataset: "agent_audit.user_prompt", kind: "event" },
-        user: { id: (if ($uid | length) > 0 then $uid else null end), name: (if ($uname | length) > 0 then $uname else null end) },
-        host: { name: (if ($hname | length) > 0 then $hname else null end), hostname: (if ($hhost | length) > 0 then $hhost else null end) },
-        agent_audit: {
-          agent: { provider: "openai", name: "codex-cli", model: (.model // null), account: { id: $id.account_id, name: $id.account_name, email: $id.account_email }, organization: { id: $id.org_id, name: $id.org_name } },
-          conversation_id: (.session_id // null),
-          turn_id: (.turn_id // null),
-          user_prompt: { text: (if $plain then $p else null end), encrypted_text: null, length: (($p // "") | length) }
-        }
-      }' 2>/dev/null) ||
-  {
-    log "payload not valid JSON — cannot shape audit document; skipping"
-    done0
-  }
+# plaintext mode populates user_prompt.text; any other content (encrypted) leaves it
+# null — sealing into encrypted_text is a later increment. .length is the true char
+# count regardless, so the audit trail still records that a prompt of that size occurred.
+if [ "$content" = plaintext ]; then
+  text_field=$(jv_esc "$prompt_esc")
+else
+  text_field=null
+fi
+
+# Assemble the canonical agent_audit.user_prompt document with printf (no jq). Lifted
+# values (prompt/session/turn/model, provider claims) are already JSON-escaped; the
+# shell-derived identity (user/host) is escaped by jv_raw.
+record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"openai","name":"codex-cli","model":%s,"account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"user_prompt":{"text":%s,"encrypted_text":null,"length":%s}}}' \
+  "$ts" "$ts" \
+  "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
+  "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
+  "$(jv_esc "$model_esc")" \
+  "$(jv_esc "$acct_id")" "$(jv_esc "$acct_name")" "$(jv_esc "$acct_email")" \
+  "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
+  "$(jv_esc "$session_esc")" "$(jv_esc "$turn_esc")" \
+  "$text_field" "$plen")
 
 # POST to the data stream's _doc endpoint (auto op_type=create for data streams).
 es_target="${es_url%/}/${data_stream}/_doc"

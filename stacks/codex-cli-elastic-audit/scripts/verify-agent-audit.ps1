@@ -4,7 +4,7 @@
 # rationale). Verifies the DIRECT Agent Audit path (UserPromptSubmit hook ->
 # Elasticsearch), not the OTLP/APM path. 3A pattern:
 #   Arrange — stack up + wait for Elasticsearch healthy; require setup.ps1 to have
-#             rendered .codex/config.toml (inline [[hooks.*]]) and .codex/agent-audit.toml.
+#             rendered .codex/config.toml (inline [[hooks.*]]) and .codex/agent-audit.conf.
 #   Act     — feed a synthetic UserPromptSubmit payload (unique session_id) on
 #             stdin to the configured hook (capture-user-prompt.ps1), with
 #             CODEX_HOME=<stack>/.codex so it reads this stack's delivery config.
@@ -33,7 +33,7 @@ $DataStream = 'logs-agent_audit.user_prompt-default'
 # .NET's HTTP client stalls ~2s on the localhost IPv6 (::1) attempt before IPv4
 # fallback (the same quirk the hook works around); use 127.0.0.1 for this script's
 # own ES polling so the verification is fast. The hook reads its own URL from
-# agent-audit.toml and applies the same rewrite internally.
+# agent-audit.conf and applies the same rewrite internally.
 $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
@@ -51,7 +51,7 @@ try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not r
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
 if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml — run scripts/setup.ps1 first' }
-if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'agent-audit.toml'))) { Skip 'no .codex/agent-audit.toml — run scripts/setup.ps1 first' }
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'agent-audit.conf'))) { Skip 'no .codex/agent-audit.conf — run scripts/setup.ps1 first' }
 # Confirm the hook is registered on UserPromptSubmit: the inline
 # [[hooks.UserPromptSubmit]] table is present in config.toml.
 if (-not (Select-String -SimpleMatch -Quiet -Pattern '[[hooks.UserPromptSubmit]]' -LiteralPath (Join-Path $CodexHome 'config.toml'))) {
@@ -91,7 +91,7 @@ try {
     } | ConvertTo-Json -Compress
 
     # Invoke the configured hook as a real child pwsh process with CODEX_HOME set,
-    # so the payload reaches its stdin and it reads the rendered agent-audit.toml.
+    # so the payload reaches its stdin and it reads the rendered agent-audit.conf.
     # Fail-open: it always exits 0; the assertion below is the signal.
     $env:CODEX_HOME = $CodexHome
     try { $payload | & pwsh -NoProfile -File $HookPs1 } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
