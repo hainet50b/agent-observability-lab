@@ -8,13 +8,13 @@
 #
 #   Arrange — bring the stack up and wait for Elasticsearch (the audit
 #             destination) to report healthy. Require that scripts/setup.sh has
-#             rendered .codex/hooks.json (the UserPromptSubmit registration) and
-#             .codex/agent-audit.toml (the hook's ES delivery config); SKIP with
-#             guidance otherwise.
+#             rendered .codex/config.toml (carrying the inline [[hooks.*]]
+#             registration) and .codex/agent-audit.toml (the hook's ES delivery
+#             config); SKIP with guidance otherwise.
 #   Act     — feed a synthetic Codex UserPromptSubmit payload (a unique
 #             session_id) on stdin to the configured UserPromptSubmit hook
 #             (components/agents/codex-cli/hooks/capture-user-prompt.sh — the same
-#             script .codex/hooks.json registers), with CODEX_HOME=<stack>/.codex
+#             script .codex/config.toml registers), with CODEX_HOME=<stack>/.codex
 #             so it reads this stack's rendered delivery config, exactly as a real
 #             Codex session invokes it.
 #   Assert  — query logs-agent_audit.user_prompt-default for the canonical
@@ -60,11 +60,12 @@ command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq >/dev/null 2>&1 || skip "jq not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
-[ -f "$CODEX_HOME_DIR/hooks.json" ] || skip "no .codex/hooks.json — run scripts/setup.sh first"
+[ -f "$CODEX_HOME_DIR/config.toml" ] || skip "no .codex/config.toml — run scripts/setup.sh first"
 [ -f "$CODEX_HOME_DIR/agent-audit.toml" ] || skip "no .codex/agent-audit.toml — run scripts/setup.sh first"
-# Confirm the hook is actually registered on UserPromptSubmit (configured state).
-jq -e '.hooks.UserPromptSubmit[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" >/dev/null 2>&1 ||
-  fail "no UserPromptSubmit command registered in .codex/hooks.json"
+# Confirm the hook is actually registered on UserPromptSubmit (configured state):
+# the inline [[hooks.UserPromptSubmit]] table is present in config.toml.
+grep -qF '[[hooks.UserPromptSubmit]]' "$CODEX_HOME_DIR/config.toml" ||
+  fail "no [[hooks.UserPromptSubmit]] registered in .codex/config.toml"
 
 # --- Arrange ---------------------------------------------------------------
 echo "[arrange] bringing the stack up (docker compose up -d)…"

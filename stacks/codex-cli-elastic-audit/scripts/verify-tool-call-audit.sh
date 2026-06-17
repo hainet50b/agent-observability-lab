@@ -8,9 +8,10 @@
 # OTLP/APM path (that is codex-cli-elastic's smoke-test.sh). Follows the 3A pattern (see CONVENTIONS.md):
 #
 #   Arrange — bring the stack up and wait for Elasticsearch (the audit destination)
-#             healthy. Require scripts/setup.sh to have rendered .codex/hooks.json
-#             (the PostToolUse registration) and .codex/agent-audit.toml (the hook's
-#             ES delivery config); SKIP with guidance otherwise.
+#             healthy. Require scripts/setup.sh to have rendered .codex/config.toml
+#             (carrying the inline [[hooks.PostToolUse]] registration) and
+#             .codex/agent-audit.toml (the hook's ES delivery config); SKIP with
+#             guidance otherwise.
 #   Act     — feed a synthetic Codex PostToolUse payload (a unique session_id, an
 #             object tool_input and a string tool_response — the heterogeneous shapes
 #             the hook serializes) on stdin to the configured PostToolUse hook
@@ -60,11 +61,12 @@ command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq >/dev/null 2>&1 || skip "jq not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
-[ -f "$CODEX_HOME_DIR/hooks.json" ] || skip "no .codex/hooks.json — run scripts/setup.sh first"
+[ -f "$CODEX_HOME_DIR/config.toml" ] || skip "no .codex/config.toml — run scripts/setup.sh first"
 [ -f "$CODEX_HOME_DIR/agent-audit.toml" ] || skip "no .codex/agent-audit.toml — run scripts/setup.sh first"
-# Confirm the hook is actually registered on PostToolUse (configured state).
-jq -e '.hooks.PostToolUse[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json" >/dev/null 2>&1 ||
-  fail "no PostToolUse command registered in .codex/hooks.json"
+# Confirm the hook is actually registered on PostToolUse (configured state):
+# the inline [[hooks.PostToolUse]] table is present in config.toml.
+grep -qF '[[hooks.PostToolUse]]' "$CODEX_HOME_DIR/config.toml" ||
+  fail "no [[hooks.PostToolUse]] registered in .codex/config.toml"
 
 # --- Arrange ---------------------------------------------------------------
 echo "[arrange] bringing the stack up (docker compose up -d)…"

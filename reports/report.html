@@ -3192,6 +3192,35 @@
       <li><strong>Verified:</strong> <code>render-otel.sh</code> and <code>render-otel.ps1</code> both render an identical <code>[otel]</code> <code>config.toml</code> with the endpoint substituted; <code>grep</code> finds no live (non-history) <code>render-config</code>/<code>config.template.toml</code> reference; all four stacks pass <code>docker compose config -q</code>; <code>shfmt -d</code> empty + <code>shellcheck</code> clean and <code>PSScriptAnalyzer</code> clean on touched scripts; and <code>codex-cli-elastic/scripts/smoke-test.sh</code> reaches <strong>PASS</strong> (all three OTLP probes 200, metrics/logs/traces assertions green).</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Point the four Codex audit verifiers at inline <code>[hooks]</code> in <code>config.toml</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Used a literal-string presence check rather than a TOML parser, exactly as the task prescribed: <code>grep -qF '[[hooks.UserPromptSubmit]]'</code> (and <code>[[hooks.PostToolUse]]</code>) in the <code>.sh</code> verifiers, and <code>Select-String -SimpleMatch -Quiet</code> in the <code>.ps1</code> mirrors. <code>render-hooks</code> writes those exact table headers, so the literal match is reliable and avoids adding a TOML dependency.</li>
+      <li>The <code>jq</code>/<code>ConvertFrom-Json</code> registration check was the <em>only</em> JSON use tied to <code>hooks.json</code>; <code>jq</code> stays a required tool (still used for the synthetic payload and the document assertions), so its precondition is untouched. Left all ES-landing logic unchanged per the task.</li>
+      <li>Kept the missing-file SKIP message symmetric with the existing <code>agent-audit.toml</code> SKIP ("run scripts/setup.sh/.ps1 first"), just swapping the filename to <code>config.toml</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The stale <code>.codex/config.toml</code> in the audit stack was live Codex-mutated state with no rendered <code>[[hooks.*]]</code> tables; re-ran <code>render-hooks.sh</code> (idempotent, append-if-absent) to land them, confirmed no <code>hooks.json</code> exists, then verified.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The two stacks (<code>codex-cli-elastic</code> / <code>codex-cli-elastic-audit</code>) reuse the same container names and ports, so a verifier's <code>docker compose up -d</code> errors with a raw Docker name conflict when the sibling stack is up. A future task could detect that and print a clear "another stack owns these container names — bring it down first" hint in the verifiers' arrange step.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The four Codex audit verifiers now gate on and check <code>.codex/config.toml</code>'s inline <code>[[hooks.*]]</code> tables instead of the retired <code>.codex/hooks.json</code>, so after the hooks-to-TOML migration they reach a genuine PASS rather than silently skipping (or false-passing on a lingering file).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end on the live audit stack with no <code>.codex/hooks.json</code> present:</strong> all four verifiers reach genuine <strong>PASS</strong> (not SKIP) — both <code>.sh</code> (RC=0) and both <code>.ps1</code> (RC=0), each indexing a synthetic doc and asserting identity / host / serialized I/O. <code>shfmt -d</code> empty + <code>shellcheck</code> clean on the touched <code>*.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on the touched <code>*.ps1</code>; all four stacks pass <code>docker compose config -q</code>. The telemetry stack was restored to its pre-task running state afterward.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

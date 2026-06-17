@@ -4,7 +4,7 @@
 # rationale). Verifies the DIRECT Agent Audit path (UserPromptSubmit hook ->
 # Elasticsearch), not the OTLP/APM path. 3A pattern:
 #   Arrange — stack up + wait for Elasticsearch healthy; require setup.ps1 to have
-#             rendered .codex/hooks.json and .codex/agent-audit.toml.
+#             rendered .codex/config.toml (inline [[hooks.*]]) and .codex/agent-audit.toml.
 #   Act     — feed a synthetic UserPromptSubmit payload (unique session_id) on
 #             stdin to the configured hook (capture-user-prompt.ps1), with
 #             CODEX_HOME=<stack>/.codex so it reads this stack's delivery config.
@@ -50,11 +50,12 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Skip 'docker CLI 
 try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not reachable; nothing to verify' } }
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
-if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'hooks.json')))       { Skip 'no .codex/hooks.json — run scripts/setup.ps1 first' }
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml — run scripts/setup.ps1 first' }
 if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'agent-audit.toml'))) { Skip 'no .codex/agent-audit.toml — run scripts/setup.ps1 first' }
-$hooksJson = Get-Content -Raw -LiteralPath (Join-Path $CodexHome 'hooks.json') | ConvertFrom-Json
-if (-not $hooksJson.hooks.UserPromptSubmit[0].hooks[0].command) {
-    Fail 'no UserPromptSubmit command registered in .codex/hooks.json'
+# Confirm the hook is registered on UserPromptSubmit: the inline
+# [[hooks.UserPromptSubmit]] table is present in config.toml.
+if (-not (Select-String -SimpleMatch -Quiet -Pattern '[[hooks.UserPromptSubmit]]' -LiteralPath (Join-Path $CodexHome 'config.toml'))) {
+    Fail 'no [[hooks.UserPromptSubmit]] registered in .codex/config.toml'
 }
 
 Push-Location $StackDir
@@ -165,3 +166,4 @@ try {
 finally {
     Pop-Location
 }
+
