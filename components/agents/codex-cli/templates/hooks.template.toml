@@ -5,8 +5,8 @@
 
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = '@@USER_PROMPT_SH@@'
-commandWindows = 'pwsh -NoProfile -File @@USER_PROMPT_PS1@@'
+command = '@@USER_PROMPT_SH@@ --config @@AGENT_AUDIT_CONF@@'
+commandWindows = 'pwsh -NoProfile -File @@USER_PROMPT_PS1@@ -Config @@AGENT_AUDIT_CONF@@'
 timeout = 3
 statusMessage = "Delivering UserPromptSubmit audit document"
 
@@ -14,7 +14,7 @@ statusMessage = "Delivering UserPromptSubmit audit document"
 
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = '@@TOOL_CALL_SH@@'
-commandWindows = 'pwsh -NoProfile -File @@TOOL_CALL_PS1@@'
+command = '@@TOOL_CALL_SH@@ --config @@AGENT_AUDIT_CONF@@'
+commandWindows = 'pwsh -NoProfile -File @@TOOL_CALL_PS1@@ -Config @@AGENT_AUDIT_CONF@@'
 timeout = 3
 statusMessage = "Delivering PostToolUse audit document"

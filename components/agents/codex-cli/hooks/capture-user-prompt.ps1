@@ -14,7 +14,7 @@
 # capture.user_prompt.enabled (false => skip), capture.user_prompt.content (plaintext
 # => .text; encrypted => null, sealing TBD), plus the shared elasticsearch.url /
 # .api_key / .timeout_ms and the per-stream elasticsearch.data_stream.user_prompt. Path:
-#   $env:CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.conf
+#   INJECTED via -Config <abs path> from the rendered hook command (no ambient discovery).
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
@@ -85,11 +85,16 @@ function Get-CodexProviderIdentity($codexHome) {
 
 try {
     $stream = 'user_prompt'
-    $configFile = if ($env:CODEX_AGENT_AUDIT_CONFIG) {
-        $env:CODEX_AGENT_AUDIT_CONFIG
-    } else {
-        $base = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-        Join-Path $base 'agent-audit.conf'
+
+    # Config path is INJECTED via -Config (the rendered hook command in config.toml
+    # supplies the absolute agent-audit.conf path). A shipped hook does NOT infer its
+    # config from cwd / CODEX_HOME / $HOME — explicit injection only.
+    $configFile = $null
+    for ($i = 0; $i -lt $args.Count; $i++) {
+        if ($args[$i] -eq '-Config' -and $i + 1 -lt $args.Count) { $configFile = $args[$i + 1] }
+    }
+    if (-not $configFile) {
+        Log 'no -Config <path> provided — skipping (the rendered hook command injects it)'; exit 0
     }
 
     if (-not (Test-Path -LiteralPath $configFile)) {

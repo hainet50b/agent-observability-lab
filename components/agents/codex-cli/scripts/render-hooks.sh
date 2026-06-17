@@ -9,6 +9,7 @@ target_dir=${1:-}
 }
 
 config="$target_dir/.codex/config.toml"
+agent_audit_conf="$target_dir/.codex/agent-audit.conf"
 
 if [ -e "$config" ] && grep -qF '[[hooks.UserPromptSubmit]]' "$config"; then
   echo "Skipped: $config already has [[hooks.UserPromptSubmit]]"
@@ -40,6 +41,7 @@ block=$(sed \
   -e "s#@@USER_PROMPT_PS1@@#$user_prompt_ps1#" \
   -e "s#@@TOOL_CALL_SH@@#$tool_call_sh#" \
   -e "s#@@TOOL_CALL_PS1@@#$tool_call_ps1#" \
+  -e "s#@@AGENT_AUDIT_CONF@@#$agent_audit_conf#" \
   "$template")
 
 mkdir -p "$target_dir/.codex"

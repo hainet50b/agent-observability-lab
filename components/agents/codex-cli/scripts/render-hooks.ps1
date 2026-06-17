@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $config = Join-Path $TargetDir '.codex/config.toml'
+$AgentAuditConf = Join-Path (Join-Path $TargetDir '.codex') 'agent-audit.conf'
 
 if ((Test-Path -LiteralPath $config) -and (Select-String -LiteralPath $config -SimpleMatch '[[hooks.UserPromptSubmit]]' -Quiet)) {
     Write-Host "Skipped: $config already has [[hooks.UserPromptSubmit]]"
@@ -36,7 +37,8 @@ $block = ((Get-Content -Raw -LiteralPath $Template) -replace "`r`n", "`n").
 Replace('@@USER_PROMPT_SH@@', $UserPromptSh).
 Replace('@@USER_PROMPT_PS1@@', $UserPromptPs1).
 Replace('@@TOOL_CALL_SH@@', $ToolCallSh).
-Replace('@@TOOL_CALL_PS1@@', $ToolCallPs1)
+Replace('@@TOOL_CALL_PS1@@', $ToolCallPs1).
+Replace('@@AGENT_AUDIT_CONF@@', $AgentAuditConf)
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
 if (Test-Path -LiteralPath $config) {

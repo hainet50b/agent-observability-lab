@@ -25,11 +25,10 @@
 #                                    .text/.encrypted_text null (sealing not built yet)
 #   elasticsearch.url / .api_key / .timeout_ms          — shared connection
 #   elasticsearch.data_stream.user_prompt               — this stream's destination
-# Config path:
-#   $CODEX_AGENT_AUDIT_CONFIG, else ${CODEX_HOME:-$HOME/.codex}/agent-audit.conf
-# Launching Codex as `CODEX_HOME=<stack>/.codex codex` (this stack's mechanism)
-# makes that <stack>/.codex/agent-audit.conf — the hook process inherits CODEX_HOME
-# from the same environment that launched Codex, beside config.toml.
+# Config path is INJECTED, not discovered: the rendered hook command in config.toml
+# passes `--config <abs path to agent-audit.conf>` (render-hooks substitutes it). A
+# shipped hook never infers its config from cwd / CODEX_HOME / $HOME. (CODEX_HOME is
+# still used below for auth.json — the agent's own credential store, not our config.)
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id  -> agent_audit.conversation_id   (Codex's session is the convo)
@@ -69,7 +68,24 @@ log() { echo "[capture-user-prompt] $*" >&2; }
 done0() { exit 0; } # every path is success — never block the prompt
 
 STREAM=user_prompt
-config_file=${CODEX_AGENT_AUDIT_CONFIG:-${CODEX_HOME:-$HOME/.codex}/agent-audit.conf}
+
+# Config path is INJECTED via --config (the rendered hook command in config.toml
+# supplies the absolute agent-audit.conf path). A shipped hook does NOT infer its
+# config from cwd / CODEX_HOME / $HOME — explicit injection only. A missing arg is
+# a fail-open skip (never block the prompt).
+config_file=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --config ] && [ "$#" -ge 2 ]; then
+    config_file=$2
+    shift 2
+  else
+    shift
+  fi
+done
+[ -n "$config_file" ] || {
+  log "no --config <path> provided — skipping (the rendered hook command injects it)"
+  done0
+}
 
 # Read a flat key=value from agent-audit.conf, with a PURE-SHELL read loop — no jq,
 # no subprocess parser (the .conf is dotted-key key=value; comment lines start with

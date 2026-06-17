@@ -94,7 +94,8 @@ try {
     # so the payload reaches its stdin and it reads the rendered agent-audit.conf.
     # Fail-open: it always exits 0; the assertion below is the signal.
     $env:CODEX_HOME = $CodexHome
-    try { $payload | & pwsh -NoProfile -File $HookPs1 } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
+    $conf = Join-Path $CodexHome 'agent-audit.conf'
+    try { $payload | & pwsh -NoProfile -File $HookPs1 -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
     # --- Assert ----------------------------------------------------------------
     Write-Host "[assert] querying $DataStream for the audit document…"

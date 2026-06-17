@@ -111,10 +111,11 @@ payload=$(jq -nc --arg cid "$cid" '{
   permission_mode: "auto"
 }')
 
-# Run the configured hook with CODEX_HOME pointed at this stack's .codex so it reads
-# the rendered agent-audit.conf. The hook is fail-open (always exit 0); the assertion
-# below — not this exit code — is the real signal.
-printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" || true
+# Run the configured hook, injecting the agent-audit.conf path via --config (the
+# production contract — the hook does no ambient config discovery). CODEX_HOME is
+# still set so the hook resolves auth.json (provider identity) from this .codex.
+# The hook is fail-open (always exit 0); the assertion below is the real signal.
+printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --config "$CODEX_HOME_DIR/agent-audit.conf" || true
 
 # --- Assert ----------------------------------------------------------------
 es_count_cid() {
