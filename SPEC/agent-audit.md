@@ -26,7 +26,7 @@ logs-agent_audit.tool_call-default
 
 ## Where this runs
 
-The audit data streams are provisioned (strict templates + data streams) and viewed (cross-agent Kibana data views / saved searches) by the **`elastic-audit`** backend — Elasticsearch + Kibana, **no APM Server**, since audit is a direct hook → Elasticsearch write that never uses the OTLP / APM path. It is composed by `<agent>-elastic-audit` stacks (e.g. `codex-cli-elastic-audit`), separate from the telemetry backend (`elastic` / `codex-cli-elastic`): same local Elasticsearch technology, but a separate compose project, separate volumes, and a separate agent home (whose `.codex` carries only `agent-audit.toml` + `hooks.json`, no `[otel]` config). The split keeps each stack's load-bearing set legible; the two stacks are alternatives, not run simultaneously.
+The audit data streams are provisioned (strict templates + data streams) and viewed (cross-agent Kibana data views / saved searches) by the **`elastic-audit`** backend — Elasticsearch + Kibana, **no APM Server**, since audit is a direct hook → Elasticsearch write that never uses the OTLP / APM path. It is composed by `<agent>-elastic-audit` stacks (e.g. `codex-cli-elastic-audit`), separate from the telemetry backend (`elastic` / `codex-cli-elastic`): same local Elasticsearch technology, but a separate compose project, separate volumes, and a separate agent home (whose `.codex` carries `config.toml` — the inline `[hooks]` registrations plus the Elasticsearch MCP — and `agent-audit.conf`, but no `[otel]` config). The split keeps each stack's load-bearing set legible; the two stacks are alternatives, not run simultaneously.
 
 ## User prompt documents
 
@@ -121,7 +121,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 - `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
 - `agent_audit.tool_call.tool.name` ← Codex `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP trace_safe `codex.tool_result` `call_id`).
 - `agent_audit.tool_call.input` ← `tool_input`, `.output` ← `tool_response`. Both Codex fields are heterogeneous JSON (an object for MCP tools; a string or object for shell tools), so the sender **serializes each to a JSON string** into `.text`, with `.length` the character count. The strict mapping then sees one scalar per side, not the tool's arbitrary nested keys.
-- `audit.mode = plaintext` populates `.text`; other modes null it and reserve `.encrypted_text` (the same gate as the prompt body).
+- `capture.tool_call.content = plaintext` populates `.text`; `encrypted` nulls it and reserves `.encrypted_text` (the same gate as the prompt body, set per stream — see [Delivery and authorization](#delivery-and-authorization)).
 - No success / exit field — Codex's `tool_response` is opaque and not reliably parseable across tools.
 - Source is Codex `PostToolUse` **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`, `agent.model` ← `model`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict).
 
@@ -157,25 +157,31 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 - Hook senders index directly to Elasticsearch for the initial implementation.
 - Senders should use a very short HTTP timeout so unavailable destinations do not noticeably delay agent usage.
 - Write credentials distributed to agent workstations should be scoped to the audit data stream and limited to create-only document ingestion. Index template, data stream, mapping, and lifecycle setup is performed by stack/admin setup, not by end-user hook credentials.
-- The preferred Elasticsearch privilege for hook ingestion is `create_doc` on `logs-agent_audit.user_prompt-*`; setup credentials, not hook credentials, own template/data-stream creation and mapping changes.
+- The preferred Elasticsearch privilege for hook ingestion is `create_doc` on the audit data streams (`logs-agent_audit.user_prompt-*` and `logs-agent_audit.tool_call-*`); setup credentials, not hook credentials, own template/data-stream creation and mapping changes.
 
 Hook delivery configuration lives in a hook-specific file rather than Codex's native `config.toml`:
 
 ```text
-.codex/agent-audit.toml
+.codex/agent-audit.conf
 ```
 
-Initial configuration shape:
+Unlike Codex's `config.toml` (which Codex itself parses, so it must be TOML), this file is read **only by the capture hook scripts**, which must run on every employee workstation with **zero external dependencies** — no `jq`, no TOML parser. So the format is a flat `key=value` file (`.conf`) that both consumers parse natively: POSIX shells with a pure-`read` loop and PowerShell with the built-in `ConvertFrom-StringData`. `#` comment lines are ignored by both, dotted keys carry the structure, and values are untyped strings the hook interprets. `render-agent-audit.{sh,ps1}` fills `elasticsearch.url` from the stack's Elasticsearch base URL.
 
-```toml
-[elasticsearch]
-url = "https://..."
-data_stream = "logs-agent_audit.user_prompt-default"
-api_key = "..."
-timeout_ms = 300
+```ini
+# capture.<stream>: enabled (true|false), content (plaintext|encrypted)
+capture.user_prompt.enabled=true
+capture.user_prompt.content=plaintext
+capture.tool_call.enabled=true
+capture.tool_call.content=plaintext
 
-[audit]
-mode = "plaintext"
+# elasticsearch: url/api_key/timeout_ms shared; data_stream is per stream
+elasticsearch.url=https://...
+elasticsearch.api_key=
+elasticsearch.timeout_ms=300
+elasticsearch.data_stream.user_prompt=logs-agent_audit.user_prompt-default
+elasticsearch.data_stream.tool_call=logs-agent_audit.tool_call-default
 ```
 
-`audit.mode` controls prompt body handling. The lab starts with `plaintext`, which populates `agent_audit.user_prompt.text`. Production-oriented flows may add an encrypted mode that sets `agent_audit.user_prompt.text` to `null` and populates `agent_audit.user_prompt.encrypted_text`.
+Two layers are kept distinct: `capture.<stream>.*` is the **backend-agnostic capture posture** (whether to capture the stream, and how its body is stored), while `elasticsearch.*` is the **backend** — a shared connection plus a per-stream `data_stream` mapping. `content` is a per-stream enum: `plaintext` populates the body's `.text`; `encrypted` sets `.text` to `null` and populates `.encrypted_text` (encryption itself is not yet built — `plaintext` is the lab default). `enabled = false` skips capture for that stream entirely.
+
+If delivery later grows structured (encryption parameters, lists of redaction patterns) or moves into a distributed helper binary, the format may move to a structured one (TOML/JSON) at that point — today's flat `.conf` is dictated solely by the zero-dependency shell-parsing constraint. Keep each hook's config read behind a small seam so a future format/parser swap stays local; the schema above is the format-agnostic source of truth.
