@@ -33,11 +33,11 @@ function Invoke-Step {
 
 Invoke-Step -Label '1/4 - trace-routing ingest pipeline' -Path (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') -StepArgs $es
 Invoke-Step -Label '2/4 - prompts-audit index' -Path (Join-Path $C 'backends/elastic/scripts/setup-prompt-audit.ps1') -StepArgs $es
-Write-Host '[setup] 3/4 - Kibana saved objects'
-Invoke-Step -Label '  backend data views' -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs $kb
-Invoke-Step -Label '  agent assets' -Path (Join-Path $C 'agents/claude-code/scripts/import-kibana-objects.ps1') -StepArgs $kb
+$kb['Sources'] = @('claude-code')
+Invoke-Step -Label '3/4 - Kibana saved objects' -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs $kb
 Invoke-Step -Label '4/4 - local Claude Code settings (telemetry env + audit hook)' `
     -Path (Join-Path $C 'agents/claude-code/scripts/render-settings.ps1') `
     -StepArgs @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
 
 Write-Host "[setup] done - run 'claude' from this directory; verify with scripts/smoke-test.sh."
+

@@ -50,9 +50,7 @@ echo "[setup] 3/4 — Codex session config (.codex/config.toml: [otel] telemetry
 "$C/agents/codex-cli/scripts/render-otel.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
 "$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
 
-echo "[setup] 4/4 — Kibana saved objects (1/2): backend cross-agent AI Agents — Traces view"
-"$C/backends/elastic/scripts/import-kibana-objects.sh" "$@"
-echo "[setup] 4/4 — Kibana saved objects (2/2): Codex agent data views + saved searches"
-"$C/agents/codex-cli/scripts/import-kibana-objects.sh" "$@"
+echo "[setup] 4/4 — Kibana saved objects (backend cross-agent view + Codex agent data views + saved searches)"
+"$C/backends/elastic/scripts/import-kibana-objects.sh" codex-cli
 
 echo "[setup] done ✓ — point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

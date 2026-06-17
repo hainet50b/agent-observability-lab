@@ -31,8 +31,7 @@ echo "[setup] 2/4 — prompts-audit index"
 "$C/backends/elastic/scripts/setup-prompt-audit.sh" "$@"
 
 echo "[setup] 3/4 — Kibana saved objects"
-"$C/backends/elastic/scripts/import-kibana-objects.sh" "$@"
-"$C/agents/claude-code/scripts/import-kibana-objects.sh" "$@"
+"$C/backends/elastic/scripts/import-kibana-objects.sh" claude-code
 
 echo "[setup] 4/4 — local Claude Code settings (telemetry env + audit hook)"
 "$C/agents/claude-code/scripts/render-settings.sh" "$OTLP_ENDPOINT" "$STACK_DIR"

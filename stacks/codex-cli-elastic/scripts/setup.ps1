@@ -54,9 +54,8 @@ Invoke-Step -Label '3/4 - Codex session config: [otel] telemetry (.codex/config.
 Invoke-Step -Label '3/4 - Codex session config: Elasticsearch MCP (.codex/config.toml)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `
     -StepArgs @{ TargetDir = $StackDir }
-Invoke-Step -Label '4/4 - Kibana saved objects (1/2): backend cross-agent AI Agents - Traces view' `
-    -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs @{}
-Invoke-Step -Label '4/4 - Kibana saved objects (2/2): Codex agent data views + saved searches' `
-    -Path (Join-Path $C 'agents/codex-cli/scripts/import-kibana-objects.ps1') -StepArgs @{}
+Invoke-Step -Label '4/4 - Kibana saved objects (backend cross-agent view + Codex agent data views + saved searches)' `
+    -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs @{ Sources = @('codex-cli') }
 
 Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."
+

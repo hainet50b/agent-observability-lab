@@ -3256,6 +3256,34 @@
       <li><strong>Decision to flag:</strong> the AskUserQuestion on jq-removal scope went unanswered, and I proceeded with full removal from the <code>.sh</code> hooks per the SPEC zero-dep invariant + the grep gate. If a smaller increment was intended (config-read swap only, deferring the auth/shaping jq removal), that part can be revisited — but as shipped the hooks satisfy the invariant and the gate.</li>
     </ul>
   </section>
+  <section>
+    <h2>Move all Kibana saved objects under the backend (namespaced per source); backend is the sole importer</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Category ordering by filename suffix, not a hand-listed FILES array.</strong> The old per-source importers carried an explicit ordered <code>FILES</code> list. Since each source dir now holds at most one file per category (<code>data-views</code> / <code>saved-searches</code> / <code>dashboard</code>), I replaced the list with an <code>import_dir</code> helper that globs <code>*&lt;category&gt;.ndjson</code> in fixed category order. This keeps dependency order (data views before the searches/dashboards that reference them) without re-listing files, and the cross-agent dir's <code>agents-data-views.ndjson</code> matches the <code>data-views</code> glob so it imports first.</li>
+      <li><strong>Sources as positional args (.sh) / <code>-Sources</code> param (.ps1).</strong> The <code>.sh</code> reads namespaces from <code>$@</code>; the <code>.ps1</code> takes a mandatory <code>[string[]]$Sources</code>, passed by the stacks through the existing <code>Invoke-Step -StepArgs</code> hashtable splat (<code>@{ Sources = @('claude-code') }</code>) — no change to the Invoke-Step plumbing. Dropped the now-meaningless <code>"$@"</code> forwarding to the importer in the stack <code>.sh</code> setups (it would have been mis-read as source names); <code>KIBANA_URL</code> stays env-based.</li>
+      <li><strong>Left the two stale README lines alone.</strong> This task's scope is explicit (moves / deletes / importer / setup rewiring) and states only that SPEC is already updated — it does not claim or request README edits, unlike sibling tasks. So I did not touch the READMEs even though two lines now describe the old layout (flagged below).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Two stale README/comment references remain</strong> (out of this task's stated scope): <code>stacks/codex-cli-elastic/README.md</code> still says the Kibana import script lives under <code>components/agents/codex-cli/</code>, and a comment in <code>setup-trace-routing.{sh,ps1}</code> points at the old <code>components/agents/claude-code/kibana/data-views.ndjson</code> path. Both are descriptive, not load-bearing. See Next PRD suggestions.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>A small cleanup task to refresh the now-stale path references: the <code>codex-cli-elastic</code> README "scripts/import-kibana-objects" sentence and the <code>setup-trace-routing.{sh,ps1}</code> comment, both of which still point at the pre-move <code>components/agents/*/kibana</code> / per-source import-script locations.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>All per-source Kibana NDJSON now lives under the Elastic backend, namespaced by source (<code>kibana/claude-code/</code>, <code>kibana/codex-cli/</code>, <code>kibana/otelcol-sidecar/</code>, plus <code>kibana/cross-agent/</code>), matching the placement rule that an artifact lives with the runtime that consumes it (Kibana is a backend service). The six per-source import scripts are gone; a single backend importer takes source names as arguments, imports cross-agent objects first, then each source in data-views → saved-searches → dashboard order. Each stack's setup calls it once with its composed sources.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live against the running Kibana (:5601):</strong> the <code>.sh</code> importer imported <code>claude-code</code> (1 cross-agent + 3 data views + 18 saved searches + 1 dashboard), <code>codex-cli</code> (1 + 3 + 15), and <code>claude-code otelcol-sidecar</code> (1 + 3 + 18 + 1 + 1 + 1) — every file <code>success: true</code>, references resolved; the <code>.ps1</code> mirror reproduced the <code>claude-code</code> import identically. Gates: all four stacks pass <code>docker compose config -q</code>; <code>shfmt -d</code> empty + <code>shellcheck</code> clean on touched <code>*.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on touched <code>*.ps1</code>; <code>find components/agents components/paths -name 'import-kibana-objects.*' -o -type d -name kibana</code> returns nothing; the live <code>codex-cli-elastic</code> smoke test still reaches PASS.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
