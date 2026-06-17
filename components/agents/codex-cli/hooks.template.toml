@@ -1,0 +1,28 @@
+# docs: https://developers.openai.com/codex/hooks
+#
+# Inline [hooks] tables for the Codex CLI agent's stack-local .codex/config.toml.
+# render-hooks.{sh,ps1} substitutes the @@…@@ placeholders with the hook scripts'
+# ABSOLUTE paths (resolved from this component) and appends these tables to
+# config.toml — the same per-hook table body Codex accepts in a sidecar hooks.json,
+# inline config.toml, or requirements.toml (see SPEC/codex-cli-managed-config.md).
+#
+# Paths are TOML literal strings (single-quoted) so Windows backslash paths need no
+# escaping. `command` runs on POSIX hosts, `commandWindows` (pwsh) on Windows.
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = '@@USER_PROMPT_SH@@'
+commandWindows = 'pwsh -NoProfile -File @@USER_PROMPT_PS1@@'
+timeout = 10
+statusMessage = "delivering UserPromptSubmit audit document"
+
+[[hooks.PostToolUse]]
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = '@@TOOL_CALL_SH@@'
+commandWindows = 'pwsh -NoProfile -File @@TOOL_CALL_PS1@@'
+timeout = 10
+statusMessage = "delivering PostToolUse audit document"

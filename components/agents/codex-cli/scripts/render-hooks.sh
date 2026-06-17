@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 #
-# render-hooks.sh — write the Codex CLI agent's stack-local .codex/hooks.json.
+# render-hooks.sh — append the Codex CLI agent's [hooks] tables to
+# <target>/.codex/config.toml (from hooks.template.toml).
 #
-# Registers two hooks into <target>/.codex/hooks.json, so a Codex session
-# launched with CODEX_HOME=<target>/.codex picks them up as user-level hooks
-# config — coexisting with the [otel] config.toml that render-config writes
-# (Codex reads hooks.json and config.toml side by side under CODEX_HOME):
+# Registers two hooks as inline [[hooks.<Event>]] tables in config.toml, so a
+# Codex session launched with CODEX_HOME=<target>/.codex picks them up as
+# user-level hooks — alongside the [otel] / [mcp_servers] tables the other
+# render-* scripts append to the same config.toml (one representation per layer:
+# inline [hooks], never a sidecar hooks.json):
 #   * UserPromptSubmit -> hooks/capture-user-prompt.{sh,ps1} — the production
 #     Agent Audit hook; at run time it delivers each submitted prompt to the
 #     local Agent Audit data stream using the delivery config in
@@ -18,11 +20,13 @@
 #
 # The hook scripts are referenced by ABSOLUTE path (resolved from this
 # component): `command` for POSIX hosts and `commandWindows` (pwsh) for Windows.
-# hooks.json is written under .codex/, which is gitignored — it carries
+# config.toml lives under .codex/, which is gitignored — it carries
 # machine-specific absolute paths.
 #
-# create-if-absent: an existing hooks.json is left untouched (delete to
-# regenerate — e.g. after the repo moves and the absolute paths go stale).
+# append-if-absent: skip when config.toml already contains the [[hooks.UserPromptSubmit]]
+# table (delete the [hooks] tables to regenerate — e.g. after the repo moves and the
+# absolute paths go stale). When config.toml exists without it, the tables are
+# appended (blank-line separated); when it does not exist, it is created.
 #
 # Usage: render-hooks.sh <target-dir>
 
@@ -35,6 +39,7 @@ HOOK_SH="$HOOKS_DIR/capture-user-prompt.sh"
 HOOK_PS1="$HOOKS_DIR/capture-user-prompt.ps1"
 TOOL_SH="$HOOKS_DIR/capture-tool-call.sh"
 TOOL_PS1="$HOOKS_DIR/capture-tool-call.ps1"
+TEMPLATE="$COMPONENT_DIR/hooks.template.toml"
 
 target=${1:-}
 [ -n "$target" ] || {
@@ -58,47 +63,27 @@ target=${1:-}
   echo "FAIL: hook not found: $TOOL_PS1" >&2
   exit 1
 }
+[ -f "$TEMPLATE" ] || {
+  echo "FAIL: template not found: $TEMPLATE" >&2
+  exit 1
+}
 
-out="$target/.codex/hooks.json"
-if [ -e "$out" ]; then
-  echo "kept existing $out (delete to regenerate)"
+config="$target/.codex/config.toml"
+
+if [ -e "$config" ] && grep -qF '[[hooks.UserPromptSubmit]]' "$config"; then
+  echo "Skipped: $config already has [[hooks.UserPromptSubmit]]"
   exit 0
 fi
 
 mkdir -p "$target/.codex"
+block=$(sed \
+  -e "s#@@USER_PROMPT_SH@@#$HOOK_SH#" \
+  -e "s#@@USER_PROMPT_PS1@@#$HOOK_PS1#" \
+  -e "s#@@TOOL_CALL_SH@@#$TOOL_SH#" \
+  -e "s#@@TOOL_CALL_PS1@@#$TOOL_PS1#" \
+  "$TEMPLATE")
 
-# POSIX absolute paths carry no JSON-special characters, so a heredoc is safe.
-cat >"$out" <<JSON
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOOK_SH",
-            "commandWindows": "pwsh -NoProfile -File $HOOK_PS1",
-            "timeout": 10,
-            "statusMessage": "delivering UserPromptSubmit audit document"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$TOOL_SH",
-            "commandWindows": "pwsh -NoProfile -File $TOOL_PS1",
-            "timeout": 10,
-            "statusMessage": "delivering PostToolUse audit document"
-          }
-        ]
-      }
-    ]
-  }
-}
-JSON
+[ -e "$config" ] && printf '\n' >>"$config"
+printf '%s\n' "$block" >>"$config"
 
-echo "wrote $out"
+echo "wrote [hooks] tables to $config"

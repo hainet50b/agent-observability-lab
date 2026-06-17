@@ -3129,6 +3129,39 @@
       <li>Worth a glance: the <code>catch { Write-Verbose … }</code> bodies are a deliberate behavior tweak (the catches stay fail-open but now emit a verbose trace), and the <code>setup.ps1</code> step calls are now self-documenting via named parameters.</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Migrate Codex hooks from sidecar <code>hooks.json</code> to inline <code>[hooks]</code> in <code>config.toml</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>TOML literal (single-quoted) strings for the hook paths.</strong> The old <code>hooks.json</code> used JSON escaping for Windows backslash paths (<code>C:\\Users\\…</code>). In TOML a basic <code>"…"</code> string treats <code>\U</code>/<code>\u</code> as escapes, so a Windows path would be invalid. I authored the template's <code>command</code>/<code>commandWindows</code> values as <strong>single-quoted literal strings</strong> so backslash paths pass through verbatim — verified by parsing the <code>.ps1</code>-rendered output (real backslash paths) with a strict TOML parser. <code>timeout</code>/<code>type</code>/<code>statusMessage</code> stay basic strings/ints, matching <code>hooks.json</code> exactly.</li>
+      <li><strong>Idempotency marker <code>[[hooks.UserPromptSubmit]]</code>.</strong> Chosen because Codex itself writes a <code>[hooks.state]</code> table into <code>config.toml</code> at runtime — a generic <code>[hooks</code> match would false-positive on that. The array-of-tables header is specific to our rendered block.</li>
+      <li><strong>Append model mirrors <code>render-mcp</code>.</strong> Both <code>render-hooks</code> and <code>render-mcp</code> now append to the same <code>config.toml</code> (blank-line separated, create-or-append). Reordered the audit stack's <code>setup.{sh,ps1}</code> so <code>render-hooks</code> (primary <code>[hooks]</code> content) runs at step 3 and <code>render-mcp</code> (the add-on) runs last, yielding <code>[hooks]</code> then <code>[mcp_servers]</code>.</li>
+      <li><strong>Sed/.Replace() substitution, not a here-doc.</strong> Followed the existing <code>render-config</code> <code>@@…@@</code> placeholder convention so the four absolute script paths are injected from one reusable TOML source — the same per-hook body the future <code>codex-cli-requirements</code> stack will reuse.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Live-session verification is an operator step.</strong> The deterministic half (fresh-target render, idempotent re-run, no <code>hooks.json</code>, valid combined TOML from both the <code>.sh</code> and <code>.ps1</code> renderers) is fully verified. The "both hooks fire on a real <code>codex-cli-elastic-audit</code> turn + <code>verify-agent-audit</code>/<code>verify-tool-call-audit</code> pass" half needs an interactive Codex session, which I did not drive. The stack's machine-local <code>.codex/</code> also had an <em>active</em> Codex session running (live sqlite writes), so I deliberately did <strong>not</strong> mutate its existing <code>config.toml</code>/<code>hooks.json</code>.</li>
+      <li><strong>Before a verifying session:</strong> delete the stale <code>stacks/codex-cli-elastic-audit/.codex/hooks.json</code> and regenerate config on a clean <code>.codex</code> (the dir is gitignored), so Codex sees one representation per layer (it warns if both <code>hooks.json</code> and inline <code>[hooks]</code> are present).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Task 568 (rename <code>config.template.toml</code> → <code>otel.template.toml</code>) is now the only remaining open task and is fully independent of this one.</li>
+      <li>A tiny TOML-validity check could be folded into the smoke tests, but it needs a TOML parser on the host — this repo currently has none (validated here via a throwaway <code>smol-toml</code> install). Probably not worth a dependency.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Codex Agent Audit hooks are no longer written to a separate <code>hooks.json</code> — they're now rendered as inline <code>[hooks]</code> tables appended to <code>.codex/config.toml</code> from a single reusable <code>hooks.template.toml</code>, removing the duplicated JSON heredoc across the shell/PowerShell renderers and prepping for the managed-config work.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified:</strong> both renderers produce TOML that a strict parser accepts (Windows backslash paths included), write no <code>hooks.json</code>, are idempotent (skip on re-run, exactly one <code>[[hooks.UserPromptSubmit]]</code>), and <code>render-mcp</code> cleanly appends <code>[mcp_servers]</code> after the hooks. <code>shfmt -d</code> empty + <code>shellcheck</code> clean on touched <code>*.sh</code>; <code>PSScriptAnalyzer</code> clean on touched <code>*.ps1</code>; all four stacks pass <code>docker compose config -q</code>.</li>
+      <li>Worth a glance: the single-quoted-literal-string choice in <code>hooks.template.toml</code> is the load-bearing decision for Windows path safety.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

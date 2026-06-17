@@ -13,11 +13,12 @@
 # hooks' Elasticsearch delivery config) from the agent-owned template with this
 # stack's local ES defaults (url = -EsUrl, security-disabled so api_key empty; see
 # SPEC/agent-audit.md); the step-3 hooks read this at run time  3) register the
-# UserPromptSubmit + PostToolUse Agent Audit hooks into .codex/hooks.json (the only
-# Codex config under CODEX_HOME for this stack — no config.toml). At run time each
-# hook reshapes its event into the canonical agent_audit document and POSTs it
-# (fail-open, short timeout) to the local Agent Audit data stream using the step-2
-# config; lab mode stores captured text in plaintext (no sealing yet)  4) import
+# UserPromptSubmit + PostToolUse Agent Audit hooks as inline [hooks] tables in
+# .codex/config.toml (render-hooks), then append the Elasticsearch MCP server to the
+# same config.toml (render-mcp, last). At run time each hook reshapes its event into
+# the canonical agent_audit document and POSTs it (fail-open, short timeout) to the
+# local Agent Audit data stream using the step-2 config; lab mode stores captured
+# text in plaintext (no sealing yet)  4) import
 # the Agent Audit Kibana saved objects (the Agent Audit — User Prompts and Agent
 # Audit — Tool Calls data views + saved searches). Step 1 idempotent; steps 2 and 3
 # create-if-absent; step 4 imports with overwrite=true. Override the ES endpoint
@@ -52,11 +53,11 @@ Invoke-Step -Label '1/4 - Agent Audit data streams (logs-agent_audit.user_prompt
 Invoke-Step -Label '2/4 - agent config: agent-audit.toml (audit delivery)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-agent-audit.ps1') `
     -StepArgs @{ EsUrl = $EsUrlLocal; TargetDir = $StackDir }
-Invoke-Step -Label '2/4 - agent config: config.toml (Elasticsearch MCP)' `
-    -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `
-    -StepArgs @{ TargetDir = $StackDir }
-Invoke-Step -Label '3/4 - UserPromptSubmit + PostToolUse Agent Audit hooks (.codex/hooks.json, ES delivery)' `
+Invoke-Step -Label '3/4 - .codex/config.toml: UserPromptSubmit + PostToolUse Agent Audit hooks (render-hooks)' `
     -Path (Join-Path $C 'agents/codex-cli/scripts/render-hooks.ps1') `
+    -StepArgs @{ TargetDir = $StackDir }
+Invoke-Step -Label '3/4 - .codex/config.toml: Elasticsearch MCP appended (render-mcp, last)' `
+    -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `
     -StepArgs @{ TargetDir = $StackDir }
 Invoke-Step -Label '4/4 - Kibana saved objects: Agent Audit data views + saved searches' `
     -Path (Join-Path $C 'backends/elastic-audit/scripts/import-kibana-objects.ps1') -StepArgs @{}

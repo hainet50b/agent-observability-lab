@@ -17,12 +17,13 @@
 #      defaults (url = ES_URL, security-disabled so api_key empty; see
 #      SPEC/agent-audit.md). The hooks (step 3) read this file at run time for their
 #      ES endpoint / data stream / timeout / audit mode.
-#   3. agent — register the UserPromptSubmit + PostToolUse Agent Audit hooks into
-#      .codex/hooks.json (the only Codex config under CODEX_HOME for this stack —
-#      no config.toml). At run time each hook reshapes its event into the canonical
-#      agent_audit document and POSTs it (fail-open, short timeout) to the local
-#      Agent Audit data stream, using the step-2 delivery config. Lab mode stores
-#      the captured text in plaintext (no sealing yet).
+#   3. agent — register the UserPromptSubmit + PostToolUse Agent Audit hooks as
+#      inline [hooks] tables in .codex/config.toml (render-hooks), then append the
+#      Elasticsearch MCP server to the same config.toml (render-mcp, last). At run
+#      time each hook reshapes its event into the canonical agent_audit document and
+#      POSTs it (fail-open, short timeout) to the local Agent Audit data stream,
+#      using the step-2 delivery config. Lab mode stores the captured text in
+#      plaintext (no sealing yet).
 #   4. kibana — import the Agent Audit saved objects (the Agent Audit — User Prompts
 #      and Agent Audit — Tool Calls data views + saved searches). Override the
 #      Kibana URL with KIBANA_URL.
@@ -46,12 +47,12 @@ C="$SCRIPT_DIR/../../../components"
 echo "[setup] 1/4 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
 "$C/backends/elastic-audit/scripts/setup-agent-audit.sh" "$@"
 
-echo "[setup] 2/4 — agent config: .codex/agent-audit.toml (audit delivery) + .codex/config.toml (Elasticsearch MCP)"
+echo "[setup] 2/4 — agent config: .codex/agent-audit.toml (audit delivery)"
 "$C/agents/codex-cli/scripts/render-agent-audit.sh" "$ES_URL" "$STACK_DIR"
-"$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
 
-echo "[setup] 3/4 — UserPromptSubmit + PostToolUse Agent Audit hooks (.codex/hooks.json, ES delivery)"
+echo "[setup] 3/4 — .codex/config.toml: UserPromptSubmit + PostToolUse Agent Audit hooks (render-hooks), then Elasticsearch MCP appended (render-mcp)"
 "$C/agents/codex-cli/scripts/render-hooks.sh" "$STACK_DIR"
+"$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
 
 echo "[setup] 4/4 — Kibana saved objects: Agent Audit data views + saved searches"
 "$C/backends/elastic-audit/scripts/import-kibana-objects.sh" "$@"
