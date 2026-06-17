@@ -152,7 +152,7 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 
 ## Delivery and authorization
 
-- User experience is prioritized over audit completeness. The lab assumes a non-adversarial model, so missing audit documents are acceptable when the destination is unavailable.
+- User experience is prioritized over audit completeness. The lab assumes a non-adversarial model, so missing audit documents are acceptable when the destination is unavailable. This hook-audit is an (A)-scoped **visibility** tool, not a tamper-proof control: it is bypassable, fail-open, and forgeable by the audited user. See [`threat-model.md`](threat-model.md) "The direct hook → Elasticsearch audit path" for the full bypass surface and why compliance evidence belongs to provider-side capture instead.
 - Hook delivery is fail-open: audit indexing failures must not block the agent interaction.
 - Hook senders index directly to Elasticsearch for the initial implementation.
 - Senders should use a very short HTTP timeout so unavailable destinations do not noticeably delay agent usage.

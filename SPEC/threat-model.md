@@ -37,6 +37,66 @@ This lab explicitly **takes (A) as in-scope and (B) as out-of-scope**. If
 is a separate endpoint-security project that observes the agent from
 outside.
 
+## The direct hook → Elasticsearch audit path
+
+The agent-audit stacks (`*-elastic-audit`) capture prompts and tool calls with
+**agent hooks** that POST straight to Elasticsearch (`logs-agent_audit.*`) — a
+different mechanism from the OTel telemetry path above. The same (A)/(B)
+boundary applies (it is an (A) tool), but the hook path sits on a **lower
+floor** than the OTel sidecar, so its limits must be stated explicitly or it
+will be mistaken for a tamper-proof audit trail — which it is not. Mistaking it
+for one is worse than having no audit: decisions get made on data that is
+incomplete and forgeable.
+
+The hook-audit's specific bypass / failure surface:
+
+- **The audited party owns the hook config.** Hooks load from user/project
+  layers the user controls. Claude Code's `--dangerously-skip-permissions`
+  silently disables PreToolUse/PostToolUse hooks (the audit records nothing) and
+  `disableAllHooks` can drop even managed hooks; Codex hooks are off with
+  `[features].hooks = false` unless pinned, and a user can launch with a
+  different `CODEX_HOME`, or no audit config at all. Auditing someone with
+  config they control is not a control.
+- **Fail-open is silent.** Delivery is deliberately fail-open (an unreachable
+  destination must not delay the agent), so blocking the endpoint — hosts file,
+  firewall, offline — drops all audit with no local gap signal.
+- **Out-of-agent activity is invisible.** Anything not flowing through the
+  instrumented agent with hooks loaded — a raw API call, a different tool, an
+  uninstrumented build — is never seen.
+- **No integrity.** The hook builds and POSTs the document; the lab stores
+  plaintext with no signing or hash-chain. A user with local privileges can
+  suppress or forge. Tamper-evidence needs server-side anchoring the client
+  cannot rewrite, and is moot while capture itself is bypassable.
+- **Endpoint credential.** The `create_doc` key is on every workstation. It
+  cannot delete or overwrite others' documents, but it can **inject forged**
+  audit documents, and it is a key-sprawl / rotation liability.
+- **Untrusted attribution.** Provider identity is read from the local
+  `auth.json` JWT **without signature verification**; the account / email / org
+  claims are self-asserted and forgeable locally.
+- **Non-adversarial gaps too.** Hook timeouts drop late deliveries, only events
+  the agent emits with a registered hook are captured, and create-if-absent
+  config means a stale or edited local file silently changes behaviour.
+
+The correct control for (B) / compliance evidence is **capture above the user's
+machine**, at a trust boundary they do not own: provider-side enterprise audit
+(Anthropic's Compliance API, ChatGPT Enterprise's compliance stack) or OS / EDR
+/ network observation outside the agent. A richer hook-audit is not a path to
+(B) — the same category mistake as hardening telemetry for (B).
+
+Within budget, what raises the floor without reaching (B): **pin the hooks**
+through the managed layer (Codex `requirements.toml` `[features].hooks = true` +
+`allow_managed_hooks_only`; Claude `managed-settings.json`) so casual
+disablement is blocked; **detect absence centrally** ("no audit from device X
+for Y minutes" against the fleet roster) to catch fail-open / disablement after
+the fact; and keep the ingest credential per-device, create-only, and rotatable
+(or front it with a gateway that holds the key). Do **not** invest in at-rest
+encryption / sealing / tamper-evidence of the captured body before the capture
+itself is non-bypassable — that hardens the confidentiality of a record that can
+still be dropped or forged, which is polishing a foundation with a hole in it.
+
+In one line: the hook-audit answers *"what did cooperative users do?"* — never
+*"prove a motivated user did not evade it."*
+
 ## Solving (A): local sidecar with persistent queue
 
 Claude Code (and other OTel-emitting agents) use the OpenTelemetry SDK's
