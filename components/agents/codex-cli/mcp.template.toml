@@ -1,4 +1,5 @@
-# docs: https://developers.openai.com/codex/mcp
+# docs:   https://developers.openai.com/codex/mcp
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/mcp_types.rs (RawMcpServerConfig)
 
 [mcp_servers.elasticsearch]
 command = "docker"
