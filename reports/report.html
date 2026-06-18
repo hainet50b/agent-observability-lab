@@ -3911,6 +3911,38 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Add <code>render-mcp.{sh,ps1}</code> — materialize <code>.mcp.json</code> (project-scoped Elasticsearch MCP)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Wrote a standalone <code>.mcp.json</code> rather than appending to a config file (unlike Codex's <code>render-mcp</code>).</strong> Codex appends a <code>[mcp_servers.elasticsearch]</code> TOML block to <code>config.toml</code>; Claude reads project MCP servers from a dedicated <code>.mcp.json</code> at the project root, so this renderer writes that file whole. It drops only the template's <code>_comment</code> (via <code>jq 'del(._comment)'</code> in bash, <code>PSObject.Properties.Remove('_comment')</code> in pwsh) and writes the rest verbatim — no placeholder substitution, since <code>mcp.template.json</code> is self-contained (<code>ES_URL</code> is baked as <code>host.docker.internal:9200</code>).</li>
+      <li><strong>No auto-approve, by design.</strong> The task is explicit that the project-scoped server stays interactive-approval — a user trust decision — so the renderer writes <em>only</em> the <code>mcpServers</code> block and touches no settings auto-approve key. First <code>claude</code> launch from the stack dir will list it as pending approval.</li>
+      <li><strong>create-if-absent, consistent with <code>render-otel</code>.</strong> An existing <code>.mcp.json</code> is left untouched (your edits / added servers survive; delete to regenerate). Re-running is a no-op — verified in both shells.</li>
+      <li><strong>Wired as setup step 5/5 in both telemetry stacks</strong> (<code>claude-code-elastic</code>, <code>claude-code-otelcol-elastic</code>), renumbering the existing four steps and updating the header step lists. No <code>ES_URL</code> passthrough needed — the template is self-contained.</li>
+      <li><strong>Added <code>.mcp.json</code> to the root <code>.gitignore</code>.</strong> It is a per-machine generated agent-home artifact like <code>.claude/</code> / <code>.codex/</code>; without the ignore, running setup would leave an untracked file dirtying the tree. Placed it right after the <code>.claude/</code> rule with a matching comment.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Both renderers create the file, drop <code>_comment</code>, keep the <code>elasticsearch</code> server, and no-op on re-run.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The remaining open tasks are the <code>claude-code-elastic-audit</code> trio (capture-prompt + render-agent-audit, render-hook, the stack) plus the <code>agent_audit.agent.model</code> removal — that audit stack's <code>setup</code> is the natural consumer that will also call this <code>render-mcp</code> (its task already lists it). No new suggestion beyond what's queued.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Running <code>setup</code> for either Claude Code telemetry stack now also writes a project-scoped <code>.mcp.json</code> registering the Elasticsearch MCP server, so a <code>claude</code> launched from the stack directory can query the backend (after the usual interactive trust prompt). New agent scripts <code>render-mcp.{sh,ps1}</code>, wired as setup step 5/5; the generated file is gitignored.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Functionally verified both shells</strong> on temp dirs: the rendered <code>.mcp.json</code> contains the <code>elasticsearch</code> server with no <code>_comment</code>, and a second run is a no-op (file untouched).</li>
+      <li><strong>Gates:</strong> <code>shfmt -d</code> empty and <code>shellcheck</code> clean on the new <code>.sh</code> + both setup scripts; <code>Invoke-ScriptAnalyzer</code> clean on the new <code>.ps1</code> + both setup scripts; <code>docker compose config -q</code> passes for all four stacks. Live MCP-tool use after approval is the manual verification, unchanged by this script.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

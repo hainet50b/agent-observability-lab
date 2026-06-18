@@ -11,8 +11,10 @@
 #      agent-owned template, so a `claude` launched from this directory
 #      auto-emits telemetry (no manual export). Prompt auditing lives in the
 #      separate claude-code-elastic-audit stack, not here.
+#   5. agent — render .mcp.json (project-scoped Elasticsearch MCP server) so a
+#      `claude` launched here can query the backend (interactive-approval).
 #
-# Steps 1–3 are idempotent. Step 4 is create-if-absent (your edits survive a
+# Steps 1–3 are idempotent. Steps 4–5 are create-if-absent (your edits survive a
 # re-run; delete the file to regenerate). Override endpoints with ES_URL /
 # KIBANA_URL. Verification (smoke-test.sh) stays separate. Run from anywhere.
 #
@@ -25,17 +27,20 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 C="$SCRIPT_DIR/../../../components"
 
-echo "[setup] 1/4 — trace-routing ingest pipeline"
+echo "[setup] 1/5 — trace-routing ingest pipeline"
 "$C/backends/elastic/scripts/setup-trace-routing.sh" "$@"
 
-echo "[setup] 2/4 — prompts-audit index"
+echo "[setup] 2/5 — prompts-audit index"
 "$C/backends/elastic/scripts/setup-prompt-audit.sh" "$@"
 
-echo "[setup] 3/4 — Kibana saved objects"
+echo "[setup] 3/5 — Kibana saved objects"
 "$C/backends/elastic/scripts/import-kibana-objects.sh" claude-code
 
-echo "[setup] 4/4 — local Claude Code settings (telemetry env)"
+echo "[setup] 4/5 — local Claude Code settings (telemetry env)"
 "$C/agents/claude-code/scripts/render-otel.sh" "$STACK_DIR" \
   "$OTLP_ENDPOINT/v1/logs" "$OTLP_ENDPOINT/v1/traces" "$OTLP_ENDPOINT/v1/metrics"
+
+echo "[setup] 5/5 — local Claude Code MCP config (.mcp.json)"
+"$C/agents/claude-code/scripts/render-mcp.sh" "$STACK_DIR"
 
 echo "[setup] done ✓ — run 'claude' from this directory; verify with scripts/smoke-test.sh."
