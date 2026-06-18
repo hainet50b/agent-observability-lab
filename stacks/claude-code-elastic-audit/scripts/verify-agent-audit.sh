@@ -117,11 +117,13 @@ payload=$(jq -nc --arg cid "$cid" '{
 # process and a command-string hook through the shell; reproduce both. The config
 # path is already baked into the rendered hook. Fail-open: the assertion is the
 # real signal.
-hook_command=$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' "$SETTINGS")
+# tr -d '\r': jq.exe on Windows writes CRLF, so a trailing CR would corrupt each
+# exec arg (e.g. "Bypass\r" silently voids -ExecutionPolicy); a no-op on POSIX jq.
+hook_command=$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' "$SETTINGS" | tr -d '\r')
 if jq -e '.hooks.UserPromptSubmit[0].hooks[0] | has("args")' "$SETTINGS" >/dev/null 2>&1; then
   hook_args=()
   while IFS= read -r a; do hook_args+=("$a"); done \
-    < <(jq -r '.hooks.UserPromptSubmit[0].hooks[0].args[]' "$SETTINGS")
+    < <(jq -r '.hooks.UserPromptSubmit[0].hooks[0].args[]' "$SETTINGS" | tr -d '\r')
   echo "[act] spawning the rendered hook (exec form): $hook_command ${hook_args[*]}"
   printf '%s' "$payload" | "$hook_command" "${hook_args[@]}" || true
 else

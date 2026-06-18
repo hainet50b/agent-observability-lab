@@ -370,11 +370,16 @@ claude-code-otelcol-elastic/
 ```
 
 `setup.{sh,ps1}` calls the component bootstrap scripts directly. The Collector
-service, its config, and its self-telemetry data view — with their own import
-script — live in `../../components/paths/otelcol-sidecar/`. The backend services,
-their config, the `traces-apm@custom` pipeline body,
-the `prompts-audit` index mapping, and the Backend bootstrap scripts live in
-`../../components/backends/elastic/`; the Claude Code agent's data views, saved
-searches — with their own import script — and the
-prompt-capture **hooks**, and the **settings template + render scripts** (the
-`.claude/settings.local.json` content) live in `../../components/agents/claude-code/`.
+service and its config live in `../../components/paths/otelcol-sidecar/`. The
+`elastic` backend (`../../components/backends/elastic/`) is a thin `include:` of
+the `elasticsearch` / `kibana` / `apm-server` service fragments plus a
+composition script that selects its assets — it owns no asset files. The service
+fragments under `../../components/backends/services/` own the service definitions
+and config, the asset libraries (the `traces-apm@custom` / `logs-apm.app@custom`
+ingest pipelines and the `prompts-audit` index under `elasticsearch/`; the
+Claude Code saved-object bundle under `kibana/claude-code/` and the sidecar's
+self-telemetry data view + dashboard under `kibana/otelcol-sidecar/`), and the
+generic appliers that load them. The Claude Code agent component
+(`../../components/agents/claude-code/`) owns only agent-runtime config — the
+prompt-capture **hooks** and the **settings template + render scripts** (the
+`.claude/settings.local.json` content), no Kibana assets.

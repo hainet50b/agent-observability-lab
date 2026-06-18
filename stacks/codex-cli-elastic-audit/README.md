@@ -200,13 +200,18 @@ codex-cli-elastic-audit/
    └─ verify-tool-call-audit.ps1          # PowerShell mirror
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The backend
-services, their config, the Agent Audit index templates, the Agent Audit Kibana
-NDJSON, and the audit setup / import scripts live in
-`../../components/backends/elastic-audit/`; the Codex CLI agent's audit hooks
-(`hooks/capture-user-prompt.{sh,ps1}`, `hooks/capture-tool-call.{sh,ps1}`), the
-hook delivery-config template, and the render scripts live in
-`../../components/agents/codex-cli/`. `scripts/setup.sh` renders the delivery
+`setup.{sh,ps1}` calls the component bootstrap scripts directly. The
+`elastic-audit` backend (`../../components/backends/elastic-audit/`) is a thin
+`include:` of the `elasticsearch` / `kibana` service fragments plus a composition
+script that selects its assets — it owns no asset files. The service fragments
+under `../../components/backends/services/` own the service definitions and
+config, the asset libraries (the Agent Audit data-stream index templates under
+`elasticsearch/index-templates/`; the Agent Audit data views and saved searches
+under `kibana/agent-audit/`), and the generic appliers that load them. The Codex
+CLI agent component (`../../components/agents/codex-cli/`) owns only agent-runtime
+config — the audit hooks (`hooks/capture-user-prompt.{sh,ps1}`,
+`hooks/capture-tool-call.{sh,ps1}`), the hook delivery-config template, and the
+render scripts. `scripts/setup.sh` renders the delivery
 config into this directory's gitignored `.codex/agent-audit.conf`, registers the
 stack-local hooks as inline `[hooks]` in `.codex/config.toml`, provisions the audit data streams, and
 imports those Kibana objects.

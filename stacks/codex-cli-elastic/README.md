@@ -186,8 +186,8 @@ docker compose down -v     # also wipe ingested telemetry
 Wired now: the composition, the OTLP-path smoke test, trace isolation, a real
 Codex session's `[otel]` telemetry config, the three Codex **data views**
 (Metrics / Events / Traces), the shared cross-agent **AI Agents — Traces** view,
-and the curated Codex saved searches, all with their own import script — modelled
-on `components/agents/claude-code/kibana/`. (Prompt / tool-call **audit** is the
+and the curated Codex saved searches, all loaded by the shared Kibana importer —
+modelled on `components/backends/services/kibana/claude-code/`. (Prompt / tool-call **audit** is the
 sibling [`codex-cli-elastic-audit`](../codex-cli-elastic-audit/) stack.) Authored
 later, with the human:
 
@@ -212,14 +212,17 @@ codex-cli-elastic/
    └─ smoke-test.sh                       # agent-independent OTLP-path verification (stack property)
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The backend
-services, their config, the cross-agent data view, the `traces-apm@custom`
-pipeline body, and the Backend bootstrap scripts live in
-`../../components/backends/elastic/`; the Codex CLI agent's `[otel]` config
-template, render scripts, Kibana data views and saved searches
-(`kibana/data-views.ndjson`, `kibana/saved-searches.ndjson`), and Kibana import
-script (`scripts/import-kibana-objects.{sh,ps1}`) live in
-`../../components/agents/codex-cli/`. `scripts/setup.sh` renders the telemetry
-template into this directory's gitignored `.codex/config.toml` and imports those
-Kibana objects. (The direct Agent Audit path — hooks writing straight to
-Elasticsearch — is the sibling `codex-cli-elastic-audit` stack.)
+`setup.{sh,ps1}` calls the component bootstrap scripts directly. The `elastic`
+backend (`../../components/backends/elastic/`) is a thin `include:` of the
+`elasticsearch` / `kibana` / `apm-server` service fragments plus a composition
+script that selects its assets — it owns no asset files. The service fragments
+under `../../components/backends/services/` own the service definitions and
+config, the asset libraries (the `traces-apm@custom` / `logs-apm.app@custom`
+ingest pipelines under `elasticsearch/`; the Codex data views and saved searches
+under `kibana/codex-cli/` — `data-views.ndjson`, `saved-searches.ndjson`), and
+the generic Kibana / Elasticsearch appliers. The Codex CLI agent component
+(`../../components/agents/codex-cli/`) owns only agent-runtime config — the
+`[otel]` config template and render scripts; `scripts/setup.sh` renders the
+telemetry template into this directory's gitignored `.codex/config.toml` and
+imports the Codex Kibana objects. (The direct Agent Audit path — hooks writing
+straight to Elasticsearch — is the sibling `codex-cli-elastic-audit` stack.)

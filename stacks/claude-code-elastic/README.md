@@ -197,7 +197,7 @@ so data lands within ~10–30s.
 
 Already done by `scripts/setup.sh` (step 1): it imports the Claude Code data
 views and curated saved searches from
-`../../components/backends/elastic/kibana/claude-code/`. Re-run `scripts/setup.sh`
+`../../components/backends/services/kibana/claude-code/`. Re-run `scripts/setup.sh`
 to re-import after editing the NDJSON (idempotent, `overwrite=true`), or import
 the files by hand via Stack Management → Saved Objects → **Import**.
 
@@ -373,11 +373,15 @@ claude-code-elastic/
    └─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The backend
-services, their config, the `traces-apm@custom`
-pipeline body, the `prompts-audit` index mapping, and the Backend bootstrap
-scripts (trace-routing, prompt-audit, Kibana import) live in
-`../../components/backends/elastic/`; the Claude Code agent's data views, saved
-searches — with their own import script — and the
-prompt-capture **hooks**, and the **settings template + render scripts** (the
-`.claude/settings.local.json` content) live in `../../components/agents/claude-code/`.
+`setup.{sh,ps1}` calls the component bootstrap scripts directly. The `elastic`
+backend (`../../components/backends/elastic/`) is a thin `include:` of the
+`elasticsearch` / `kibana` / `apm-server` service fragments plus a composition
+script that selects its assets — it owns no asset files. The service fragments
+under `../../components/backends/services/` own the service definitions and
+config, the asset libraries (the `traces-apm@custom` / `logs-apm.app@custom`
+ingest pipelines and the `prompts-audit` index under `elasticsearch/`; the
+Claude Code data views and saved searches under `kibana/claude-code/`), and the
+generic Elasticsearch / Kibana appliers that load them. The Claude Code agent
+component (`../../components/agents/claude-code/`) owns only agent-runtime
+config — the prompt-capture **hooks** and the **settings template + render
+scripts** (the `.claude/settings.local.json` content), no Kibana assets.
