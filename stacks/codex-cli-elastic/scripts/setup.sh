@@ -29,20 +29,16 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/4 — trace-routing ingest pipeline"
-"$components_dir/backends/elastic/scripts/setup-trace-routing.sh" | indent
+echo "[setup] 1/3 — Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)"
+"$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" | indent
 
 echo
-echo "[setup] 2/4 — logs-drop ingest pipeline (logs-apm.app@custom)"
-"$components_dir/backends/elastic/scripts/setup-logs-drop.sh" | indent
-
-echo
-echo "[setup] 3/4 — Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)"
+echo "[setup] 2/3 — Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)"
 "$components_dir/agents/codex-cli/scripts/render-otel.sh" "$otlp_endpoint" "$stack_dir" | indent
 "$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$stack_dir" | indent
 
 echo
-echo "[setup] 4/4 — Kibana saved objects (data views + saved searches)"
+echo "[setup] 3/3 — Kibana saved objects (data views + saved searches)"
 "$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" codex-cli | indent
 
 echo

@@ -42,26 +42,23 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'ap
 
 filter Indent { "  $_" }
 
-Write-Host '[setup] 1/5 - trace-routing ingest pipeline'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-trace-routing.ps1') -EsUrl $EsUrl 6>&1 | Indent
+Write-Host '[setup] 1/4 - Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 2/5 - prompts-audit index'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-prompt-audit.ps1') -EsUrl $EsUrl 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 3/5 - Kibana saved objects (data views + saved searches)'
+Write-Host '[setup] 2/4 - Kibana saved objects (data views + saved searches)'
 & (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code' 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 4/5 - local Claude Code settings (telemetry env)'
+Write-Host '[setup] 3/4 - local Claude Code settings (telemetry env)'
 & (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-otel.ps1') -TargetDir $StackDir -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics" 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 5/5 - local Claude Code MCP config (.mcp.json)'
+Write-Host '[setup] 4/4 - local Claude Code MCP config (.mcp.json)'
 & (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-mcp.ps1') -TargetDir $StackDir 6>&1 | Indent
 
 Write-Host ''
 Write-Host "[setup] done - run 'claude' from this directory; verify with scripts/smoke-test.sh."
+
 
 

@@ -29,7 +29,7 @@ export ES_URL KIBANA_URL
 indent() { sed 's/^/  /'; }
 
 echo "[setup] 1/4 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
-"$components_dir/backends/elastic-audit/scripts/setup-agent-audit.sh" | indent
+"$components_dir/backends/elastic-audit/scripts/setup-elasticsearch.sh" | indent
 
 echo
 echo "[setup] 2/4 — agent config: .codex/agent-audit.conf (audit delivery)"

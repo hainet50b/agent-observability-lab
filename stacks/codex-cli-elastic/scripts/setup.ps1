@@ -42,22 +42,19 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'ap
 
 filter Indent { "  $_" }
 
-Write-Host '[setup] 1/4 - trace-routing ingest pipeline'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-trace-routing.ps1') -EsUrl $EsUrl 6>&1 | Indent
+Write-Host '[setup] 1/3 - Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 2/4 - logs-drop ingest pipeline (logs-apm.app@custom)'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-logs-drop.ps1') -EsUrl $EsUrl 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 3/4 - Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)'
+Write-Host '[setup] 2/3 - Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)'
 & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-otel.ps1') -OtlpEndpoint $OtlpEndpoint -TargetDir $StackDir 6>&1 | Indent
 & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $StackDir 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 4/4 - Kibana saved objects (data views + saved searches)'
+Write-Host '[setup] 3/3 - Kibana saved objects (data views + saved searches)'
 & (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'codex-cli' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh.'
+
 

@@ -29,24 +29,20 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/5 — trace-routing ingest pipeline"
-"$components_dir/backends/elastic/scripts/setup-trace-routing.sh" | indent
+echo "[setup] 1/4 — Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)"
+"$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" | indent
 
 echo
-echo "[setup] 2/5 — prompts-audit index"
-"$components_dir/backends/elastic/scripts/setup-prompt-audit.sh" | indent
-
-echo
-echo "[setup] 3/5 — Kibana saved objects (data views + saved searches)"
+echo "[setup] 2/4 — Kibana saved objects (data views + saved searches)"
 "$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" claude-code | indent
 
 echo
-echo "[setup] 4/5 — local Claude Code settings (telemetry env)"
+echo "[setup] 3/4 — local Claude Code settings (telemetry env)"
 "$components_dir/agents/claude-code/scripts/render-otel.sh" "$stack_dir" \
   "$otlp_endpoint/v1/logs" "$otlp_endpoint/v1/traces" "$otlp_endpoint/v1/metrics" | indent
 
 echo
-echo "[setup] 5/5 — local Claude Code MCP config (.mcp.json)"
+echo "[setup] 4/4 — local Claude Code MCP config (.mcp.json)"
 "$components_dir/agents/claude-code/scripts/render-mcp.sh" "$stack_dir" | indent
 
 echo

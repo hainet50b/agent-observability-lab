@@ -40,7 +40,7 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl }.Ge
 filter Indent { "  $_" }
 
 Write-Host '[setup] 1/5 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)'
-& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-agent-audit.ps1') -EsUrl $EsUrl 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 2/5 - register the UserPromptSubmit Agent Audit hook (.claude/settings.local.json)'
@@ -60,5 +60,6 @@ Write-Host '[setup] 5/5 - Kibana saved objects: Agent Audit data views + saved s
 
 Write-Host ''
 Write-Host "[setup] done - run 'claude' from this directory; verify with scripts/verify-agent-audit.ps1."
+
 
 
