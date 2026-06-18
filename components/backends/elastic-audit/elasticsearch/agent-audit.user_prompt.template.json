@@ -38,7 +38,6 @@
               "properties": {
                 "provider": { "type": "keyword" },
                 "name":     { "type": "keyword" },
-                "model":    { "type": "keyword" },
                 "account": {
                   "properties": {
                     "id":    { "type": "keyword" },

@@ -34,7 +34,6 @@
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id  -> agent_audit.conversation_id   (Codex's session is the convo)
 #   .turn_id     -> agent_audit.turn_id
-#   .model       -> agent_audit.agent.model
 #   .prompt      -> agent_audit.user_prompt.text  (+ .length = its character count)
 #   agent.provider/name are constants ("openai" / "codex-cli").
 #   user.* is the workstation login identity, best-effort: user.id is the
@@ -249,7 +248,6 @@ prompt_esc=$(json_get "$payload" prompt)
 }
 session_esc=$(json_get "$payload" session_id)
 turn_esc=$(json_get "$payload" turn_id)
-model_esc=$(json_get "$payload" model)
 plen=$(strlen_esc "$prompt_esc")
 
 ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -315,13 +313,12 @@ redacted) text_field='"[REDACTED]"' ;;
 esac
 
 # Assemble the canonical agent_audit.user_prompt document with printf (no jq). Lifted
-# values (prompt/session/turn/model, provider claims) are already JSON-escaped; the
+# values (prompt/session/turn, provider claims) are already JSON-escaped; the
 # shell-derived identity (user/host) is escaped by jv_raw.
-record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"openai","name":"codex-cli","model":%s,"account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"user_prompt":{"text":%s,"encrypted_text":null,"length":%s}}}' \
+record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"openai","name":"codex-cli","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"user_prompt":{"text":%s,"encrypted_text":null,"length":%s}}}' \
   "$ts" "$ts" \
   "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
   "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
-  "$(jv_esc "$model_esc")" \
   "$(jv_esc "$acct_id")" "$(jv_esc "$acct_name")" "$(jv_esc "$acct_email")" \
   "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
   "$(jv_esc "$session_esc")" "$(jv_esc "$turn_esc")" \

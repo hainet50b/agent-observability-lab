@@ -36,7 +36,6 @@
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id   -> agent_audit.conversation_id   (Codex's session is the convo)
 #   .turn_id      -> agent_audit.turn_id
-#   .model        -> agent_audit.agent.model
 #   .tool_name    -> agent_audit.tool_call.tool.name
 #   .tool_use_id  -> agent_audit.tool_call.tool.call_id  (per-call id; also the join
 #                    key to the OTLP trace_safe codex.tool_result `call_id`)
@@ -233,7 +232,6 @@ tool_name_esc=$(json_get "$payload" tool_name)
 call_id_esc=$(json_get "$payload" tool_use_id)
 session_esc=$(json_get "$payload" session_id)
 turn_esc=$(json_get "$payload" turn_id)
-model_esc=$(json_get "$payload" model)
 
 # tool_input / tool_response are heterogeneous JSON — take each value's raw JSON text
 # verbatim as the serialized form (one scalar for the strict mapping). .length is the
@@ -312,11 +310,10 @@ esac
 
 # Assemble the canonical agent_audit.tool_call document with printf (no jq). Lifted
 # values are already JSON-escaped; shell-derived identity is escaped by jv_raw.
-record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"openai","name":"codex-cli","model":%s,"account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":null,"length":%s},"output":{"text":%s,"encrypted_text":null,"length":%s}}}}' \
+record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"openai","name":"codex-cli","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":null,"length":%s},"output":{"text":%s,"encrypted_text":null,"length":%s}}}}' \
   "$ts" "$ts" \
   "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
   "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
-  "$(jv_esc "$model_esc")" \
   "$(jv_esc "$acct_id")" "$(jv_esc "$acct_name")" "$(jv_esc "$acct_email")" \
   "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
   "$(jv_esc "$session_esc")" "$(jv_esc "$turn_esc")" \

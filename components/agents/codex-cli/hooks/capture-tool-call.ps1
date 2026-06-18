@@ -21,7 +21,6 @@
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
-#   .model -> agent_audit.agent.model
 #   .tool_name   -> agent_audit.tool_call.tool.name
 #   .tool_use_id -> agent_audit.tool_call.tool.call_id (per-call id; join key to the
 #                   OTLP trace_safe codex.tool_result `call_id`)
@@ -199,7 +198,6 @@ try {
             agent = [ordered]@{
                 provider     = 'openai'
                 name         = 'codex-cli'
-                model        = $rawObj.model
                 account      = [ordered]@{ id = $ident.account_id; name = $ident.account_name; email = $ident.account_email }
                 organization = [ordered]@{ id = $ident.org_id; name = $ident.org_name }
             }
@@ -240,3 +238,4 @@ catch {
     Log "capture failed ($_) — tool call proceeds uncaptured"
 }
 exit 0
+

@@ -3943,6 +3943,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Remove <code>agent_audit.agent.model</code> from the agent_audit schema</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Mechanical removal across the four named targets, nothing more.</strong> <code>model</code> is an LLM-request concern, not a prompt/tool-call audit concern, and Claude's <code>UserPromptSubmit</code>/<code>PostToolUse</code> payloads don't carry it anyway. Dropped: the <code>"model": { "type": "keyword" }</code> property under <code>agent_audit.agent</code> in both strict templates (<code>user_prompt</code> + <code>tool_call</code>); the <code>agent_audit.agent.model</code> column from both Agent Audit saved searches in <code>agent-audit.ndjson</code>; and from all four Codex hooks the <code>model</code> lift, the <code>"model":%s</code> / <code>model = $rawObj.model</code> field, and the field-mapping header line.</li>
+      <li><strong>Kept the "model context" comments — they are not the field.</strong> Each hook's contract comment says hook stdout "can be injected into the model context"; that is the LLM's context window, unrelated to <code>agent_audit.agent.model</code>. Left untouched. Verified that no <code>agent_audit.agent.model</code> reference remains anywhere under <code>components/</code>.</li>
+      <li><strong>NDJSON edited by exact-string replace, not by hand.</strong> The two saved-search column arrays are on long single lines; I removed <code>"agent_audit.agent.name","agent_audit.agent.model"</code> → <code>"agent_audit.agent.name"</code> in both, then revalidated every NDJSON line parses as JSON (it does).</li>
+      <li><strong>Re-provision is an operator step, left to the human (per the task).</strong> The strict mapping changed, so existing <code>logs-agent_audit.{user_prompt,tool_call}-default</code> streams must be re-run through <code>setup-agent-audit</code> / recreated for the new shape to take on a live stack; pre-change docs keep the old field. This is explicitly out of the code change and not scripted here.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None in code. The live-session verification (a <code>codex-cli-elastic-audit</code> session landing model-free docs, both saved searches opening without the column) is the operator/manual check after re-provisioning — it needs the running stack.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new. This unblocks the <code>claude-code-elastic-audit</code> stack task (3/3), which requires the streams to be model-free — that and its two predecessor tasks (capture-prompt + render-agent-audit, render-hook) are the remaining queued work.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The Agent Audit schema no longer carries <code>agent_audit.agent.model</code>. Removed from both strict Elasticsearch mapping templates, both Kibana Agent Audit saved-search column lists, and all four Codex capture hooks (<code>user_prompt</code> + <code>tool_call</code>, <code>.sh</code> + <code>.ps1</code>) — model is an LLM-request field, not a prompt/tool-call audit field, and Claude's hook payloads don't even carry it. SPEC was already updated; existing data streams need an operator re-provision to pick up the new shape.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified the assembled documents.</strong> Substituting every <code>%s</code> in each hook's <code>printf</code> format with <code>null</code> parses as JSON with <code>agent_audit.agent</code> keys exactly <code>provider, name, account, organization</code>; the format placeholders and continuation args stay balanced (15 for user_prompt, 19 for tool_call). Both ES templates parse; every <code>agent-audit.ndjson</code> line parses.</li>
+      <li><strong>Gates:</strong> <code>shfmt -d</code> empty and <code>shellcheck</code> clean on both changed <code>.sh</code> hooks; <code>Invoke-ScriptAnalyzer</code> clean on both changed <code>.ps1</code> hooks; <code>docker compose config -q</code> passes for all four stacks.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

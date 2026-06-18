@@ -19,7 +19,7 @@
 #
 # Field mapping (Codex raw payload -> canonical document):
 #   .session_id -> agent_audit.conversation_id   .turn_id -> agent_audit.turn_id
-#   .model -> agent_audit.agent.model            .prompt  -> agent_audit.user_prompt.text
+#   .prompt -> agent_audit.user_prompt.text
 #   agent.provider/name are constants; prompt.length is the prompt's char count.
 #   user.* is the workstation login identity, best-effort: user.id is the
 #   domain-qualified login from `whoami` (DOMAIN\user on Windows, bare login on
@@ -182,7 +182,6 @@ try {
             agent = [ordered]@{
                 provider     = 'openai'
                 name         = 'codex-cli'
-                model        = $rawObj.model
                 account      = [ordered]@{ id = $ident.account_id; name = $ident.account_name; email = $ident.account_email }
                 organization = [ordered]@{ id = $ident.org_id; name = $ident.org_name }
             }
@@ -223,3 +222,4 @@ catch {
     Log "capture failed ($_) — prompt proceeds uncaptured"
 }
 exit 0
+
