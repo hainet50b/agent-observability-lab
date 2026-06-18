@@ -71,8 +71,9 @@ model the same activities.**
 - **Object kind:** aggregates are ES|QL saved Discover sessions; raw views are
   data-view + filter-pill objects with an empty query bar.
 - **Trailer / spine:** every raw view ends with `trace.id` (click-through).
-- **Identity ("who") is agent-dependent, not part of the model:** Claude Code
-  leads every view with `labels.user_email`; Codex CLI keeps identity in the
-  audit stream and leads with `@timestamp`. Don't force one agent's identity
-  convention onto another.
+- **Identity ("who") is not a column in these views** — it belongs to the audit
+  concern ([`agent-audit.md`](agent-audit.md)), not the telemetry views. Both
+  agents lead with `@timestamp`. (Claude Code's earlier convention of leading
+  every view with `labels.user_email` is retired in the Codex-aligned rebuild;
+  the kept searches drop it as each is reworked.)
 - **Description:** one concise line per search, no boilerplate.
