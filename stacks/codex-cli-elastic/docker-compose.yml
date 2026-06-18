@@ -1,17 +1,3 @@
-# codex-cli-elastic — Codex CLI over the direct path (agent → APM Server, no
-# Collector), composed with the shared Elastic backend. Second agent on that
-# backend, modelled on claude-code-elastic. Backend services, config, Kibana
-# assets, and bootstrap scripts live in ../../components/backends/elastic/ and are
-# pulled in via `include:` below; per-stack glue (setup + smoke test) lives under
-# scripts/. See README.md.
-#
-# Reuses the backend's fixed aol-* container names and host ports (9200/5601/8200),
-# so it CANNOT run at the same time as the other Elastic stacks — `docker compose
-# down` the other one first.
-#
-# `name:` is explicit so the Compose project is codex-cli-elastic, not derived from
-# an included file's own `name:`.
-
 name: codex-cli-elastic
 
 include:

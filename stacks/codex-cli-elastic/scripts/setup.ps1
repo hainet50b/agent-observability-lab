@@ -1,48 +1,56 @@
-#!/usr/bin/env pwsh
-# setup.ps1 — PowerShell mirror of setup.sh: one-shot post-up bootstrap for the
-# codex-cli-elastic OTLP telemetry path. Run once after `docker compose up -d`
-# reports healthy. Each step delegates to a component script (see README.md for
-# what each does, SPEC/ for the rationale). Steps are idempotent / create-if-absent,
-# so re-running is safe. Override the ES endpoint with -EsUrl and the Kibana URL
-# with the KIBANA_URL env var.
-#
-# Verification (smoke-test.sh) and prompt/tool-call audit (the codex-cli-elastic-audit
-# stack) are separate concerns, not part of this script.
-
 [CmdletBinding()]
 param(
-    [string]$EsUrl
+    [string]$Config
 )
 
 $ErrorActionPreference = 'Stop'
-$OtlpEndpoint = 'http://localhost:8200'
+
 $StackDir = Split-Path -Parent $PSScriptRoot
-$C = Join-Path $PSScriptRoot '../../../components'
+$ComponentsDir = Join-Path $PSScriptRoot '../../../components'
 
-# Forward -EsUrl to the component scripts only when set, so each falls back to its own default.
-$es = @{}; if ($EsUrl) { $es['EsUrl'] = $EsUrl }
-
-# PowerShell does not abort on a child script's nonzero exit (no `set -e`), so each
-# step checks $LASTEXITCODE explicitly.
-function Invoke-Step {
-    param([string]$Label, [string]$Path, [hashtable]$StepArgs)
-    Write-Host "[setup] $Label"
-    $global:LASTEXITCODE = 0
-    & $Path @StepArgs
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not $Config) {
+    $Config = Join-Path $StackDir 'setup.conf'
+}
+if (-not (Test-Path -LiteralPath $Config -PathType Leaf)) {
+    [Console]::Error.WriteLine("FAIL: config file not found: $Config")
+    exit 2
 }
 
-Invoke-Step -Label '1/4 - trace-routing ingest pipeline' -Path (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') -StepArgs $es
-Invoke-Step -Label '2/4 - logs-drop ingest pipeline (logs-apm.app@custom)' `
-    -Path (Join-Path $C 'backends/elastic/scripts/setup-logs-drop.ps1') -StepArgs $es
-Invoke-Step -Label '3/4 - Codex session config (.codex/config.toml: [otel])' `
-    -Path (Join-Path $C 'agents/codex-cli/scripts/render-otel.ps1') `
-    -StepArgs @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
-Invoke-Step -Label '3/4 - Codex session config (.codex/config.toml: Elasticsearch MCP)' `
-    -Path (Join-Path $C 'agents/codex-cli/scripts/render-mcp.ps1') `
-    -StepArgs @{ TargetDir = $StackDir }
-Invoke-Step -Label '4/4 - Kibana saved objects (data views + saved searches)' `
-    -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs @{ Sources = @('codex-cli') }
+foreach ($line in Get-Content -LiteralPath $Config) {
+    if ($line -match '^\s*#' -or $line -notmatch '=') {
+        continue
+    }
+    $k, $v = $line -split '=', 2
+    switch ($k.Trim()) {
+        'elasticsearch.url' {
+            $EsUrl = $v.Trim()
+        }
+        'kibana.url' {
+            $KibanaUrl = $v.Trim()
+        }
+        'apm_server.otlp_endpoint' {
+            $OtlpEndpoint = $v.Trim()
+        }
+    }
+}
+foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'apm_server.otlp_endpoint' = $OtlpEndpoint }.GetEnumerator()) {
+    if (-not $req.Value) {
+        [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key '$($req.Key)'.")
+        exit 2
+    }
+}
 
-Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."
+Write-Host '[setup] 1/4 - trace-routing ingest pipeline'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-trace-routing.ps1') -EsUrl $EsUrl
 
+Write-Host '[setup] 2/4 - logs-drop ingest pipeline (logs-apm.app@custom)'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-logs-drop.ps1') -EsUrl $EsUrl
+
+Write-Host '[setup] 3/4 - Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)'
+& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-otel.ps1') -OtlpEndpoint $OtlpEndpoint -TargetDir $StackDir
+& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $StackDir
+
+Write-Host '[setup] 4/4 - Kibana saved objects (data views + saved searches)'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'codex-cli'
+
+Write-Host '[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh.'

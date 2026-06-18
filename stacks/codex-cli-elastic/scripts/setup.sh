@@ -1,32 +1,43 @@
 #!/usr/bin/env bash
-#
-# setup.sh — one-shot post-up bootstrap for the codex-cli-elastic OTLP telemetry
-# path. Run once after `docker compose up -d` reports healthy. Each step delegates
-# to a component script (see README.md for what each does, SPEC/ for the rationale).
-# Steps are idempotent / create-if-absent, so re-running is safe. Override the ES
-# endpoint with ES_URL and the Kibana URL with KIBANA_URL. On Windows use setup.ps1.
-#
-# Verification (smoke-test.sh) and prompt/tool-call audit (the codex-cli-elastic-audit
-# stack) are separate concerns, not part of this script.
-
 set -euo pipefail
 
-OTLP_ENDPOINT=http://localhost:8200
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-C="$SCRIPT_DIR/../../../components"
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+stack_dir=$(cd -- "$script_dir/.." && pwd)
+components_dir="$script_dir/../../../components"
+
+config=${1:-$stack_dir/setup.conf}
+[ -f "$config" ] || {
+  echo "FAIL: config file not found: $config" >&2
+  exit 2
+}
+
+while IFS='=' read -r key val; do
+  case $key in
+  elasticsearch.url) ES_URL=$val ;;
+  kibana.url) KIBANA_URL=$val ;;
+  apm_server.otlp_endpoint) otlp_endpoint=$val ;;
+  esac
+done <"$config"
+for kv in "elasticsearch.url=${ES_URL:-}" "apm_server.otlp_endpoint=${otlp_endpoint:-}" "kibana.url=${KIBANA_URL:-}"; do
+  [ -n "${kv#*=}" ] || {
+    echo "FAIL: $config: missing or empty key '${kv%%=*}'." >&2
+    exit 2
+  }
+done
+
+export ES_URL KIBANA_URL
 
 echo "[setup] 1/4 — trace-routing ingest pipeline"
-"$C/backends/elastic/scripts/setup-trace-routing.sh" "$@"
+"$components_dir/backends/elastic/scripts/setup-trace-routing.sh"
 
 echo "[setup] 2/4 — logs-drop ingest pipeline (logs-apm.app@custom)"
-"$C/backends/elastic/scripts/setup-logs-drop.sh" "$@"
+"$components_dir/backends/elastic/scripts/setup-logs-drop.sh"
 
 echo "[setup] 3/4 — Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)"
-"$C/agents/codex-cli/scripts/render-otel.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
-"$C/agents/codex-cli/scripts/render-mcp.sh" "$STACK_DIR"
+"$components_dir/agents/codex-cli/scripts/render-otel.sh" "$otlp_endpoint" "$stack_dir"
+"$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$stack_dir"
 
 echo "[setup] 4/4 — Kibana saved objects (data views + saved searches)"
-"$C/backends/elastic/scripts/import-kibana-objects.sh" codex-cli
+"$components_dir/backends/elastic/scripts/import-kibana-objects.sh" codex-cli
 
 echo "[setup] done ✓ — point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

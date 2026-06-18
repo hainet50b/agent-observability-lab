@@ -64,6 +64,7 @@ The shortest path from clone to "I see Codex CLI telemetry in Elasticsearch."
 cd stacks/codex-cli-elastic
 docker compose up -d
 docker compose ps        # wait until all three services report healthy
+# edit setup.conf if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -77,8 +78,10 @@ renders a Codex `[otel]` config to `.codex/config.toml` in this directory
 **data views** (Metrics / Events / Traces) and **saved searches**, plus the
 shared cross-agent **AI Agents — Traces** view. Steps are idempotent /
 create-if-absent, so re-run it any time.
-Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the Kibana
-URL with `KIBANA_URL`.
+Both scripts read their target endpoints — Elasticsearch, the APM OTLP endpoint,
+and Kibana — from `setup.conf` at the stack root, or another file you pass
+(`setup.sh <config>` / `setup.ps1 -Config <config>`); they fail fast if the file
+is missing or a key is empty rather than assuming localhost.
 
 ### 2. Point a Codex session at the stack
 
@@ -202,6 +205,7 @@ later, with the human:
 ```
 codex-cli-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
+├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / APM OTLP / Kibana)
 └─ scripts/
    ├─ setup.sh                            # bootstrap: trace routing + logs-drop + Codex config + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
