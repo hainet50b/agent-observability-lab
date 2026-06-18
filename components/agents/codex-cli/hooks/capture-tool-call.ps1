@@ -1,4 +1,10 @@
 #!/usr/bin/env pwsh
+# Runs under Windows PowerShell 5.1 (powershell.exe) on the employee fleet — no
+# PS7-only syntax. On Windows it is spawned by powershell.exe via the config.toml
+# `commandWindows` (see templates/hooks.template.toml); the pwsh shebang is only
+# for direct execution on POSIX (where powershell.exe does not exist) and implies
+# no PS7 runtime requirement.
+#
 # capture-tool-call.ps1 — Codex CLI PostToolUse audit hook
 # (PowerShell mirror of capture-tool-call.sh; same .sh/.ps1 pairing as the
 # repo's other scripts). See that file's header for the full rationale. In
@@ -238,4 +244,5 @@ catch {
     Log "capture failed ($_) — tool call proceeds uncaptured"
 }
 exit 0
+
 

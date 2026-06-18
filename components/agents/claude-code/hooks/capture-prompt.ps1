@@ -1,4 +1,9 @@
 #!/usr/bin/env pwsh
+# Runs under Windows PowerShell 5.1 (powershell.exe) on the employee fleet — no
+# PS7-only syntax. On Windows it is spawned by powershell.exe via the exec-form
+# hook (see render-hook.ps1); the pwsh shebang is only for direct execution on
+# POSIX (where powershell.exe does not exist) and implies no PS7 runtime requirement.
+#
 # capture-prompt.ps1 — Claude Code UserPromptSubmit audit hook
 # (PowerShell mirror of capture-prompt.sh; same .sh/.ps1 pairing as the repo's
 # other scripts). See that file's header for the full rationale. In short: fires
@@ -186,4 +191,5 @@ catch {
     Log "capture failed ($_) — prompt proceeds uncaptured"
 }
 exit 0
+
 

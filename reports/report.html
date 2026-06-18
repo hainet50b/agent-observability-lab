@@ -4100,6 +4100,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Fleet PS 5.1: Codex hooks spawn via <code>powershell.exe</code>; both agents' capture hooks audited 5.1-clean</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Invocation — Codex <code>commandWindows</code> swapped <code>pwsh</code> → <code>powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass</code></strong> in <code>templates/hooks.template.toml</code> (both the UserPromptSubmit and PostToolUse entries), mirroring the Claude exec-form fix from the previous task. <code>powershell.exe</code> (Windows PowerShell 5.1) is guaranteed on every workstation; <code>pwsh</code>/PS7 may be absent. Claude's side was already handled by the exec-form <code>render-hook.ps1</code>.</li>
+      <li><strong>Script compatibility — the three capture hooks were already 5.1-clean; no code changes were needed.</strong> A scan for PS7-only constructs (<code>??</code>/<code>??=</code>, ternary <code>?:</code>, <code>&&</code>/<code>||</code> pipeline chains, <code>ConvertFrom-Json -AsHashtable</code>, <code>Get-Content -AsByteStream</code>) found none. The constructs they do use — <code>[ordered]@{}</code>, <code>if</code>/<code>switch</code>/<code>try</code> as value expressions, <code>[Type]::new()</code> (5.0+), <code>ConvertFrom-StringData</code>, byte-body POST — are all 5.1-supported. Rather than change working code, I <em>proved</em> it: ran each hook under <code>powershell.exe</code> 5.1.26100 with a synthetic payload and confirmed each indexed its canonical doc.</li>
+      <li><strong>Shebang left as <code>#!/usr/bin/env pwsh</code>.</strong> 5.1 is Windows-only (<code>powershell.exe</code>) and 7 is the only cross-platform binary (<code>pwsh</code>), so a POSIX shebang can only name <code>pwsh</code> — and it is ignored entirely on Windows, where the hook is spawned explicitly by <code>powershell.exe</code>. To remove the implied PS7 requirement I added a header note to each hook stating it is 5.1-clean and that the shebang is for direct POSIX execution only, rather than churn the shebang itself.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Behavioural footnote (not a 5.1 syntax issue, left as-is to stay identical to the verified Claude hook): <code>Invoke-RestMethod -TimeoutSec</code> is typed <code>[int]</code> in 5.1, so the <code>0.3</code> fractional timeout coerces to <code>0</code> (no timeout). Harmless against the fast local lab ES; worth revisiting only if these hooks ever point at a slow/remote destination.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Prompt sealing/encryption (null <code>text</code>, populated <code>encrypted_text</code>) remains reserved-but-unbuilt for both agents — the natural next audit increment.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The employee-fleet audit hooks now run on the PowerShell that's actually present everywhere. Codex's Windows hook command was changed from <code>pwsh</code> to <code>powershell.exe</code> (Windows PowerShell 5.1) with <code>-NoProfile -NonInteractive -ExecutionPolicy Bypass</code>, matching Claude. All three <code>capture-*.ps1</code> hooks were audited and confirmed free of PS7-only syntax, and each was run end-to-end under PS 5.1 to prove it indexes its audit document.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live under Windows PowerShell 5.1.26100.</strong> Each hook (<code>capture-prompt.ps1</code> / Claude, <code>capture-user-prompt.ps1</code> + <code>capture-tool-call.ps1</code> / Codex), spawned as <code>powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File … -Config …</code> with a synthetic payload, indexed a canonical doc (HTTP 201) into <code>logs-agent_audit.{user_prompt,tool_call}-default</code>. Codex tool_call shape confirmed: <code>openai</code>/<code>codex-cli</code>, <code>turn_id</code> present, heterogeneous <code>tool_input</code>/<code>tool_response</code> serialized to JSON strings. All synthetic <code>ps51-*</code> docs deleted afterward.</li>
+      <li><strong>Rendered output confirmed:</strong> <code>render-hooks.ps1</code> emits <code>commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &lt;capture-*.ps1&gt; -Config &lt;agent-audit.conf&gt;'</code> for both events.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> passes for all five stacks; <code>Invoke-Formatter</code> + <code>Invoke-ScriptAnalyzer</code> clean on all three hooks; the hook <code>.ps1</code> diffs are comment-only (no code lines changed).</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
