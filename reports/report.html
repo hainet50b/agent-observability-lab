@@ -3626,6 +3626,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Rework Claude Code — Tool Results into Claude Code — Tool Calls</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Rename-in-place via <code>jq</code>: <code>id</code> (<code>claude-code-tool-results</code> → <code>claude-code-tool-calls</code>), title, description, columns; kept the single <code>message: claude_code.tool_result</code> pill, both refs, and the sort. No <code>exportedCount</code> change. Deleted the stale live id.</li>
+      <li>Kept <code>labels.mcp_server_scope</code> as a column though it is absent from current live data (only present on MCP tool calls) — it is the clean ungated MCP signal the task calls for, and saved objects store column names only.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Dropped <code>user_email</code>, the <code>decision_*</code> pair, and the gated <code>tool_input</code>/<code>tool_parameters</code> per the task; <code>trace.id</code> deferred to the traces diff.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Renamed <strong>Claude Code — Tool Results</strong> to <strong>Claude Code — Tool Calls</strong> (the abstract Tool Call entity), trimming columns to the Metadata facet — success, duration, tool name, I/O sizes, MCP scope — with <code>@timestamp</code> lead and no identity. Still a single-pill view on <code>claude_code.tool_result</code>.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> the new object has one <code>message</code> pill, 2 refs, the specified columns; import reports <code>success: true, successCount: 13</code>; old id deleted (HTTP 200).</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
