@@ -1,45 +1,19 @@
 #!/usr/bin/env bash
 #
-# smoke-test.sh — codex-cli-elastic end-to-end pipeline smoke / verification.
+# smoke-test.sh — verifies the OTLP → APM Server → Elasticsearch path end to end,
+# following the 3A pattern (Arrange/Act/Assert; see CONVENTIONS.md). It POSTs a
+# synthetic OTLP/protobuf metrics+logs+traces probe (service.name=aol-smoke-test)
+# and asserts the docs land in the APM data streams, then prints the service.name
+# values present so any real agent telemetry shows up alongside the probe.
 #
-# Follows the 3A pattern (see CONVENTIONS.md):
+# The probe is agent-INDEPENDENT: it proves the shared OTLP path without a
+# configured Codex session (no API key, no interactive session) so it can run as a
+# gate. This stack's APM Server always protobuf-decodes the body (it ignores
+# Content-Type, no OTLP/JSON toggle), so the payloads are precomputed protobuf
+# embedded as base64 below — no protobuf tooling needed.
 #
-#   Arrange — bring the stack up and wait for Elasticsearch, Kibana, and APM
-#             Server to all report healthy.
-#   Act     — POST a synthetic OTLP/protobuf metrics payload, a synthetic
-#             OTLP/protobuf logs payload, and a synthetic OTLP/protobuf traces
-#             payload to the APM Server OTLP/HTTP endpoint, shaped like the three
-#             channels an OTLP agent emits (one metric data point + one log/event
-#             record + one trace span), tagged with service.name "aol-smoke-test".
-#             This stack's APM Server always protobuf-decodes the request body (it
-#             ignores Content-Type and has no OTLP/JSON toggle), so the probe sends
-#             protobuf — the same wire format real OTLP agents (Codex CLI, Claude
-#             Code) export (http/protobuf).
-#   Assert  — query Elasticsearch and confirm those documents were ingested into
-#             the APM data streams, proving the OTLP -> APM Server ->
-#             Elasticsearch path the agent relies on works end to end.
-#
-# It then prints a DISCOVER summary: the service.name values currently present in
-# the APM metrics/logs/traces data streams, so any real agent telemetry shows up
-# alongside the probe.
-#
-# The probe is agent-INDEPENDENT — it proves the shared OTLP path that any agent
-# (Codex CLI here) will use, without requiring a configured session. To point a
-# real Codex CLI session at this stack, run scripts/setup.sh and launch codex with
-# CODEX_HOME=<stack>/.codex (see ../README.md); its telemetry then lands under
-# service.name=codex-cli through this identical pipeline. Codex-specific Kibana
-# views remain a later increment.
-#
-# Why synthetic telemetry: the Act step must be self-contained and deterministic
-# (no API key, no interactive session) so it can run as a gate.
-#
-# Prerequisites: docker (+ a running daemon), curl, jq, base64 (coreutils). If
-# the daemon is not reachable the script SKIPs (exit 0) rather than failing —
-# there is nothing to smoke-test without it. No protobuf tooling is needed: the
-# three OTLP payloads are precomputed and embedded as base64 below.
-#
-# Endpoints can be overridden via ES_URL / APM_OTLP_URL if you publish different
-# ports than the defaults below.
+# Needs docker (running daemon), curl, jq, base64; SKIPs (exit 0) if the daemon is
+# unreachable. Override endpoints with ES_URL / APM_OTLP_URL.
 
 set -euo pipefail
 
@@ -95,16 +69,12 @@ done
 # --- Act -------------------------------------------------------------------
 echo "[act] sending synthetic OTLP/protobuf telemetry (service.name=$SERVICE_NAME)…"
 
-# This stack's APM Server always protobuf-decodes the OTLP body (it ignores
-# Content-Type and exposes no OTLP/JSON toggle), so the probe POSTs protobuf —
-# the same wire format real OTLP agents use (http/protobuf). The three payloads
-# are precomputed and embedded as base64 to avoid pulling in protobuf tooling:
-#   - metrics: ExportMetricsServiceRequest, one aol.smoke.counter sum point
-#   - logs:    ExportLogsServiceRequest,    one aol.smoke.event log record
-#   - traces:  ExportTraceServiceRequest,   one aol.smoke.span span
-# All three bake service.name=aol-smoke-test and a fixed timeUnixNano (≈2026-05-28);
-# the assertions below query _count by service.name with no time filter, so the
-# fixed timestamp does not affect them.
+# Three precomputed OTLP/protobuf payloads, base64-embedded (see header):
+#   metrics: ExportMetricsServiceRequest, one aol.smoke.counter sum point
+#   logs:    ExportLogsServiceRequest,    one aol.smoke.event log record
+#   traces:  ExportTraceServiceRequest,   one aol.smoke.span span
+# Each bakes service.name=aol-smoke-test and a fixed timeUnixNano; the assertions
+# below query _count by service.name with no time filter, so the timestamp is moot.
 metrics_payload="ClUKIgogCgxzZXJ2aWNlLm5hbWUSEAoOYW9sLXNtb2tlLXRlc3QSLxItChFhb2wuc21va2UuY291bnRlcjoYChIZAAAytJHUsxgxAQAAAAAAAAAQAhgB"
 logs_payload="CmcKIgogCgxzZXJ2aWNlLm5hbWUSEAoOYW9sLXNtb2tlLXRlc3QSQRI/CQAAMrSR1LMYEAkqEQoPYW9sIHNtb2tlIGV2ZW50Mh8KCmV2ZW50Lm5hbWUSEQoPYW9sLnNtb2tlLmV2ZW50"
 traces_payload="CmgKIgogCgxzZXJ2aWNlLm5hbWUSEAoOYW9sLXNtb2tlLXRlc3QSQhJAChAREREREREREREREREREREREggiIiIiIiIiIioOYW9sLnNtb2tlLnNwYW4wATkAADK0kdSzGEFAQkG0kdSzGA=="
@@ -168,7 +138,5 @@ discover "traces-apm*"
 
 echo
 echo "PASS: OTLP -> APM Server -> Elasticsearch pipeline verified."
-echo "To point a real Codex CLI session here, run scripts/setup.sh and launch codex with"
-echo "CODEX_HOME=<stack>/.codex (see ../README.md); its telemetry lands under service.name="
-echo "codex-cli through this identical pipeline. Codex-specific Kibana views are a later"
-echo "increment. Inspect what is here now in Kibana (http://localhost:5601)."
+echo "To point a real Codex CLI session here, run scripts/setup.sh (see ../README.md)."
+echo "Inspect what is here now in Kibana (http://localhost:5601)."
