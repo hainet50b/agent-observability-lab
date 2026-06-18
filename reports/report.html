@@ -3342,6 +3342,37 @@
       <li>Gates: <code>shfmt -d</code> empty + <code>shellcheck</code> clean on both touched <code>*.sh</code>; <code>Invoke-Formatter</code> no-op + <code>Invoke-ScriptAnalyzer</code> clean on both touched <code>*.ps1</code>; all four stacks pass <code>docker compose config -q</code>.</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Retire the Claude Code — Overview dashboard</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The task is essentially a single file deletion (<code>components/backends/elastic/kibana/claude-code/dashboard.ndjson</code>, id <code>claude-code-overview</code>). The only real judgement was whether the importer needs touching: it does not. <code>import_dir</code> globs <code>*&lt;category&gt;.ndjson</code> per category (data-views → saved-searches → dashboard) and <code>continue</code>s on a no-match, so the <code>claude-code</code> source's dashboard category now silently globs to nothing while <code>otelcol-sidecar</code> still ships and imports its dashboard.</li>
+      <li>Used <code>git rm</code> for the deletion so the removal is staged atomically.</li>
+      <li>The shipped NDJSON only stops a fresh import from recreating the object; the object lived on in the running Kibana from a prior import. Treated removing it from Kibana as part of the verify gate ("<code>claude-code-overview</code> is gone from Kibana") and issued a Saved Objects <code>DELETE</code> — confirmed 404 afterward.</li>
+      <li>Left <code>claude-code-metrics</code> in <code>data-views.ndjson</code> untouched per the task (it completes the metrics/events/traces trio and will back ported Claude metrics saved searches), even though the dashboard was its only consumer.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><code>claude-code-metrics</code> is now a data view with zero consumers until the Claude metrics saved searches are ported from Codex. Worth a follow-up task to port those so the metrics data view earns its keep (and the trio stays meaningful).</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Removed the legacy <strong>Claude Code — Overview</strong> Kibana dashboard, aligning the Claude Code source with the saved-search-centric standard (no dashboard) that the Codex source set. The importer is unchanged — the <code>claude-code</code> source simply ships no dashboard now; <code>otelcol-sidecar</code>'s dashboard still imports.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> <code>claude-code</code> import is clean — cross-agent data view (1) + <code>claude-code</code> data-views (3, incl. <code>claude-code-metrics</code>) + saved-searches (18), dashboard category skipped silently. <code>claude-code otelcol-sidecar</code> import is clean and still loads the otelcol dashboard (1). The stale <code>claude-code-overview</code> object was deleted from Kibana (now 404).</li>
+      <li>Gates: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched, so the script format/lint gates had nothing to run.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
