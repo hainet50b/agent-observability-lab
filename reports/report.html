@@ -3793,6 +3793,35 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Swap labels.prompt_id → trace.id in the seven raw Claude events views</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Column-only change, exactly as the task scoped it: replaced the trailing <code>labels.prompt_id</code> with <code>trace.id</code> in the seven raw event views (User Prompts, LLM Requests, LLM Request Errors, Tool Calls, Tool Call Errors, Hooks, Turn Timeline) and left filter pills, <code>references[]</code>, sort, and descriptions untouched.</li>
+      <li>Implemented as a single <code>replace_all</code> on the literal <code>"session.id","labels.prompt_id"]</code>. That suffix is unique to the seven raw views — the two ES|QL rollups (Conversations, Turns) don't have a <code>session.id</code> column and Turns' <code>prompt_id</code> is its aggregation key, so the swap could not touch them. Verified afterward: exactly 7 occurrences changed, all 10 NDJSON lines still parse.</li>
+      <li>Did not touch descriptions even though several still say "trace.id is deferred to the traces diff" — description cleanup is its own task (the description-shortening task later in the PRD), and this task says column-only.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The <code>trace.id</code> URL field formatter on the <code>claude-code-events</code> data view survived the earlier rebuild (confirmed live), so the new column is click-through to the APM trace view with no extra change.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new — the two following tasks (re-key Turns/Conversations/Timeline to turn-bearing events, and shorten descriptions) already cover the natural follow-ups, including retiring the now-stale "deferred to the traces diff" notes.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The seven raw Claude Code event saved searches now show <strong>trace.id</strong> as their final column instead of <code>prompt_id</code> — a click-through bridge into the APM trace view, 1:1 with the turn now that tracing is on.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> all 9 objects import with <code>success: true</code>; the Kibana API confirms <code>trace.id</code> is the last column on each of the seven views and the events data view still carries the <code>/app/apm/link-to/trace/{{value}}</code> URL formatter; 44 live <code>claude_code</code> event docs carry <code>trace.id</code> so the column is populated.</li>
+      <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>smoke-test.sh</code> reaches PASS (all three OTLP probes land). No shell scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
