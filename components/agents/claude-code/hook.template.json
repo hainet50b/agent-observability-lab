@@ -6,7 +6,11 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "@@HOOK_COMMAND@@", "timeout": 3 }
+          {
+            "type": "command",
+            "command": "@@HOOK_COMMAND@@",
+            "timeout": 3
+          }
         ]
       }
     ]
