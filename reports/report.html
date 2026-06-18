@@ -3822,6 +3822,34 @@
       <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>smoke-test.sh</code> reaches PASS (all three OTLP probes land). No shell scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Scope timeline + Conversations to turn-bearing events, re-key Turns to trace.id</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Used <code>labels.prompt_id</code> presence as the uniform turn-scoping guard across all three views, exactly as the task specified — and verified live <em>why</em> a <code>trace.id</code>-based guard would be wrong: all 15 <code>gen_ai.request.attempt</code> rows carry <code>trace.id</code> but none carry <code>prompt_id</code>, so a trace-id guard would re-admit them while the prompt-id guard correctly excludes them (along with startup events).</li>
+      <li>Turn Timeline got the guard as a single <strong>exists</strong> filter pill (<code>type:"exists"</code>, <code>key: labels.prompt_id</code>) with its <code>meta.index</code> wired through a new <code>filter[0].meta.index</code> <code>references[]</code> entry — empty query bar preserved, so it still reads as a removable pill in Discover. Conversations got <code>| WHERE labels.prompt_id IS NOT NULL</code> right after <code>FROM</code> (symmetric with Turns). Turns changed its aggregation key <code>BY prompt_id = labels.prompt_id</code> → <code>BY trace_id = trace.id</code> and renamed the trailing column <code>prompt_id</code> → <code>trace_id</code> (the key <em>is</em> the column), keeping its existing <code>WHERE</code> guard and <code>conversation_id = VALUES(session.id)</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>Turns shows one extra <code>null</code> <code>trace_id</code> bucket (17 docs) alongside the per-turn rows. These are prompt-bearing events captured <em>before</em> tracing was enabled, so they have no <code>trace.id</code> and collapse together — this is the exact trade-off the task documents ("tracing off → prompt-bearing events have null trace.id and collapse to one bucket"). With tracing on going forward, new turns each get their own <code>trace.id</code> row.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new. The last remaining task (shorten every saved-search description) is the natural closer — several descriptions still carry the now-obsolete "trace.id is deferred to the traces diff" note that this and the previous task made stale.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p><strong>Turns</strong> is now keyed on <code>trace.id</code> (one row per turn, Codex-aligned) and <strong>Conversations</strong> / <strong>Turn Timeline</strong> now exclude the tracing channel's <code>gen_ai.request.attempt</code> noise and startup events — all three count only real turn activity.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> all 9 objects import with <code>success: true</code>; the Turn Timeline pill is an <code>exists</code> filter with 2 refs; the live Turns query yields one row per <code>trace.id</code> with <code>conversation_id</code> populated; the guard excludes all 15 gen_ai rows (0 carry <code>prompt_id</code>); Conversations rollup counts 48 turn docs / 6 turns.</li>
+      <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>smoke-test.sh</code> reaches PASS. No shell scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
