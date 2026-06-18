@@ -3737,6 +3737,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Rework Claude Code — API Errors into Claude Code — LLM Request Errors</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Rename-in-place via <code>jq</code>: <code>id</code> (<code>claude-code-api-errors</code> → <code>claude-code-llm-request-errors</code>), title, description, columns; kept the single <code>message: claude_code.api_error</code> pill, both refs, the sort. No <code>exportedCount</code> change. Deleted the stale live id.</li>
+      <li>Confirmed the pill still resolves to <code>claude_code.api_error</code> after the rewrite; <code>numeric_labels.attempt</code> retained as the column that absorbs the deleted API Retries Exhausted signal.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>No <code>claude_code.api_error</code> docs in the current sample, so a non-empty result can't be live-verified — the field paths are doc/SPEC-confirmed and the object imports/opens cleanly. (Expected per the task.)</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Renamed <strong>Claude Code — API Errors</strong> to <strong>Claude Code — LLM Request Errors</strong> (matching the LLM Requests rename and Codex's naming), reordering columns to time → duration → model → failure block → correlation, with <code>@timestamp</code> lead and no identity.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> new object has one <code>message: claude_code.api_error</code> pill, 2 refs, the specified columns; import reports <code>success: true, successCount: 8</code>; old id deleted (HTTP 200).</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
