@@ -3599,6 +3599,33 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Delete Tool Decisions, Tool Output, and Tool I/O (joined) saved searches</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Removed all three ids in one <code>jq</code> pass (an <code>index()</code>-based reject filter), rebuilt the summary line <code>exportedCount</code> 16 → 13, and deleted each live object so a populated Kibana matches a fresh import.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Deleted three Tool views as part of consolidating Tool Call activity onto a single events view: <strong>Tool Decisions</strong> (no Codex counterpart — the decision rides on tool_result metadata), and <strong>Tool Output</strong> / <strong>Tool I/O (joined)</strong> (actual tool I/O is audit-concern content, gated and trace-dependent). The underlying events/spans remain in the data streams. The Claude saved-search set is now 13.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> none of the three remain in the NDJSON; each was deleted (HTTP 200); import reports <code>success: true, successCount: 13</code>.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
