@@ -45,6 +45,7 @@ Telemetry-as-audit in this lab targets the **non-adversarial / network-reliabili
 
 Developer-facing references that sit beside this spec. The user-facing `README.md` files do **not** link into these — they are found here, via `SPEC/`:
 
+- [`agent-activity-model.md`](agent-activity-model.md) — the agent-agnostic activity model the Kibana saved searches are designed from (Conversation ⊃ Turn ⊃ {prompt, LLM request, tool call}; the Execution / Content / Metadata facets; the `conversation_id` + `trace.id` spine) and how each agent's telemetry realizes it (Codex's three-lens fan-out vs Claude's collapsed event view). The top-down design contract for onboarding a new agent's views.
 - [`threat-model.md`](threat-model.md) — audit-coverage threat model: the (A) non-adversarial / (B) adversarial split, why telemetry only solves (A), and the local-sidecar (`file_storage`) solution the `*-otelcol-*` stacks demonstrate.
 - [`agent-audit.md`](agent-audit.md) — direct agent-audit data streams and hook delivery: canonical user-prompt schema, mapping/lifecycle defaults, fail-open delivery, and hook-specific configuration.
 - [`claude-code-telemetry.md`](claude-code-telemetry.md) — what Claude Code emits into the `claude-code-elastic` stack: every metric / event / span field, the string-vs-numeric and PII caveats, the trace data model, and the trace-isolation routing.

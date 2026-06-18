@@ -191,33 +191,11 @@ so data lands within ~10–30s.
 
 ### 3. Import the Kibana saved objects
 
-The importable NDJSON lives in the component directories — the Claude Code
-agent's **data views** (`data-views.ndjson`) and **saved searches**
-(`saved-searches.ndjson`) in
-`../../components/backends/elastic/kibana/claude-code/`. The import helper below
-pulls them in dependency order:
-
-| Saved object | Type | Shows |
-| --- | --- | --- |
-| **Claude Code — Metrics** | data view (`metrics-apm.app.claude_code*`) | the numeric metric documents (physically scoped to the agent's data stream) |
-| **Claude Code — Events** | data view (`logs-apm.app.claude_code*`) | the prompt / tool-result / API-request events (physically scoped to the agent's data stream) |
-| **Claude Code — Traces** | data view (`traces-apm-agents_claude_code*`) | this agent's beta trace spans (per-agent isolated) |
-| **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view (each ends with `trace.id`, a click-through to the APM UI trace) |
-| **Claude Code — Interactions** | saved search | one row per **interactive turn** (the `interaction` root) — rich turn columns (prompt, sequence, duration); interactive-only |
-| **Claude Code — Traces** | saved search | one row per **trace, all session types** (`processor.event: transaction`); `transaction.name` shows the root type (interaction vs llm_request/tool) |
-
-The saved searches **reference the data views**, so they are imported
-data-views-first (or together).
-
-- **Already imported by `scripts/setup.sh`** (step 1) — it runs the backend
-  import then the agent import, each in dependency order (data views first). To
-  re-import after editing the NDJSON, just re-run `scripts/setup.sh` (idempotent,
-  `overwrite=true`).
-- **Kibana UI** — Stack Management → Saved Objects → **Import** → choose the
-  `.ndjson` file(s), data views first.
-- **Manual API** — `POST` each file (data views first) to
-  `/api/saved_objects/_import?overwrite=true` with header `kbn-xsrf: true`; the
-  helper above just wraps this.
+Already done by `scripts/setup.sh` (step 1): it imports the Claude Code data
+views and curated saved searches from
+`../../components/backends/elastic/kibana/claude-code/`. Re-run `scripts/setup.sh`
+to re-import after editing the NDJSON (idempotent, `overwrite=true`), or import
+the files by hand via Stack Management → Saved Objects → **Import**.
 
 ### 4. See the telemetry in Kibana
 
