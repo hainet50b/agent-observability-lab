@@ -1,10 +1,5 @@
 # docs:   https://developers.openai.com/codex/hooks
 # schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs (HookHandlerConfig)
-#
-# commandWindows spawns the hook via `powershell` (Windows PowerShell 5.1 —
-# guaranteed on every employee workstation, unlike pwsh/PS7 which may be absent)
-# with -NoProfile (skip the user profile), -NonInteractive, and -ExecutionPolicy
-# Bypass (run on locked-down machines). The capture-*.ps1 hooks are 5.1-clean.
 
 [[hooks.UserPromptSubmit]]
 
