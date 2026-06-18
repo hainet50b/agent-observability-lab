@@ -3373,6 +3373,35 @@
       <li>Gates: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched, so the script format/lint gates had nothing to run.</li>
     </ul>
   </section>
+  <section>
+    <h2>Drop the cross-agent <code>agents-traces</code> data view, re-pointing its only users first</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Used a single precise <code>replace_all</code> on the literal token <code>{"id":"agents-traces","name":</code> rather than a bare <code>agents-traces</code> swap — this targets only the <code>references[]</code> ref ids (6 occurrences across the three trace searches) and cannot accidentally touch a <code>name</code>, filter, or column. Confirmed exactly 6 hits beforehand, all in the three named searches (Turn Timeline, LLM Requests / Duration, Tool Calls / Execution).</li>
+      <li>Deleted the <code>cross-agent/</code> directory with <code>git rm</code> + <code>rmdir</code> so the empty dir goes with its only file, matching the task's "the empty <code>cross-agent/</code> dir goes with it".</li>
+      <li>Found and fixed a third doc-comment line in <code>import-kibana-objects.sh</code> (line 16, "Within every directory (cross-agent and each source)…") beyond the two the task explicitly called out — left dangling it would still have said "cross-agent". Trimmed it to "Within every source directory". Left the unrelated <code>cross-agent</code> mentions in <code>setup-trace-routing.*</code> (the <code>traces-apm-agents_*</code> glob) and in the separate <code>elastic-audit</code> backend untouched.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The importer's <code>Import-Dir</code>/<code>import_dir</code> now only ever receives source namespaces — the "cross-agent first so references resolve" ordering logic is fully retired. If no future backend asset needs a shared pre-import dir, the category-ordering comment could be simplified further, but it's harmless as-is.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Retired the cross-agent <strong>AI Agents — Traces</strong> Kibana data view (<code>agents-traces</code>). Its only three users — Codex's <em>Turn Timeline</em>, <em>LLM Requests (Duration)</em>, and <em>Tool Calls (Execution)</em> trace searches — now point at Codex's own agent-scoped <code>codex-cli-traces</code> data view (same <code>trace.id</code> click-through). The backend importer no longer imports a <code>cross-agent/</code> dir.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> <code>grep -rn agents-traces components/</code> is empty; all 16 NDJSON lines re-parse with <code>jq</code>. The <code>codex-cli</code> import is clean (3 data views + 15 saved searches) and the three re-pointed searches report references <code>codex-cli-traces</code> (×2 each) via the Saved Objects API — no dangling refs. <code>claude-code</code> and <code>claude-code otelcol-sidecar</code> imports are clean with no cross-agent step. The <code>.ps1</code> importer behaves identically.</li>
+      <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>shfmt -d</code> empty and <code>shellcheck</code> clean on the touched <code>.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on the touched <code>.ps1</code>.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

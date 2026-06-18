@@ -5,18 +5,15 @@
 #
 # Kibana objects are consumed by Kibana, a backend service, so all per-source
 # NDJSON lives under this backend, namespaced by source: kibana/<source>/ (e.g.
-# kibana/claude-code/, kibana/codex-cli/, kibana/otelcol-sidecar/). The
-# cross-agent objects that per-agent saved searches depend on (e.g. the AI Agents
-# — Traces data view) live in kibana/cross-agent/.
+# kibana/claude-code/, kibana/codex-cli/, kibana/otelcol-sidecar/).
 #
-# Usage: pass the source namespace(s) to import as positional arguments. The
-# cross-agent objects are always imported first so per-agent references resolve:
+# Usage: pass the source namespace(s) to import as positional arguments:
 #
 #   scripts/import-kibana-objects.sh claude-code
 #   scripts/import-kibana-objects.sh claude-code otelcol-sidecar
 #   scripts/import-kibana-objects.sh codex-cli
 #
-# Within every directory (cross-agent and each source) files import in category
+# Within every source directory files import in category
 # order: data-views → saved-searches → dashboard, so data views exist before the
 # saved searches and dashboards that reference them.
 #
@@ -85,11 +82,7 @@ import_dir() {
 
 echo "[import] importing Kibana saved objects into $KIBANA_URL…"
 
-# Cross-agent objects first (e.g. the AI Agents — Traces data view) so per-agent
-# saved searches that reference them resolve.
-import_dir "kibana/cross-agent"
-
-# Then each requested source namespace.
+# Each requested source namespace.
 for src in "$@"; do
   import_dir "kibana/$src"
 done

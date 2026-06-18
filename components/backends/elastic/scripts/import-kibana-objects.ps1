@@ -6,14 +6,11 @@
 # ralph.ps1). Kibana objects are consumed by Kibana, a backend service, so all
 # per-source NDJSON lives under this backend, namespaced by source:
 # kibana/<source>/ (e.g. kibana/claude-code/, kibana/codex-cli/,
-# kibana/otelcol-sidecar/). The cross-agent objects that per-agent saved searches
-# depend on (e.g. the AI Agents — Traces data view) live in kibana/cross-agent/.
+# kibana/otelcol-sidecar/).
 #
-# Pass the source namespace(s) to import via -Sources. The cross-agent objects
-# are always imported first so per-agent references resolve; within every
-# directory files import in category order data-views → saved-searches →
-# dashboard, so data views exist before the saved searches and dashboards that
-# reference them.
+# Pass the source namespace(s) to import via -Sources. Within every directory
+# files import in category order data-views → saved-searches → dashboard, so
+# data views exist before the saved searches and dashboards that reference them.
 #
 # Prerequisites: PowerShell 7+ (curl is not required — uses Invoke-RestMethod).
 # Override the Kibana base URL with -KibanaUrl or the KIBANA_URL env var
@@ -90,11 +87,7 @@ function Import-Dir {
 
 Write-Host "[import] importing Kibana saved objects into $KibanaUrl…"
 
-# Cross-agent objects first (e.g. the AI Agents — Traces data view) so per-agent
-# saved searches that reference them resolve.
-Import-Dir -Dir 'kibana/cross-agent'
-
-# Then each requested source namespace.
+# Each requested source namespace.
 foreach ($src in $Sources) {
     Import-Dir -Dir "kibana/$src"
 }
