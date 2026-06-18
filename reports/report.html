@@ -3571,6 +3571,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Rework Claude Code — API Requests into Claude Code — LLM Requests</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Rename-in-place via <code>jq</code>: changed <code>id</code> (<code>claude-code-api-requests</code> → <code>claude-code-llm-requests</code>), title, description, and column set; left the single <code>message: claude_code.api_request</code> pill, both <code>references[]</code> (to <code>claude-code-events</code>), and the sort untouched. No <code>exportedCount</code> change (rename, not add/remove).</li>
+      <li>Deleted the stale <code>claude-code-api-requests</code> object from the live Kibana so a re-import doesn't leave the old id orphaned alongside the new one.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Dropped <code>query_source</code>/<code>speed</code>/<code>effort</code>/<code>cost_usd</code>/<code>user_email</code> per the task; <code>trace.id</code> deferred to the traces diff.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Renamed <strong>Claude Code — API Requests</strong> to <strong>Claude Code — LLM Requests</strong> (the abstract LLM Request entity), trimming its columns to model + latency + the token quartet, with <code>@timestamp</code> lead and no identity. Still a single-pill view on <code>claude_code.api_request</code>.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> the new object has exactly one <code>message</code> pill, 2 refs, and the specified columns; import reports <code>success: true, successCount: 16</code>; the old id was deleted (HTTP 200).</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
