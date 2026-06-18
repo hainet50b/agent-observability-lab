@@ -3654,6 +3654,33 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Delete the Claude Code — Hook Registered saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><code>jq</code> reject + summary rebuild (<code>exportedCount</code> 13 → 12); deleted the live object too.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Deleted <strong>Claude Code — Hook Registered</strong> — the Hooks node consolidates onto the runtime view (Hook Executions → Hooks); registration/provenance is startup inventory with no Codex counterpart. The <code>hook_registered</code> event remains in <code>logs-apm.app.claude_code*</code>. The Claude saved-search set is now 12.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> gone from the NDJSON, deleted (HTTP 200), import reports <code>success: true, successCount: 12</code>.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
