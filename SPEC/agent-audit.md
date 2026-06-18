@@ -53,7 +53,6 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
     "agent": {
       "provider": "openai",
       "name": "codex-cli",
-      "model": "gpt-5.5",
       "account": {
         "id": "...",
         "name": "...",
@@ -101,7 +100,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
   "host": { "name": "...", "hostname": "..." },
   "agent_audit": {
     "agent": {
-      "provider": "openai", "name": "codex-cli", "model": "...",
+      "provider": "openai", "name": "codex-cli",
       "account": { "id": "...", "name": "...", "email": "..." },
       "organization": { "id": "...", "name": "..." }
     },
@@ -123,7 +122,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 - `agent_audit.tool_call.input` ← `tool_input`, `.output` ← `tool_response`. Both Codex fields are heterogeneous JSON (an object for MCP tools; a string or object for shell tools), so the sender **serializes each to a JSON string** into `.text`, with `.length` the character count. The strict mapping then sees one scalar per side, not the tool's arbitrary nested keys.
 - `capture.tool_call.content = plaintext` populates `.text`; `redacted` writes a `[REDACTED]` marker; `encrypted` nulls it and reserves `.encrypted_text` — all keep the true `.length`, set per stream (the same gate as the prompt body — see [Delivery and authorization](#delivery-and-authorization)).
 - No success / exit field — Codex's `tool_response` is opaque and not reliably parseable across tools.
-- Source is Codex `PostToolUse` **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`, `agent.model` ← `model`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict).
+- Source is Codex `PostToolUse` **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict).
 
 ## Identity derivation
 
