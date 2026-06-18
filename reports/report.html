@@ -4131,6 +4131,38 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Setup propagation 1/4 — <code>claude-code-elastic</code> adopts the <code>setup.conf</code> convention</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Kept the existing 5-step order rather than reflowing to Codex's group order.</strong> Codex runs Kibana import last; <code>claude-code-elastic</code> has it as step 3 (before the agent render steps 4/5). The task said both "Keep the existing call shape" / "reproduces today's behavior" <em>and</em> "match Codex ordering wherever the stack's own steps allow." Since these steps are independent and idempotent, reordering would be cosmetic only, and the stronger, explicit constraint is reproducing today's behavior — so I preserved the current 1→5 order and call shapes, only restructuring the scaffolding (read <code>setup.conf</code>, fail-fast, export, indent).</li>
+      <li><strong>Bridged endpoints exactly the Codex way.</strong> <code>setup.sh</code> exports <code>ES_URL</code>/<code>KIBANA_URL</code> (the env contract the backend component scripts already read) and builds the three <code>/v1/{logs,traces,metrics}</code> URLs from <code>apm_server.otlp_endpoint</code> for the unchanged <code>render-otel</code> positional call. No component-script interface changed.</li>
+      <li><strong>Reduced <code>docker-compose.yml</code> to Codex's minimal form.</strong> The "lean" rule says add no comments beyond what <code>codex-cli-elastic</code> keeps — and Codex keeps none — so the explanatory header block (including the <code>name:</code>-is-explicit note) was stripped; <code>name:</code> + <code>include:</code> are byte-identical, confirmed by <code>docker compose config -q</code>.</li>
+      <li><strong>Dropped the <code>Invoke-Step</code> helper in <code>setup.ps1</code></strong> per the shared rule (inline <code>&amp;</code> + named args, relying on <code>$ErrorActionPreference = 'Stop'</code>), and piped each component step through <code>6&gt;&amp;1 | Indent</code> — verified all three Claude-specific <code>.ps1</code> component scripts emit via <code>Write-Host</code> (stream 6) so the indent catches their output.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>The smoke-test gate could not run against <code>claude-code-elastic</code>'s own project while <code>codex-cli-elastic</code> was up (shared <code>aol-*</code> container names + ports — a documented "cannot co-run" constraint). I briefly <code>docker compose down</code>'d codex (volume preserved), ran the claude smoke test to PASS, then <code>down -v</code>'d the throwaway claude stack and restored codex with <code>up -d</code> (healthy). Net effect on the user's environment: none.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The remaining three propagation tasks (2/4 <code>claude-code-otelcol-elastic</code>, 3/4 <code>claude-code-elastic-audit</code>, 4/4 <code>codex-cli-elastic-audit</code>) are independent and ready; each follows this same shape against its own step list.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <code>claude-code-elastic</code> stack's bootstrap now reads its endpoints from a new <code>setup.conf</code> at the stack root (Elasticsearch / Kibana / APM OTLP) instead of relying on baked-in defaults and env-var overrides — matching the canonical <code>codex-cli-elastic</code> pattern. <code>setup.sh</code>/<code>setup.ps1</code> were slimmed (prose headers gone, indented step output), <code>docker-compose.yml</code> reduced to the minimal include, and the README Quick Tour/Layout updated to the "edit <code>setup.conf</code>, then run setup" flow.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live against the running Elastic backend:</strong> no-arg <code>setup.sh</code> discovered <code>setup.conf</code> and ran all five steps to success (trace-routing <code>acknowledged</code>, <code>prompts-audit</code> created, 3 data views + 9 saved searches imported, settings + <code>.mcp.json</code> rendered). Fail-fast confirmed: missing file and empty key both exit <code>2</code>.</li>
+      <li><strong>Smoke test PASS</strong> end-to-end (metrics/logs/traces OTLP probes all HTTP 200 and all landed) on a freshly-brought-up claude stack.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> clean for all five stacks; <code>shfmt</code>/<code>shellcheck</code> clean on <code>setup.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on <code>setup.ps1</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

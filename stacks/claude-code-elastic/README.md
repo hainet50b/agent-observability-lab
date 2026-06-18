@@ -37,6 +37,7 @@ The shortest path from clone to "I see Claude Code telemetry in Kibana."
 cd stacks/claude-code-elastic
 docker compose up -d
 docker compose ps        # wait until all three services report healthy
+# edit setup.conf if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -44,8 +45,11 @@ Kibana is then at <http://localhost:5601>. `scripts/setup.sh` runs every post-up
 bootstrap step in one shot — it installs the trace-routing ingest pipeline
 (isolates Claude Code's spans into `traces-apm-agents_claude_code`), creates the
 `prompts-audit` index, and imports the Kibana saved objects — and is idempotent,
-so re-run it any time (e.g. after editing saved objects). Override endpoints with
-`ES_URL` / `KIBANA_URL` (or `-EsUrl` / `-KibanaUrl` for the `.ps1`).
+so re-run it any time (e.g. after editing saved objects). Both scripts read their
+target endpoints — Elasticsearch, the APM OTLP endpoint, and Kibana — from
+`setup.conf` at the stack root, or another file you pass (`setup.sh <config>` /
+`setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
+empty rather than assuming localhost.
 
 Optionally prove the pipeline end to end with the smoke test (see
 [Verify the pipeline](#verify-the-pipeline)):
@@ -362,6 +366,7 @@ claude mcp add elasticsearch -- `
 ```
 claude-code-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
+├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / APM OTLP / Kibana)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + prompts-audit + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
