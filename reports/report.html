@@ -3878,6 +3878,39 @@
       <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>smoke-test.sh</code> reaches PASS. No shell scripts touched.</li>
     </ul>
   </section>
+  <section class="entry">
+    <h2>Replace <code>render-settings</code> with <code>render-otel</code> — telemetry stacks render <code>env</code> only</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>JSON key-merge instead of whole-file create (unlike Codex's <code>render-otel</code>).</strong> Codex's <code>render-otel</code> writes the entire <code>config.toml</code>, but Claude's <code>settings.local.json</code> is a shared object that the audit stack will later add a <code>hooks</code> block to. So this renderer fills the four tokens in <code>otel.template.json</code>, extracts its <code>env</code> block (dropping <code>_comment</code>), and merges: writes <code>{ "env": {…} }</code> if the file is absent, adds <code>env</code> to an existing file only if it has none, and never clobbers an existing <code>env</code>. Verified the three paths plus a hooks-only file gaining <code>env</code> while keeping its <code>hooks</code> key.</li>
+      <li><strong>Caller constructs the per-signal endpoints; the renderer does no path math.</strong> Per the task, <code>render-otel</code> substitutes <code>@@OTLP_{LOGS,TRACES,METRICS}_ENDPOINT@@</code> with values supplied verbatim. The two <code>setup.{sh,ps1}</code> build them from each stack's OTLP base — direct APM <code>http://localhost:8200/v1/{logs,traces,metrics}</code>, otelcol collector <code>http://localhost:4318/v1/…</code> — so the <code>/v1/&lt;signal&gt;</code> path stays the backend's choice.</li>
+      <li><strong>Discovered the old <code>render-settings</code> was already broken.</strong> Its template <code>settings.template.json</code> no longer exists (the earlier split produced <code>otel.template.json</code> + <code>hook.template.json</code>), and <code>render-settings.ps1</code> still set <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>, a key absent from the new template. Deleting it was clean — the only references were the two setup scripts (rewired) and PRD.</li>
+      <li><strong><code>@@OTLP_HEADERS@@</code> defaults to empty.</strong> Both stacks run security-disabled, so no auth header; the optional fifth arg / <code>-OtlpHeaders</code> param fills it for a future secured variant. Result is <code>"OTEL_EXPORTER_OTLP_HEADERS": ""</code>, harmless for the demo.</li>
+      <li><strong>Hook registration removed from the telemetry stacks by construction.</strong> Switching the renderer means the rendered <code>settings.local.json</code> now carries <code>env</code> only — no <code>hooks</code> block. Prompt auditing moves to the separate <code>claude-code-elastic-audit</code> stack (its own queued tasks); the setup header comments were updated to say so.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None for this task. See the suggestion below about the now-orphaned audit step.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>With the prompt-capture hook gone from the telemetry stacks, <code>setup.{sh,ps1}</code> step 2 (<code>setup-prompt-audit</code>, the older flat <code>prompts-audit</code> index) now provisions a store nothing in these stacks writes to. I left it untouched (out of this task's scope), but a follow-up could drop that step from the telemetry stacks once <code>claude-code-elastic-audit</code> owns the audit path — leaving the telemetry stacks purely OTLP.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <code>claude-code-elastic</code> and <code>claude-code-otelcol-elastic</code> setups now render a telemetry-only <code>.claude/settings.local.json</code> — three per-signal OTLP endpoints in an <code>env</code> block, no audit hook. The old <code>render-settings.{sh,ps1}</code> (which also wired a prompt-capture hook, and whose template no longer existed) is replaced by <code>render-otel.{sh,ps1}</code>, a create-if-absent JSON merge that never clobbers your edits. Prompt auditing now belongs to the dedicated audit stack.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Functionally verified both shells</strong> on temp dirs: create-if-absent writes <code>env</code>-only with all tokens filled (none left), re-running is a byte-identical no-op, and merging into a hooks-only file adds <code>env</code> while preserving <code>hooks</code>.</li>
+      <li><strong>Gates:</strong> <code>shfmt -d</code> empty and <code>shellcheck</code> clean on the new <code>.sh</code> + both setup scripts; <code>Invoke-ScriptAnalyzer</code> clean on the new <code>.ps1</code> + both setup scripts; <code>docker compose config -q</code> passes for all four stacks. The "a <code>claude</code> session lands logs/traces/metrics" check is the live/manual verification, unchanged by this refactor.</li>
+      <li>Worth a glance: the orphaned <code>setup-prompt-audit</code> step noted under Next PRD suggestions.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

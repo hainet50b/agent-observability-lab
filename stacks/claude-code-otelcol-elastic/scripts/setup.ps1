@@ -4,10 +4,11 @@
 # PowerShell mirror of setup.sh. Run once after `docker compose up -d` (healthy).
 # Steps: 1) trace-routing pipeline  2) prompts-audit index  3) Kibana saved
 # objects (backend, agent, sidecar)  4) render .claude/settings.local.json
-# (telemetry env pointed at the Collector + audit hook) from the agent-owned
-# template, so a `claude` launched from this directory auto-emits telemetry and
-# audits prompts. Steps 1-3 idempotent; step 4 is create-if-absent. Override
-# endpoints with -EsUrl / -KibanaUrl. Verification stays separate.
+# (telemetry env only, pointed at the Collector) from the agent-owned template,
+# so a `claude` launched from this directory auto-emits telemetry. Prompt
+# auditing lives in the separate claude-code-elastic-audit stack, not here.
+# Steps 1-3 idempotent; step 4 is create-if-absent. Override endpoints with
+# -EsUrl / -KibanaUrl. Verification stays separate.
 
 [CmdletBinding()]
 param(
@@ -35,9 +36,10 @@ Invoke-Step -Label '1/4 - trace-routing ingest pipeline' -Path (Join-Path $C 'ba
 Invoke-Step -Label '2/4 - prompts-audit index' -Path (Join-Path $C 'backends/elastic/scripts/setup-prompt-audit.ps1') -StepArgs $es
 $kb['Sources'] = @('claude-code', 'otelcol-sidecar')
 Invoke-Step -Label '3/4 - Kibana saved objects' -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs $kb
-Invoke-Step -Label '4/4 - local Claude Code settings (telemetry env + audit hook)' `
-    -Path (Join-Path $C 'agents/claude-code/scripts/render-settings.ps1') `
-    -StepArgs @{ OtlpEndpoint = $OtlpEndpoint; TargetDir = $StackDir }
+Invoke-Step -Label '4/4 - local Claude Code settings (telemetry env)' `
+    -Path (Join-Path $C 'agents/claude-code/scripts/render-otel.ps1') `
+    -StepArgs @{ TargetDir = $StackDir; LogsEndpoint = "$OtlpEndpoint/v1/logs"; TracesEndpoint = "$OtlpEndpoint/v1/traces"; MetricsEndpoint = "$OtlpEndpoint/v1/metrics" }
 
 Write-Host "[setup] done - run 'claude' here; verify with smoke-test.sh (and resilience-test.sh)."
+
 

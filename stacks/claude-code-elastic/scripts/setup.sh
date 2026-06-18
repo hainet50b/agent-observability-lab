@@ -7,9 +7,10 @@
 #   1. backend — trace-routing ingest pipeline
 #   2. backend — prompts-audit index
 #   3. Kibana saved objects (backend cross-agent view, then the agent assets)
-#   4. agent — render .claude/settings.local.json (telemetry env + audit hook)
-#      from the agent-owned template, so a `claude` launched from this directory
-#      auto-emits telemetry and audits prompts (no manual export / hook registration)
+#   4. agent — render .claude/settings.local.json (telemetry env only) from the
+#      agent-owned template, so a `claude` launched from this directory
+#      auto-emits telemetry (no manual export). Prompt auditing lives in the
+#      separate claude-code-elastic-audit stack, not here.
 #
 # Steps 1–3 are idempotent. Step 4 is create-if-absent (your edits survive a
 # re-run; delete the file to regenerate). Override endpoints with ES_URL /
@@ -33,7 +34,8 @@ echo "[setup] 2/4 — prompts-audit index"
 echo "[setup] 3/4 — Kibana saved objects"
 "$C/backends/elastic/scripts/import-kibana-objects.sh" claude-code
 
-echo "[setup] 4/4 — local Claude Code settings (telemetry env + audit hook)"
-"$C/agents/claude-code/scripts/render-settings.sh" "$OTLP_ENDPOINT" "$STACK_DIR"
+echo "[setup] 4/4 — local Claude Code settings (telemetry env)"
+"$C/agents/claude-code/scripts/render-otel.sh" "$STACK_DIR" \
+  "$OTLP_ENDPOINT/v1/logs" "$OTLP_ENDPOINT/v1/traces" "$OTLP_ENDPOINT/v1/metrics"
 
 echo "[setup] done ✓ — run 'claude' from this directory; verify with scripts/smoke-test.sh."
