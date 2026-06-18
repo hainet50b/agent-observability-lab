@@ -3431,6 +3431,35 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Add a Claude Code — Conversations saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Authored the entry in the Codex ES|QL house style (the <code>EVAL is_*</code> discriminators, <code>ts_ms</code> duration, <code>docs</code>, <code>COUNT_DISTINCT</code>) to match <strong>Codex CLI — Conversations</strong> — <code>isTextBasedQuery: true</code>, empty <code>sort</code>, no <code>references</code> (the query carries its own <code>FROM</code>).</li>
+      <li>Built the NDJSON line with <code>jq --rawfile</code> rather than hand-escaping the multi-line ES|QL, so the embedded query's quotes and newlines are guaranteed valid JSON.</li>
+      <li>No real choice on columns / query — both were specified verbatim by the task.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. Trace-derived columns (precise per-turn duration, TTFT) are explicitly deferred to a later traces diff, as the task states.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — the next several open tasks already cover the remaining Codex-aligned reworks (Turns, User Prompts, Turn Timeline, the entity renames).</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a <strong>Claude Code — Conversations</strong> saved search — an ES|QL session-level usage rollup (one row per <code>session.id</code>: turns, prompts, LLM requests, tool calls, hooks, token sums, cost), Claude's counterpart to Codex's Conversations view. The Claude saved-search set is now 15.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> the ES|QL query runs and returns one row per session (the active session shows 11 turns / 19 LLM requests / 10 tool calls / $0.95); all 16 NDJSON lines parse with <code>jq</code>; the import reports <code>success: true, successCount: 15, errors: 0</code>.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
