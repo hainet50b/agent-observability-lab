@@ -3488,6 +3488,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Rework the Claude Code — User Prompts saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Column-only edit via a targeted <code>jq</code> transform on the <code>claude-code-user-prompts</code> object — left the single <code>message: claude_code.user_prompt</code> filter pill, the <code>references[]</code>, and the <code>@timestamp</code> desc sort untouched (confirmed post-edit: one <code>message</code> pill, 2 refs). No <code>exportedCount</code> change.</li>
+      <li>Kept <code>labels.command_name</code> / <code>labels.command_source</code> as columns even though absent from current live data — they populate only on slash-command prompts, and a saved object stores column <em>names</em> only, so their absence is informative not broken (per the task's doc-confirmed attribute list).</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Reworked <strong>Claude Code — User Prompts</strong> to the agent-activity-model column set: <code>@timestamp</code> lead, the prompt content + length, the slash-command fields, then <code>session.id</code> / <code>prompt_id</code> — dropping the <code>user_email</code> lead and <code>trace.id</code> (identity is now an audit concern; <code>trace.id</code> returns with the traces diff).</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> the file imports <code>success: true, successCount: 16, errors: 0</code>; the search retains exactly one <code>message</code> filter pill with an empty query bar and the new column order.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
