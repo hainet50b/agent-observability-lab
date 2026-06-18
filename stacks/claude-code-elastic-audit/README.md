@@ -72,6 +72,7 @@ The shortest path from clone to "I see Claude prompts in Elasticsearch."
 cd stacks/claude-code-elastic-audit
 docker compose up -d
 docker compose ps        # wait until both services report healthy
+# edit setup.conf if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -83,8 +84,10 @@ and their strict index templates, registers the `UserPromptSubmit` hook in
 `.claude/settings.local.json`, renders the hook delivery config to
 `.claude/agent-audit.conf`, writes the Elasticsearch MCP to `.mcp.json` (all in this
 directory), and imports the Agent Audit Kibana **data views** and **saved searches**.
-Steps are idempotent / create-if-absent, so re-run it any time. Override the ES
-endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the Kibana URL with `KIBANA_URL`.
+Steps are idempotent / create-if-absent, so re-run it any time. Both scripts read
+their target endpoints — Elasticsearch and Kibana — from `setup.conf` at the stack
+root, or another file you pass (`setup.sh <config>` / `setup.ps1 -Config <config>`);
+they fail fast if the file is missing or a key is empty rather than assuming localhost.
 
 ### 2. Point a Claude session at the stack
 
@@ -171,6 +174,7 @@ with the human:
 ```
 claude-code-elastic-audit/
 ├─ docker-compose.yml                     # thin composition: `include:`s the elastic-audit backend component
+├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / Kibana)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
    ├─ setup.sh                            # bootstrap: audit streams + settings.local.json (hook) + agent-audit.conf + .mcp.json + Kibana import

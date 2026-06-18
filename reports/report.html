@@ -4190,6 +4190,38 @@
     </ul>
   </section>
 
+  <section>
+    <h2>setup propagation 3/4 — <code>claude-code-elastic-audit</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Mirrored the canonical pattern verbatim.</strong> Reused the exact <code>setup.conf</code> reader, fail-fast loop, <code>indent()</code> / <code>filter Indent</code>, and inline-step shape already shipped for the other four stacks — the audit stack only differs in keys (no <code>apm_server.otlp_endpoint</code>) and step list (audit hooks, no OTLP render). <code>setup.conf</code> carries only <code>elasticsearch.url</code> + <code>kibana.url</code>, the two endpoints this path actually targets.</li>
+      <li><strong>Bridged values to the existing component interfaces unchanged.</strong> sh exports <code>ES_URL</code>/<code>KIBANA_URL</code> (the env contract <code>setup-agent-audit.sh</code> and <code>import-kibana-objects.sh</code> already read) and passes the ES base positionally to <code>render-agent-audit.sh</code>; ps1 forwards <code>-EsUrl</code>/<code>-KibanaUrl</code> as named params. No component script was touched.</li>
+      <li><strong>Dropped the <code>Invoke-Step</code> helper for inline steps.</strong> Per the group's "ps1 inline" rule, each step is now <code>&amp;</code> + named args relying on <code>$ErrorActionPreference = 'Stop'</code>, matching the sibling stacks.</li>
+      <li><strong>Stripped the long compose + script prose headers</strong> down to the bare <code>name:</code> + <code>include:</code> compose and header-less scripts, matching <code>codex-cli-elastic</code>; the "why no APM Server / alternative-not-co-run" rationale already lives in the README, so nothing load-bearing was lost.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Cross-run hook spawn breaks on a CRLF-tainted <code>settings.local.json</code>.</strong> A <code>.claude/settings.local.json</code> rendered by <code>render-hook.ps1</code> stores each hook arg with a trailing <code>\r</code> (e.g. <code>Bypass\r</code>); when <code>verify-agent-audit.sh</code> (bash) spawns that PowerShell exec-form hook, <code>-ExecutionPolicy Bypass\r</code> is invalid so the policy stays <code>RemoteSigned</code> and the unsigned script is blocked → no document lands. Not caused by this task (it only touches setup config plumbing). The native paths are clean: <code>setup.sh</code>→<code>render-hook.sh</code> writes a POSIX command-string hook that <code>verify-agent-audit.sh</code> runs to PASS, and <code>verify-agent-audit.ps1</code> tolerates the <code>\r</code> when launching <code>powershell.exe</code> natively (PASS). The bug only surfaces in the unsupported cross-run (.ps1-rendered hook spawned from bash).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li><strong>Fix the <code>\r</code> in <code>render-hook.ps1</code>'s emitted hook args.</strong> The exec-form arg list is written with embedded carriage returns inside the JSON string values (visible as <code>^M</code> in <code>jq -r '…args[]'</code>). Harmless on the native PowerShell path but a latent footgun for anything that re-spawns those args through a non-Windows shell. A small renderer task to strip the CR before writing would make the rendered file shell-agnostic.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The <code>claude-code-elastic-audit</code> stack's bootstrap now reads its two endpoints (Elasticsearch / Kibana) from a new <code>setup.conf</code> at the stack root instead of env-var-overridable defaults, matching the canonical setup pattern. <code>setup.sh</code>/<code>setup.ps1</code> were slimmed (headers gone, indented step output, fail-fast on a missing file or empty key, inline ps1 steps), the compose file stripped to a bare <code>include:</code>, and the README Quick Tour/Layout moved to the "edit <code>setup.conf</code>, then run setup" flow.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live against the <code>elastic-audit</code> backend</strong> (brought up by swapping out the running <code>codex-cli-elastic</code> stack, then restored): no-arg <code>setup.sh</code> <em>and</em> <code>setup.ps1</code> both discovered <code>setup.conf</code> and ran all five steps to success (audit data streams provisioned, hook registered, <code>agent-audit.conf</code> + <code>.mcp.json</code> rendered, 4 Kibana objects imported). Fail-fast confirmed on both: missing file and empty key each exit <code>2</code>.</li>
+      <li><strong>Both verify scripts reach PASS</strong> when the agent home is set up by their matching setup script — <code>verify-agent-audit.sh</code> (POSIX hook) and <code>verify-agent-audit.ps1</code> (PowerShell exec hook). See Unresolved for the cross-run caveat.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> clean for all five stacks; <code>shfmt -d</code> empty + <code>shellcheck</code> clean on <code>setup.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on <code>setup.ps1</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
