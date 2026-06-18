@@ -1,0 +1,25 @@
+# claude-code-elastic-audit — direct agent-audit, Elastic backend (composition).
+#
+# The audit counterpart to claude-code-elastic. It composes the **elastic-audit**
+# backend (Elasticsearch + Kibana, NO APM Server) with Claude Code's audit hook:
+# each submitted prompt is written straight to Elasticsearch
+# (logs-agent_audit.user_prompt-default) by a fail-open UserPromptSubmit hook — a
+# direct path that never traverses the OTLP / APM pipeline (see
+# SPEC/agent-audit.md "Where this runs"). Because there is no telemetry here, the
+# composed backend visibly carries no APM Server.
+#
+# This reuses the elastic-audit backend wholesale (same as codex-cli-elastic-audit),
+# adding only Claude Code's audit hook. It is an ALTERNATIVE to claude-code-elastic,
+# not a co-run: it reuses the same aol-* container names and host ports (9200 / 5601),
+# and owns its own Compose project, volumes, and agent home (.claude with
+# settings.local.json — the UserPromptSubmit hook registration — agent-audit.conf,
+# and .mcp.json; no telemetry env). `docker compose down` the telemetry stack — or
+# any other Elastic stack — before bringing this one up.
+#
+# `name:` is set explicitly so the Compose project name is claude-code-elastic-audit
+# (and not derived from an included file's own `name:`).
+
+name: claude-code-elastic-audit
+
+include:
+  - ../../components/backends/elastic-audit/docker-compose.yml

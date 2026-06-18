@@ -4036,6 +4036,40 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Claude Code audit hook (3/3): the <code>claude-code-elastic-audit</code> stack</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Mirrored <code>codex-cli-elastic-audit</code> structurally, reusing the <code>elastic-audit</code> backend wholesale.</strong> The compose is a thin <code>include:</code> of <code>../../components/backends/elastic-audit/docker-compose.yml</code> with an explicit <code>name: claude-code-elastic-audit</code> — resolved services are exactly <code>elasticsearch</code> + <code>kibana</code>, <strong>no APM Server</strong> (verified via <code>docker compose config --services</code>). The only Claude-specific additions are the agent home contents the setup renders.</li>
+      <li><strong><code>setup.{sh,ps1}</code> ordering: provision → render-hook → render-agent-audit → render-mcp → Kibana import.</strong> render-hook runs before render-agent-audit deliberately (it only writes the conf <em>path</em> into the hook command; the conf file is rendered next) — exactly the task's order. No <code>render-otel</code> step: the audit stack has no telemetry env. The agent home ends up with <code>settings.local.json</code> (the hook), <code>agent-audit.conf</code> (delivery), and <code>.mcp.json</code> (ES MCP) — and no telemetry, matching SPEC "Where this runs".</li>
+      <li><strong>Single hook, not two.</strong> Codex captures both <code>user_prompt</code> and <code>tool_call</code>; Claude Code's audit today is <code>UserPromptSubmit</code> only (no <code>PostToolUse</code> capture hook yet), so the stack ships one verify script and the README flags tool-call capture as deferred. The shared backend still provisions the <code>tool_call</code> stream (cross-agent schema), which is harmless and documented.</li>
+      <li><strong><code>verify-agent-audit.{sh,ps1}</code> assert on Claude specifics.</strong> Beyond the Codex-shared checks (doc lands, host enrichment, account/organization present, no <code>user.email</code>, <code>user.id</code> derived), the Claude verify asserts <code>provider=anthropic</code>, <code>name=claude-code</code>, <code>turn_id=null</code>, and <strong>no <code>model</code></strong> field; the synthetic payload omits <code>turn_id</code>/<code>model</code> and includes <code>cwd</code> to confirm the strict mapping drops it. The hook registration precondition checks <code>.hooks.UserPromptSubmit</code> in <code>settings.local.json</code> (JSON via jq) rather than Codex's TOML grep. Provider <code>account.id</code> is informational (read from the user's global <code>~/.claude.json</code>, which may be API-key/unauthenticated).</li>
+      <li><strong>No stack-local <code>.gitignore</code> needed.</strong> The root <code>.gitignore</code> already covers <code>.claude/</code> and (from task 2 of this session) <code>.mcp.json</code> at any depth — same as how <code>codex-cli-elastic-audit</code> relies on the root for <code>.codex/</code>. Confirmed the rendered agent home does not show in <code>git status</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>The verify scripts' <code>docker compose up</code> Arrange was not exercised live</strong> — a sibling Elastic stack already occupied the <code>aol-*</code> container names / ports (these stacks are alternatives, not co-run), so starting the audit project would collide. Instead I ran <code>setup.sh</code> against the already-running ES/Kibana and drove the registered hook directly (the verify's Act/Assert), which is the same delivery path. The scripts are lint-clean and their up/health-wait logic matches the proven Codex sibling.</li>
+      <li>Cosmetic: on this git-bash host the rendered hook <code>command</code> mixes path forms (<code>C:/…</code> for the script via <code>cd…pwd</code>, <code>/c/…</code> for the injected conf via the stack <code>cd…pwd</code>). Both resolve correctly in git-bash and on a real POSIX host both would be identical; not worth special-casing.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>A Claude <code>PostToolUse</code> audit hook (writing <code>logs-agent_audit.tool_call-default</code>, as Codex already does) is the natural next increment — the stream and Kibana view already exist cross-agent.</li>
+      <li>Prompt sealing/encryption (null <code>text</code>, populated <code>encrypted_text</code>) is reserved in the schema but unbuilt for both agents.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>New <code>stacks/claude-code-elastic-audit/</code> — the audit counterpart to <code>claude-code-elastic</code>. It composes the <code>elastic-audit</code> backend (Elasticsearch + Kibana, <strong>no APM Server</strong>) and adds Claude Code's <code>UserPromptSubmit</code> audit hook: <code>scripts/setup.{sh,ps1}</code> provision the Agent Audit data streams, register the hook in <code>.claude/settings.local.json</code> with an injected <code>--config</code>, render <code>.claude/agent-audit.conf</code> and <code>.mcp.json</code>, and import the Agent Audit Kibana views; <code>scripts/verify-agent-audit.{sh,ps1}</code> prove the hook → Elasticsearch path; a Quick-Tour README ships alongside. This completes the claude-code-elastic-audit initiative.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end-to-end on the live stack.</strong> <code>setup.sh</code> ran all five steps green (streams + templates acknowledged, agent home rendered, both Agent Audit Kibana objects imported); driving the registered hook with the rendered <code>agent-audit.conf</code> landed a canonical document (HTTP 201) — <code>anthropic</code>/<code>claude-code</code>, <code>turn_id=null</code>, <code>conversation_id==session_id</code>, no <code>model</code>, account/organization present, no <code>user.email</code>, multibyte prompt <code>length=21</code>. All throwaway streams/templates/Kibana objects and the generated agent home were deleted afterward — ES/Kibana left as found.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> passes for all five stacks and the audit stack resolves to <code>elasticsearch</code>+<code>kibana</code> only (no APM Server); <code>shfmt -d</code> empty + <code>shellcheck</code> clean on both new <code>.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on both new <code>.ps1</code>; the gitignored agent home does not appear in <code>git status</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
