@@ -135,6 +135,8 @@ Identity fields are populated best-effort by the hook sender, **locally and with
   - `organization.id` / `organization.name` ← the `is_default` entry (fallback: first) of the `id_token` `https://api.openai.com/auth` → `organizations` array, mapping `.id` → `organization.id` and **`.title`** → `organization.name` (the claim has no `name` key — the human-readable label is `title`).
   - The `id_token` is a JWT whose payload (second `.`-separated segment) is base64url-decoded and read as JSON claims; it is **not** signature-verified (a local, trusted file). In API-key auth mode (no `id_token` / `tokens`) these fields stay `null`.
 
+  For **Claude Code** the store is `~/.claude.json` — its `oauthAccount` object, **plain JSON (no JWT to decode)**: `account.id` ← `accountUuid`, `account.name` ← `displayName`, `account.email` ← `emailAddress`, `organization.id` ← `organizationUuid`, `organization.name` ← `organizationName`. Any missing key leaves the field `null` (API-key / unauthenticated sessions have no `oauthAccount`). Claude's `UserPromptSubmit` hook payload carries **no turn id**, so `agent_audit.turn_id` is `null` (`conversation_id` ← `session_id` still links to the OTLP session); the payload also has no model (model reaches only `SessionStart` hooks), consistent with `agent_audit.agent.model` having been dropped from the schema.
+
 ## Mapping and lifecycle
 
 - Audit data stream mappings are strict by default. Unexpected fields should fail indexing rather than silently expanding the audit schema.
