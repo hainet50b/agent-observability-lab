@@ -3709,6 +3709,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Delete four more out-of-scope Claude saved searches</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Removed all four ids in one <code>jq</code> reject pass and rebuilt the summary: <code>exportedCount</code> 12 → 8 and, because Interactions / Traces were the only objects on the <code>claude-code-traces</code> data view, dropped that id from <code>missingReferences</code> (<code>missingRefCount</code> 2 → 1). Confirmed programmatically that no remaining search references <code>claude-code-traces</code> before editing the summary.</li>
+      <li>Left the <code>claude-code-traces</code> data-view object itself in <code>data-views.ndjson</code> — the two trace-based searches are deferred to the traces diff, not gone for good.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Deleted <strong>API Bodies</strong>, <strong>API Retries Exhausted</strong>, <strong>Interactions</strong>, and <strong>Traces</strong> — audit/gated content and trace-based views that are empty with tracing off. The trace-based two return with the traces diff. The Claude saved-search set is now 8.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> none of the four remain in the NDJSON; each deleted (HTTP 200); import reports <code>success: true, successCount: 8</code>; summary now <code>exportedCount: 8, missingRefCount: 1</code>.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
