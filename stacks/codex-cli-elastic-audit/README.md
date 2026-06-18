@@ -71,6 +71,7 @@ Elasticsearch."
 cd stacks/codex-cli-elastic-audit
 docker compose up -d
 docker compose ps        # wait until both services report healthy
+# edit setup.conf if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -82,8 +83,10 @@ streams and their strict index templates, renders the hook delivery config to
 `.codex/agent-audit.conf` and registers the audit hooks as inline `[hooks]` in
 `.codex/config.toml` (both in this directory), and imports the Agent Audit Kibana **data views** and
 **saved searches**. Steps are idempotent / create-if-absent, so re-run it any
-time. Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`) and the
-Kibana URL with `KIBANA_URL`.
+time. Both scripts read their target endpoints — Elasticsearch and Kibana — from
+`setup.conf` at the stack root, or another file you pass (`setup.sh <config>` /
+`setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
+empty rather than assuming localhost.
 
 ### 2. Point a Codex session at the stack
 
@@ -186,6 +189,7 @@ later, with the human:
 ```
 codex-cli-elastic-audit/
 ├─ docker-compose.yml                     # thin composition: `include:`s the elastic-audit backend component
+├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / Kibana)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
    ├─ setup.sh                            # bootstrap: audit streams + config.toml (hooks + MCP) + agent-audit.conf + Kibana import
