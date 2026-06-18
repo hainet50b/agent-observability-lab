@@ -222,10 +222,10 @@ after editing the NDJSON, just re-run `scripts/setup.sh` (idempotent). You can
 also import from the Kibana UI (Stack Management → Saved Objects → **Import**,
 data views first).
 
-This brings in the **Metrics**, **Events**, **Traces**, **AI Agents — Traces**,
-and **OTel Collector Sidecar — Metrics** data views, the curated **saved
-searches** (Event Overview, API Requests, Tool Results, …, Interactions, Traces),
-and the **Claude Code — Overview** dashboard.
+This brings in the **Metrics**, **Events**, **Traces**, and **OTel Collector
+Sidecar — Metrics** data views, the curated **saved searches** (Event Overview,
+API Requests, Tool Results, …, Interactions, Traces), and the **OTel Collector
+Sidecar — Health** dashboard.
 
 ### 4. See the telemetry in Kibana
 
@@ -367,9 +367,9 @@ claude-code-otelcol-elastic/
 `setup.{sh,ps1}` calls the component bootstrap scripts directly. The Collector
 service, its config, and its self-telemetry data view — with their own import
 script — live in `../../components/paths/otelcol-sidecar/`. The backend services,
-their config, the cross-agent data view, the `traces-apm@custom` pipeline body,
+their config, the `traces-apm@custom` pipeline body,
 the `prompts-audit` index mapping, and the Backend bootstrap scripts live in
 `../../components/backends/elastic/`; the Claude Code agent's data views, saved
-searches, Overview dashboard — with their own import script — and the
+searches — with their own import script — and the
 prompt-capture **hooks**, and the **settings template + render scripts** (the
 `.claude/settings.local.json` content) live in `../../components/agents/claude-code/`.

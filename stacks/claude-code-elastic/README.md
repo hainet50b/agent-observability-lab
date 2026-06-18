@@ -191,27 +191,23 @@ so data lands within ~10–30s.
 
 ### 3. Import the Kibana saved objects
 
-The importable NDJSON lives in the component directories — the backend's
-cross-agent data view in `../../components/backends/elastic/kibana/`
-(`agents-data-views.ndjson`), and the Claude Code agent's **data views**
-(`data-views.ndjson`), **saved searches** (`saved-searches.ndjson`), and
-**dashboard** (`dashboard.ndjson`) in
-`../../components/agents/claude-code/kibana/`. The import helper below pulls
-them in dependency order:
+The importable NDJSON lives in the component directories — the Claude Code
+agent's **data views** (`data-views.ndjson`) and **saved searches**
+(`saved-searches.ndjson`) in
+`../../components/backends/elastic/kibana/claude-code/`. The import helper below
+pulls them in dependency order:
 
 | Saved object | Type | Shows |
 | --- | --- | --- |
 | **Claude Code — Metrics** | data view (`metrics-apm.app.claude_code*`) | the numeric metric documents (physically scoped to the agent's data stream) |
 | **Claude Code — Events** | data view (`logs-apm.app.claude_code*`) | the prompt / tool-result / API-request events (physically scoped to the agent's data stream) |
 | **Claude Code — Traces** | data view (`traces-apm-agents_claude_code*`) | this agent's beta trace spans (per-agent isolated) |
-| **AI Agents — Traces** | data view (`traces-apm-agents_*`) | all AI agents' trace spans (cross-agent: claude_code, codex, …), excludes non-agent traces |
 | **Event Overview**, **API Requests**, **Tool Results**, **Tool Decisions**, **User Prompts**, **Hook Registered**, **Hook Executions**, **Subagent Completions**, **Permission Mode Changes**, **MCP Server Connections**, **Auth Events** | saved searches | **Event Overview** is the all-event-types timeline; the rest are per-`message` curated column views on the Events data view (each ends with `trace.id`, a click-through to the APM UI trace) |
 | **Claude Code — Interactions** | saved search | one row per **interactive turn** (the `interaction` root) — rich turn columns (prompt, sequence, duration); interactive-only |
 | **Claude Code — Traces** | saved search | one row per **trace, all session types** (`processor.event: transaction`); `transaction.name` shows the root type (interaction vs llm_request/tool) |
-| **Claude Code — Overview** | dashboard | a starter demo dashboard — Lens panels over the metrics & events data views |
 
-The saved searches and the dashboard **reference the data views**, so they are
-imported data-views-first (or all together).
+The saved searches **reference the data views**, so they are imported
+data-views-first (or together).
 
 - **Already imported by `scripts/setup.sh`** (step 1) — it runs the backend
   import then the agent import, each in dependency order (data views first). To
@@ -395,10 +391,10 @@ claude-code-elastic/
 ```
 
 `setup.{sh,ps1}` calls the component bootstrap scripts directly. The backend
-services, their config, the cross-agent data view, the `traces-apm@custom`
+services, their config, the `traces-apm@custom`
 pipeline body, the `prompts-audit` index mapping, and the Backend bootstrap
 scripts (trace-routing, prompt-audit, Kibana import) live in
 `../../components/backends/elastic/`; the Claude Code agent's data views, saved
-searches, Overview dashboard — with their own import script — and the
+searches — with their own import script — and the
 prompt-capture **hooks**, and the **settings template + render scripts** (the
 `.claude/settings.local.json` content) live in `../../components/agents/claude-code/`.

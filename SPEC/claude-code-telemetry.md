@@ -4,8 +4,11 @@ What Claude Code actually emits into the `claude-code-elastic` stack, captured
 from live sessions (`service.name = claude-code`, Claude Code 2.1.159, Stack
 9.4.2). Discover is the source of truth for the version you run — names and
 fields can change. This is the agent-knowledge companion to the stack's Quick
-Tour (`stacks/claude-code-elastic/README.md`); the Kibana views built on top of
-these signals are documented in [`kibana-saved-objects.md`](kibana-saved-objects.md).
+Tour (`stacks/claude-code-elastic/README.md`); the Kibana views built on these
+signals ship as importable NDJSON in
+`components/backends/elastic/kibana/claude-code/` — curated Discover **saved
+searches** rather than extra data views (a data view holds only an index-pattern
++ time field, not a stored query or columns).
 
 ## How to read the data
 
@@ -146,10 +149,9 @@ below).
   (the Claude Code docs state the same for `prompt.id`); there is no metric↔trace join,
   correlate metrics to a run by shared dimensions like `session.id` instead.
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
-  map and trace waterfalls — is the natural home; two Discover data views also let
-  you scan spans — **Claude Code — Traces** (`traces-apm-agents_claude_code*`, this
-  agent) and **AI Agents — Traces** (`traces-apm-agents_*`, all agents). Two saved
-  searches sit on the per-agent view: **Claude Code — Interactions** (one row per
+  map and trace waterfalls — is the natural home; the **Claude Code — Traces**
+  Discover data view (`traces-apm-agents_claude_code*`, this agent) also lets
+  you scan spans. Two saved searches sit on it: **Claude Code — Interactions** (one row per
   *interactive turn* — the `interaction` root, with rich prompt/sequence/duration
   columns; interactive-only) and **Claude Code — Traces** (one row per *trace*,
   all session types, via `processor.event: transaction`). On these data views
