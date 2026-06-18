@@ -3402,6 +3402,35 @@
       <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>shfmt -d</code> empty and <code>shellcheck</code> clean on the touched <code>.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on the touched <code>.ps1</code>.</li>
     </ul>
   </section>
+  <section>
+    <h2>Delete four out-of-model Claude saved searches</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>The four target ids (<code>claude-code-subagent-completions</code>, <code>-permission-mode-changes</code>, <code>-mcp-server-connections</code>, <code>-auth-events</code>) use hyphenated ids that never appear elsewhere in the file (the corresponding <code>message</code> filters use the underscore form, e.g. <code>claude_code.subagent_completed</code>), so a single <code>grep -vE</code> on the four hyphenated ids cleanly drops exactly four lines with no collateral matches — confirmed by a pre-edit count of 4.</li>
+      <li>Set the trailing summary's <code>exportedCount</code> 18 → 14 and left <code>missingRefCount</code> / <code>missingReferences</code> untouched, exactly as the task specified (the two missing-ref data-view ids remain valid for the surviving searches).</li>
+      <li>Import-with-overwrite does not delete objects absent from the file, so the four would have lingered in the live Kibana. Issued explicit <code>DELETE</code>s for the four saved-object ids to realize the "gone from Discover" end state.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — the file is now 14 saved searches all within <code>SPEC/agent-activity-model.md</code>.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Removed four session-lifecycle / nested-agent Kibana saved searches (<strong>Subagent Completions</strong>, <strong>Permission Mode Changes</strong>, <strong>MCP Server Connections</strong>, <strong>Auth Events</strong>) that fell outside the agent-activity model. Those events still land in <code>logs-apm.app.claude_code*</code> and remain visible via <strong>Event Overview</strong>. The Claude Code saved-search set is now 14.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> all 15 NDJSON lines re-parse with <code>jq</code>; the import reports <code>success: true, successCount: 14, errors: 0</code>; the four ids were deleted (HTTP 200 each) and a Saved Objects <code>_find</code> shows exactly 14 <code>claude-code</code> search objects with none of the four present.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
