@@ -3765,6 +3765,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Add a Claude Code — Tool Call Errors saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Two-pill view: <code>message: claude_code.tool_result</code> AND <code>labels.success: false</code>, each filter's <code>meta.index</code> wired through its own <code>references[]</code> entry (<code>filter[0]</code> / <code>filter[1]</code>) plus the main index ref — 3 references total. Built with <code>jq -n</code> for safe JSON.</li>
+      <li>Confirmed the two-pill predicate returns the live failed row (an <code>mcp_tool</code> / <code>McpError</code>) before shipping, so the view is non-empty against current telemetry.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. As documented, <code>success: false</code> includes benign failures — this is a "failed tool calls" browse view by design; <code>error_type</code> + row content separate real faults from trial-and-error.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — this completes the Codex-aligned Claude saved-search rebuild. The remaining trace-based views (Interactions, Traces) are tracked as the future "traces diff".</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added <strong>Claude Code — Tool Call Errors</strong> — the Tool Call error complement, a two-pill view on failed <code>tool_result</code> events with <code>error_type</code> and the Tool Calls column set. The Claude saved-search set is now 9.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> the object has exactly two filter pills and 3 refs; the predicate returns the live <code>McpError</code> row; all 10 NDJSON lines parse; import reports <code>success: true, successCount: 9, errors: 0</code>.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
