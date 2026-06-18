@@ -1,0 +1,40 @@
+# Elasticsearch service fragment — shared, agent- and backend-agnostic.
+#
+# Composed into backends via `docker compose include:`, so it carries no
+# top-level `name:`. Single-node, security-disabled local demo; do NOT expose
+# publicly. All services share one pinned Elastic Stack version (9.4.2).
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
+    container_name: aol-elasticsearch
+    environment:
+      # Heap sizing is a process env read by the ES startup script, not a YAML
+      # setting — kept here (rather than a jvm.options file) so it is visible
+      # next to the container resource limits.
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      # Bind to localhost only — demo posture, never exposed publicly.
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - ./config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      # Security is disabled, so the HTTP API is reachable without auth/TLS.
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  elasticsearch-data:
+    driver: local

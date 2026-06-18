@@ -36,6 +36,26 @@
 <p>Verified end-to-end on the live stack: <code>docker compose config -q</code> (all stacks), <code>shfmt -d</code> empty + <code>shellcheck</code> clean on <code>setup.sh</code>, <code>Invoke-Formatter</code> no-op + <code>Invoke-ScriptAnalyzer</code> clean on <code>setup.ps1</code>, no-arg <code>setup.sh</code> reproduced the full bootstrap, fail-fast returned exit 2 for both a missing file and an empty key, and <code>verify-agent-audit.sh</code> + <code>verify-tool-call-audit.sh</code> both reached PASS.</p>
 </section>
 
+<section>
+<h2>Backends decomposition 1/4 — extract the service fragments</h2>
+<time>2026-06-19</time>
+
+<h3>Judgement points</h3>
+<p>Gave each fragment a <code>config/</code> subdirectory (<code>services/elasticsearch/config/elasticsearch.yml</code>, etc.) rather than dropping the YAML at the fragment root — this matches the established stack convention (CONVENTIONS &ldquo;service config under <code>config/</code>&rdquo;) and keeps the config visually distinct from the asset libraries (<code>elasticsearch/</code> pipelines, <code>kibana/&lt;source&gt;/</code> bundles) that Phases 2&ndash;3 will move into these same fragments. The bind mounts stay relative (<code>./config/elasticsearch.yml</code>), which Compose resolves against the included fragment's own directory, so they keep resolving after the nested <code>include:</code> — confirmed in the rendered config. The <code>elasticsearch-data</code> volume moved into the elasticsearch fragment (the only service that uses it). Collapsed the two byte-identical config copies (they differed only in a header comment) to one shared copy per service and rewrote the headers to read &ldquo;shared service fragment&rdquo; rather than &ldquo;claude-code-elastic stack&rdquo;. The two backend compose files became pure <code>include:</code> lists with a lean header preserving each backend's load-bearing <em>why</em> (elastic-audit's &ldquo;no APM Server&rdquo; and the shared <code>aol-*</code> container-name warning).</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The audit stack's <code>verify-agent-audit.sh</code> did not reach PASS on this Windows host, but for a reason outside this task's scope: its rendered hook in <code>.claude/settings.local.json</code> is the PowerShell exec-form, and <code>powershell.exe</code> refused to load <code>capture-prompt.ps1</code> with &ldquo;running scripts is disabled on this system&rdquo; <em>despite</em> <code>-ExecutionPolicy Bypass</code> — a machine execution-policy/GPO block. This refactor touches only Compose structure and config-file locations (zero hook/PowerShell code), and I confirmed the audit ES delivery path is healthy under the refactor by running the POSIX hook <code>capture-prompt.sh</code> directly against the same conf: it indexed a doc (HTTP 201) that landed in <code>logs-agent_audit.user_prompt-default</code>. The <code>.ps1</code> hook-execution-policy issue should be looked at separately (it is not introduced here).</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The <code>verify-agent-audit</code> spawn-path can't run on a machine whose Group Policy forces a restrictive PowerShell execution policy that <code>-ExecutionPolicy Bypass</code> can't override — worth a small task to detect that and SKIP with guidance (or fall back to the POSIX hook on such hosts) so the gate stays meaningful rather than red. Independent of the decomposition work.</p>
+
+<h3>Change summary</h3>
+<p>The Elasticsearch, Kibana, and APM Server service definitions (plus their config files and the data volume) now live once each under <code>components/backends/services/&lt;service&gt;/</code>. The <code>elastic</code> and <code>elastic-audit</code> backends are now thin <code>include:</code> compositions over those shared fragments — <code>elastic</code> pulls all three, <code>elastic-audit</code> pulls only Elasticsearch + Kibana (no APM Server). No assets or scripts moved yet; behaviour is unchanged.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live: <code>docker compose config -q</code> green for all five stacks; the rendered config for <code>claude-code-elastic</code> shows the same container names / host ports / mounts as before, with bind sources now pointing at the fragment <code>config/</code> files. <code>docker compose up -d</code> brought the 3-fragment <code>elastic</code> backend healthy and <code>smoke-test.sh</code> reached PASS (all three OTLP probes landed); the 2-fragment <code>elastic-audit</code> backend came up with Elasticsearch + Kibana and <em>no</em> APM Server. The only script-lint findings are in <code>stacks/codex-cli-elastic/.codex/.tmp/plugins/&hellip;</code> — a gitignored third-party Codex plugin cache, not project source and not touched here; this task changed zero shell scripts.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

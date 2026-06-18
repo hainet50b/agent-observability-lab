@@ -1,98 +1,12 @@
-# Elastic backend component — reusable, agent-agnostic.
+# Elastic backend — reusable, agent-agnostic composition (owns no services).
 #
-# Brings up Elasticsearch, Kibana, and APM Server (the Elastic-native OTLP
-# receiver that agent telemetry is pointed at). Not a stack on its own: it is
-# composed into stacks via `docker compose include:`, so it carries no
-# top-level `name:` — the including stack owns the Compose project name.
-#
-# Single-node, security-disabled local demo. Do NOT expose publicly.
-# All services share one pinned Elastic Stack version (9.4.2).
+# The full OTLP ingest path: Elasticsearch + Kibana + APM Server (the
+# Elastic-native OTLP receiver agent telemetry is pointed at), assembled by
+# `include:`ing the shared service fragments. Not a stack on its own — it
+# carries no top-level `name:`, so the including stack owns the Compose project
+# name. Single-node, security-disabled local demo; do NOT expose publicly.
 
-services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
-    container_name: aol-elasticsearch
-    environment:
-      # Heap sizing is a process env read by the ES startup script, not a YAML
-      # setting — kept here (rather than a jvm.options file) so it is visible
-      # next to the container resource limits.
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      # Bind to localhost only — demo posture, never exposed publicly.
-      - "127.0.0.1:9200:9200"
-    volumes:
-      - ./config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
-      - elasticsearch-data:/usr/share/elasticsearch/data
-    healthcheck:
-      # Security is disabled, so the HTTP API is reachable without auth/TLS.
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 60s
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:9.4.2
-    container_name: aol-kibana
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    volumes:
-      - ./config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
-    ports:
-      # Bind to localhost only — demo posture, never exposed publicly.
-      - "127.0.0.1:5601:5601"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:5601/api/status | grep -qE '\"level\":\"available\"'",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 90s
-
-  apm-server:
-    image: docker.elastic.co/apm/apm-server:9.4.2
-    container_name: aol-apm-server
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    # strict.perms is relaxed because apm-server.yml is bind-mounted from the
-    # host and will not be owned by the in-container apm-server user; -e logs to
-    # stderr so `docker compose logs apm-server` is useful during verification.
-    command: ["--strict.perms=false", "-e"]
-    volumes:
-      - ./config/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
-    ports:
-      # OTLP/HTTP and OTLP/gRPC are both served on 8200. Localhost-only — demo
-      # posture, never exposed publicly.
-      - "127.0.0.1:8200:8200"
-    healthcheck:
-      # The apm-server image ships no curl/wget, so probe the OTLP port with a
-      # bash /dev/tcp request: the root endpoint returns "200" once the server
-      # is accepting traffic (no auth is configured).
-      test:
-        [
-          "CMD",
-          "bash",
-          "-c",
-          'exec 3<>/dev/tcp/localhost/8200; printf "GET / HTTP/1.0\r\n\r\n" >&3; read -t 5 line <&3; case "$$line" in *200*) exit 0;; *) exit 1;; esac',
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 60s
-
-volumes:
-  elasticsearch-data:
-    driver: local
+include:
+  - ../services/elasticsearch/docker-compose.yml
+  - ../services/kibana/docker-compose.yml
+  - ../services/apm-server/docker-compose.yml

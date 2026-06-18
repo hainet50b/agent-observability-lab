@@ -1,75 +1,19 @@
-# Elastic-audit backend component — reusable, agent-agnostic.
+# Elastic-audit backend — reusable, agent-agnostic composition (owns no services).
 #
-# The same local Elasticsearch store as the `elastic` backend, but WITHOUT APM
-# Server: the audit concern is a direct hook → Elasticsearch write that never
-# traverses the OTLP / APM path, so the OTLP receiver is deliberately absent. A
-# stack composing this backend visibly carries no APM Server — its load-bearing
-# set is legible (see SPEC/SPEC.md "Repository shape" and SPEC/agent-audit.md
-# "Where this runs"). Not a stack on its own: it is composed into stacks via
-# `docker compose include:`, so it carries no top-level `name:` — the including
-# stack owns the Compose project name.
-#
-# Single-node, security-disabled local demo. Do NOT expose publicly.
-# Both services share one pinned Elastic Stack version (9.4.2).
+# The same Elasticsearch + Kibana store as the `elastic` backend, but WITHOUT
+# APM Server: the audit concern is a direct hook → Elasticsearch write that
+# never traverses the OTLP / APM path, so the OTLP receiver fragment is
+# deliberately not included. A stack composing this backend visibly carries no
+# APM Server — its load-bearing set is legible (see SPEC/SPEC.md "Repository
+# shape" and SPEC/agent-audit.md "Where this runs"). Not a stack on its own — it
+# carries no top-level `name:`, so the including stack owns the Compose project
+# name. Single-node, security-disabled local demo; do NOT expose publicly.
 #
 # ⚠️ Reuses the same aol-* container names and host ports (9200 / 5601) as the
 # `elastic` backend. An <agent>-elastic-audit stack and its telemetry sibling
 # (<agent>-elastic) are ALTERNATIVES, not co-run — `docker compose down` one
 # before bringing the other up.
 
-services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
-    container_name: aol-elasticsearch
-    environment:
-      # Heap sizing is a process env read by the ES startup script, not a YAML
-      # setting — kept here (rather than a jvm.options file) so it is visible
-      # next to the container resource limits.
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      # Bind to localhost only — demo posture, never exposed publicly.
-      - "127.0.0.1:9200:9200"
-    volumes:
-      - ./config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
-      - elasticsearch-data:/usr/share/elasticsearch/data
-    healthcheck:
-      # Security is disabled, so the HTTP API is reachable without auth/TLS.
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 60s
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:9.4.2
-    container_name: aol-kibana
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    volumes:
-      - ./config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
-    ports:
-      # Bind to localhost only — demo posture, never exposed publicly.
-      - "127.0.0.1:5601:5601"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:5601/api/status | grep -qE '\"level\":\"available\"'",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 90s
-
-volumes:
-  elasticsearch-data:
-    driver: local
+include:
+  - ../services/elasticsearch/docker-compose.yml
+  - ../services/kibana/docker-compose.yml

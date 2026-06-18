@@ -1,4 +1,4 @@
-# Elasticsearch — claude-code-elastic stack.
+# Elasticsearch — shared service fragment.
 #
 # Demo posture (see SPEC invariants): single-node, security disabled, plain
 # HTTP on localhost. Do NOT expose this publicly or point it at sensitive data.

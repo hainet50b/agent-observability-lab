@@ -1,4 +1,4 @@
-# APM Server — Elastic-native OTLP receiver for the claude-code-elastic stack.
+# APM Server — Elastic-native OTLP receiver (shared service fragment).
 #
 # Runs standalone (no Fleet, no upstream OpenTelemetry Collector). It accepts
 # OpenTelemetry over BOTH OTLP/HTTP and OTLP/gRPC on the host:port below and

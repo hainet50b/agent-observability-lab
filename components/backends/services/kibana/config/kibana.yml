@@ -1,4 +1,4 @@
-# Kibana — elastic-audit backend component.
+# Kibana — shared service fragment.
 #
 # Demo posture (see SPEC invariants): plain HTTP to a security-disabled
 # Elasticsearch on the compose network, no auth. Do NOT expose this publicly.
