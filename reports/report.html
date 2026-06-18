@@ -3850,6 +3850,34 @@
       <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>smoke-test.sh</code> reaches PASS. No shell scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Shorten every Claude Code saved-search description</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Replaced all 9 <code>attributes.description</code> values with the concise one-liners from the task, verbatim. To touch <em>only</em> the description (leaving title, id, columns, filter pills, sort, references, and ES|QL queries byte-identical) I drove the rewrite with <code>jq</code> keyed off an id→description map rather than hand-editing — that guarantees no incidental change to the surrounding JSON and handles the embedded quotes / em-dashes (e.g. Turn Timeline's <code>"what"</code>, Tool Call Errors' <code>—</code>) without manual escaping. The summary line (no <code>.id</code>) passes through untouched via a short-circuit guard.</li>
+      <li>No <code>exportedCount</code> change — the object set is unchanged, only field values.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. This was the last open PRD task; the Claude Code saved-search set is now complete and Codex-aligned.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The "traces diff" deferred across several recent tasks (the trace-based Interactions / Traces views, span-based per-turn duration and TTFT columns) is the natural next body of work whenever it's picked up — now unblocked since tracing runs alongside events.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Every Claude Code saved search now carries a short one-line <strong>description</strong> (matching the Codex CLI style) instead of the long implementation-rationale text — the Discover saved-objects list and search headers are now readable at a glance.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> all 9 search objects import with <code>success: true</code> (references resolved); the new descriptions read back correctly from the Kibana API, including the ones with quotes and em-dashes; all 10 NDJSON lines parse.</li>
+      <li>Gates: all four stacks pass <code>docker compose config -q</code>; <code>smoke-test.sh</code> reaches PASS. No shell scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
