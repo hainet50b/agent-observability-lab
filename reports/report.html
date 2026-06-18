@@ -4070,6 +4070,36 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Windows audit hook: <code>render-hook.ps1</code> now emits an exec-form hook (no shell, PS 5.1)</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Exec form by overriding the template entry, not the <code>@@HOOK_COMMAND@@</code> placeholder.</strong> The shared <code>hook.template.json</code> carries a single <code>command: "@@HOOK_COMMAND@@"</code> that <code>render-hook.sh</code> still substitutes for its command-string form. For the <code>.ps1</code> I read the template's hook entry (preserving its <code>type</code>/<code>timeout</code>), set <code>command: "powershell"</code>, and <code>Add-Member</code> an <code>args</code> array — leaving <code>render-hook.sh</code> and the template untouched. Result: <code>powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &lt;abs capture-prompt.ps1&gt; --config &lt;abs agent-audit.conf&gt;</code>.</li>
+      <li><strong>Both <code>verify-agent-audit</code> scripts now drive the <em>rendered</em> hook, not <code>capture-prompt</code> directly.</strong> Each reads <code>command</code> (+ <code>args[]</code> when present) from <code>settings.local.json</code> and spawns that exact process with the payload on stdin — reproducing how Claude launches it (exec form as a direct child; a command-string hook through the shell). This is what catches the original gap class: a hook that renders but cannot actually be spawned. The <code>.sh</code> handles both forms so it stays correct on POSIX (command-string) and against a Windows-rendered exec-form settings.</li>
+      <li><strong>JSON key order is type/command/timeout/args</strong> (args appended via <code>Add-Member</code>) vs. the hand-verified local file's type/command/args/timeout. Left as-is: key order is insignificant to Claude's hook reader, and the idempotent create-if-absent path means a re-run never rewrites an existing block anyway.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. The <code>capture-prompt.ps1</code> script body's PS 5.1 compatibility audit is explicitly the next task (701), not this one — though the live run below already exercised it under Windows PowerShell 5.1 and it indexed cleanly.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Already captured as task 701 (fleet-wide PS 5.1 compatibility for both agents' capture hooks); no new observations.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>On Windows the Claude audit hook silently delivered nothing: Claude runs a command-string hook through Git Bash, which can't execute a <code>.ps1</code> (exit 127 → fail-open no-op). <code>render-hook.ps1</code> now registers the hook in <strong>exec form</strong> — spawning <code>powershell.exe</code> (Windows PowerShell 5.1) directly with <code>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File …</code>, no shell in between. Both <code>verify-agent-audit</code> scripts were upgraded to spawn the rendered hook exactly as Claude does, so this failure mode can't silently return.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end-to-end on the live stack under Windows PowerShell 5.1.</strong> <code>verify-agent-audit.ps1</code> spawned the rendered exec-form hook (<code>command: "powershell"</code> → <code>powershell.exe</code>) and a canonical doc landed in <code>logs-agent_audit.user_prompt-default</code> (HTTP 201): <code>anthropic</code>/<code>claude-code</code>, <code>turn_id=null</code>, account/organization present, no <code>user.email</code>, host enrichment present, provider <code>account.id</code> derived. The synthetic doc was cleaned up afterward.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> passes for all five stacks; <code>shfmt -w</code> applied then <code>shellcheck</code> clean on the touched <code>.sh</code> (the only shellcheck findings are in the gitignored vendored <code>.codex/.tmp/plugins/</code> tree, not our code); <code>Invoke-Formatter</code> + <code>Invoke-ScriptAnalyzer</code> clean on both <code>.ps1</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

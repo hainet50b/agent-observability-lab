@@ -7,18 +7,21 @@
 #             rendered .claude/settings.local.json (hooks.UserPromptSubmit) and
 #             .claude/agent-audit.conf.
 #   Act     — feed a synthetic UserPromptSubmit payload (unique session_id) on
-#             stdin to the configured hook (capture-prompt.ps1), injecting the
-#             delivery config via --config, exactly as a real Claude session does.
+#             stdin to the RENDERED hook exactly as Claude spawns it — read the
+#             command + args[] straight from .claude/settings.local.json and run
+#             that process. (Driving capture-prompt.ps1 directly would not catch a
+#             broken rendered hook command, e.g. a non-exec-form hook Git Bash
+#             cannot run on Windows — the class of gap this verification guards.)
 #   Assert  — poll logs-agent_audit.user_prompt-default for the document.
 #   Cleanup — delete the synthetic document, then print PASS.
 #
 # Fail-open note: the hook always exits 0 (never blocks a prompt), so the signal
 # is the ASSERTION (doc present in ES), not the hook's exit code.
 #
-# The hook is invoked as a real child `pwsh` process so the payload reaches its
-# stdin ([Console]::In.ReadToEnd()) — piping a PowerShell variable straight to
-# `& script.ps1` would hang, because the script reads the process stdin, which is
-# how Claude actually drives it.
+# The hook is spawned as the rendered command/args (on Windows, exec form:
+# `powershell -NoProfile … -File capture-prompt.ps1 --config <conf>`), a real child
+# process, so the payload reaches its stdin ([Console]::In.ReadToEnd()) exactly as
+# Claude drives it.
 #
 # Prereqs: docker (+ daemon), pwsh. SKIP (exit 0) if the daemon is unreachable or
 # setup has not run. Override the ES endpoint with -EsUrl.
@@ -89,11 +92,14 @@ try {
         permission_mode = 'default'
     } | ConvertTo-Json -Compress
 
-    # Invoke the configured hook as a real child pwsh process so the payload reaches
-    # its stdin and it reads the rendered agent-audit.conf. Fail-open: it always
-    # exits 0; the assertion below is the signal.
-    $conf = Join-Path $ClaudeHome 'agent-audit.conf'
-    $payload | & pwsh -NoProfile -File $HookPs1 -Config $conf
+    # Spawn the hook EXACTLY as Claude does: read the rendered command + args[] from
+    # settings.local.json and run that process with the payload on stdin (the config
+    # path is already baked into the rendered args). Fail-open: it always exits 0;
+    # the assertion below is the signal.
+    $entry = (Get-Content -Raw -LiteralPath $Settings | ConvertFrom-Json).hooks.UserPromptSubmit[0].hooks[0]
+    $hookArgs = if ($entry.PSObject.Properties.Name -contains 'args') { @($entry.args) } else { @() }
+    Write-Host "[act] spawning the rendered hook: $($entry.command) $($hookArgs -join ' ')"
+    $payload | & $entry.command @hookArgs
 
     # --- Assert ----------------------------------------------------------------
     Write-Host "[assert] querying $DataStream for the audit document…"
@@ -170,4 +176,5 @@ try {
 finally {
     Pop-Location
 }
+
 

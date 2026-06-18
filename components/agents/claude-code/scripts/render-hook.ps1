@@ -3,10 +3,21 @@
 # <TargetDir>/.claude/settings.local.json (PowerShell mirror of render-hook.sh).
 #
 # Merges the `hooks` block from ../hook.template.json into the target's
-# settings.local.json, substituting @@HOOK_COMMAND@@ with THIS platform's
-# capture-prompt.ps1 absolute path plus `--config <abs>/.claude/agent-audit.conf`
-# (the config path is INJECTED into the hook command — a shipped hook never
-# discovers its own config; see SPEC/agent-audit.md "Delivery and authorization").
+# settings.local.json, rendering the UserPromptSubmit hook in EXEC FORM so it runs
+# on Windows: `command: "powershell"` with an `args` array that spawns THIS
+# platform's capture-prompt.ps1 directly (no shell), passing
+# `--config <abs>/.claude/agent-audit.conf` (the config path is INJECTED into the
+# hook command — a shipped hook never discovers its own config; see
+# SPEC/agent-audit.md "Delivery and authorization").
+#
+# Why exec form: Claude runs a command-STRING hook via Git Bash when present, which
+# mangles the Windows backslash path and cannot execute a .ps1 (exit 127 ->
+# fail-open no-op — the audit silently delivers nothing). The exec form spawns the
+# executable directly, so it is Git-Bash-independent. It pins Windows PowerShell 5.1
+# (`powershell.exe`, on every Windows box — no pwsh/PS7 dependency), suppresses the
+# profile (-NoProfile), and runs under any execution policy (-ExecutionPolicy
+# Bypass). No `shell` field — it is ignored when `args` is set. (render-hook.sh is
+# unchanged: its .sh command-string runs under the default shell on macOS/Linux.)
 #
 # JSON key-merge, create-if-absent: writes { "hooks": {…} } when absent; adds
 # `hooks` to an existing file only if it has none; never clobbers an existing
@@ -45,12 +56,18 @@ New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.claude') | Out
 $captureAbs = (Resolve-Path -LiteralPath $Capture).Path
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
 $conf = Join-Path $targetAbs '.claude/agent-audit.conf'
-$hookCmd = "$captureAbs --config $conf"
 
-# Substitute @@HOOK_COMMAND@@ in the template's fixed hook path, then take the
-# `hooks` block (dropping the template's _comment).
+# Take the template's hook entry (preserving its `type` / `timeout`), then rewrite
+# it into exec form: command = powershell, args spawn capture-prompt.ps1 directly.
+# Dropping the template's _comment. The `@@HOOK_COMMAND@@` placeholder is not used
+# here — exec form sets `command` + `args` rather than a single command string.
 $tpl = Get-Content -Raw -LiteralPath $Template | ConvertFrom-Json
-$tpl.hooks.UserPromptSubmit[0].hooks[0].command = $hookCmd
+$entry = $tpl.hooks.UserPromptSubmit[0].hooks[0]
+$entry.command = 'powershell'
+$entry | Add-Member -NotePropertyName 'args' -NotePropertyValue @(
+    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', $captureAbs, '--config', $conf
+) -Force
 $hooks = $tpl.hooks
 
 if (Test-Path -LiteralPath $out) {
@@ -63,4 +80,5 @@ else {
     [pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $out -Encoding utf8
     Write-Host "wrote $out"
 }
+
 

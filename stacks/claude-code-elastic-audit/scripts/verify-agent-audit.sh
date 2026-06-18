@@ -12,10 +12,11 @@
 #             hook registration) and .claude/agent-audit.conf (the hook's ES
 #             delivery config); SKIP with guidance otherwise.
 #   Act     — feed a synthetic Claude UserPromptSubmit payload (a unique
-#             session_id) on stdin to the configured UserPromptSubmit hook
-#             (components/agents/claude-code/hooks/capture-prompt.sh — the same
-#             script settings.local.json registers), injecting the delivery config
-#             via --config, exactly as a real Claude session invokes it.
+#             session_id) on stdin to the RENDERED hook exactly as Claude spawns
+#             it — read the command (+ args[] for the exec form) straight from
+#             .claude/settings.local.json and run that process. Driving
+#             capture-prompt.sh directly would not catch a broken rendered hook
+#             command, the class of gap this verification guards.
 #   Assert  — query logs-agent_audit.user_prompt-default for the canonical
 #             agent_audit.user_prompt document carrying that conversation_id;
 #             poll until it lands.
@@ -109,10 +110,24 @@ payload=$(jq -nc --arg cid "$cid" '{
   permission_mode: "default"
 }')
 
-# Run the configured hook, injecting the agent-audit.conf path via --config (the
-# production contract — the hook does no ambient config discovery). The hook is
-# fail-open (always exit 0); the assertion below is the real signal.
-printf '%s' "$payload" | bash "$HOOK" --config "$CLAUDE_HOME_DIR/agent-audit.conf" || true
+# Spawn the hook EXACTLY as Claude does: read the rendered command (+ args[] for
+# the exec form) from settings.local.json and run it with the payload on stdin,
+# rather than invoking capture-prompt.sh directly — so a broken rendered hook
+# command is caught. Claude runs the exec form (command + args[]) as a direct child
+# process and a command-string hook through the shell; reproduce both. The config
+# path is already baked into the rendered hook. Fail-open: the assertion is the
+# real signal.
+hook_command=$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' "$SETTINGS")
+if jq -e '.hooks.UserPromptSubmit[0].hooks[0] | has("args")' "$SETTINGS" >/dev/null 2>&1; then
+  hook_args=()
+  while IFS= read -r a; do hook_args+=("$a"); done \
+    < <(jq -r '.hooks.UserPromptSubmit[0].hooks[0].args[]' "$SETTINGS")
+  echo "[act] spawning the rendered hook (exec form): $hook_command ${hook_args[*]}"
+  printf '%s' "$payload" | "$hook_command" "${hook_args[@]}" || true
+else
+  echo "[act] spawning the rendered hook (command string via shell): $hook_command"
+  printf '%s' "$payload" | sh -c "$hook_command" || true
+fi
 
 # --- Assert ----------------------------------------------------------------
 es_count_cid() {
