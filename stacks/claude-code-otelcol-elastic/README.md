@@ -108,6 +108,7 @@ local Collector — in Kibana."
 cd stacks/claude-code-otelcol-elastic
 docker compose up -d
 docker compose ps        # wait until elasticsearch, kibana, apm-server report healthy
+# edit setup.conf if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -117,8 +118,11 @@ of starting. Kibana is at <http://localhost:5601>. `scripts/setup.sh` runs every
 post-up bootstrap step in one shot — it installs the trace-routing ingest
 pipeline (isolates Claude Code's spans into `traces-apm-agents_claude_code`),
 creates the `prompts-audit` index, and imports the Kibana saved objects — and is
-idempotent, so re-run it any time. Override endpoints with `ES_URL` / `KIBANA_URL`
-(or `-EsUrl` / `-KibanaUrl` for the `.ps1`).
+idempotent, so re-run it any time. Both scripts read their target endpoints —
+Elasticsearch, the Collector OTLP endpoint, and Kibana — from `setup.conf` at the
+stack root, or another file you pass (`setup.sh <config>` /
+`setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
+empty rather than assuming localhost.
 
 Optionally prove the whole path end to end with the smoke test (see
 [Verify the pipeline](#verify-the-pipeline)):
@@ -357,6 +361,7 @@ scripts/resilience-test.sh    # from anywhere — it locates its own stack direc
 ```
 claude-code-otelcol-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
+├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / Collector OTLP / Kibana)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + prompts-audit + Kibana import (3 components)
    ├─ setup.ps1                           # PowerShell mirror of setup.sh

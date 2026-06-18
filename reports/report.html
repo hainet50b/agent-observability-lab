@@ -4163,6 +4163,33 @@
     </ul>
   </section>
 
+  <section>
+    <h2>Setup propagation 2/4 — <code>claude-code-otelcol-elastic</code> driven from <code>setup.conf</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Mirrored the already-shipped <code>claude-code-elastic</code> (1/4) setup surface verbatim and changed only what the Collector path requires: the conf key is <code>collector.otlp_endpoint</code> (default <code>http://localhost:4318</code>), not <code>apm_server.*</code>, and the Kibana import keeps both sources <code>claude-code otelcol-sidecar</code>. The five-step order is identical to the sibling (trace-routing → prompts-audit → Kibana import → render-otel → render-mcp).</li>
+      <li>Kept the internal shell var named <code>otlp_endpoint</code> and built the three <code>/v1/{logs,traces,metrics}</code> URLs from the base, exactly as the sibling does — the only difference from the APM stack is the localhost port the conf points at.</li>
+      <li>The <code>done</code> line and the README keep their mention of <code>resilience-test.sh</code> (a real stack property here, unlike the APM sibling) — that text was not part of the canonical <code>codex-cli-elastic</code> template but is correct for this stack, so I preserved it.</li>
+      <li>Dropped the old <code>Invoke-Step</code> helper from <code>setup.ps1</code> in favour of inline <code>&amp;</code> + named-arg steps relying on <code>$ErrorActionPreference = 'Stop'</code>, per the shared rule "no step-runner helper".</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <p>None. The end-to-end run used the running Elastic backend (the <code>aol-*</code> containers, currently owned by the <code>claude-code-elastic</code> compose project — same fixed names/ports). I deliberately did not tear that stack down to bring up this stack's Collector just to re-run the <em>unchanged</em> <code>smoke-test.sh</code>/<code>resilience-test.sh</code>: those scripts are self-contained (own <code>ES_URL</code> default, no <code>setup.sh</code> dependency) and the shared rules require they be left untouched, so their PASS status is independent of this change.</p>
+
+    <h3>Next PRD suggestions</h3>
+    <p>Tasks 3/4 (<code>claude-code-elastic-audit</code>) and 4/4 (<code>codex-cli-elastic-audit</code>) remain — the last two of the setup-propagation group, both no-OTLP audit paths.</p>
+
+    <h3>Change summary</h3>
+    <p>The <code>claude-code-otelcol-elastic</code> stack's bootstrap now reads its endpoints from a new <code>setup.conf</code> at the stack root (Elasticsearch / Kibana / Collector OTLP) instead of baked-in defaults and env-var overrides, matching the canonical pattern. <code>setup.sh</code>/<code>setup.ps1</code> were slimmed (prose headers gone, indented step output, fail-fast on a missing file or empty key), and the README Quick Tour/Layout updated to the "edit <code>setup.conf</code>, then run setup" flow.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified live against the running Elastic backend:</strong> no-arg <code>setup.sh</code> discovered <code>setup.conf</code> and ran all five steps to success (trace-routing <code>acknowledged</code>, <code>prompts-audit</code> present, 3 data views + 9 saved searches + the sidecar view/dashboard imported, settings + <code>.mcp.json</code> rendered). Fail-fast confirmed: missing file and empty key both exit <code>2</code>.</li>
+      <li><strong>Gates:</strong> <code>docker compose config -q</code> clean for all five stacks; <code>shfmt -d</code> empty + <code>shellcheck</code> clean on <code>setup.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on <code>setup.ps1</code>.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

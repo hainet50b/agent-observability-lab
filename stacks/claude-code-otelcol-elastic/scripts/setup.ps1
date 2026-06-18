@@ -1,50 +1,66 @@
-#!/usr/bin/env pwsh
-# setup.ps1 — one-shot bootstrap for the claude-code-otelcol-elastic stack.
-#
-# PowerShell mirror of setup.sh. Run once after `docker compose up -d` (healthy).
-# Steps: 1) trace-routing pipeline  2) prompts-audit index  3) Kibana saved
-# objects (backend, agent, sidecar)  4) render .claude/settings.local.json
-# (telemetry env only, pointed at the Collector) from the agent-owned template,
-# so a `claude` launched from this directory auto-emits telemetry. Prompt
-# auditing lives in the separate claude-code-elastic-audit stack, not here.
-# 5) render .mcp.json (project-scoped Elasticsearch MCP server,
-# interactive-approval). Steps 1-3 idempotent; steps 4-5 are create-if-absent.
-# Override endpoints with -EsUrl / -KibanaUrl. Verification stays separate.
-
 [CmdletBinding()]
 param(
-    [string]$EsUrl,
-    [string]$KibanaUrl
+    [string]$Config
 )
 
 $ErrorActionPreference = 'Stop'
-$OtlpEndpoint = 'http://localhost:4318'
+
 $StackDir = Split-Path -Parent $PSScriptRoot
-$C = Join-Path $PSScriptRoot '../../../components'
+$ComponentsDir = Join-Path $PSScriptRoot '../../../components'
 
-$es = @{}; if ($EsUrl)     { $es['EsUrl'] = $EsUrl }
-$kb = @{}; if ($KibanaUrl) { $kb['KibanaUrl'] = $KibanaUrl }
-
-function Invoke-Step {
-    param([string]$Label, [string]$Path, [hashtable]$StepArgs)
-    Write-Host "[setup] $Label"
-    $global:LASTEXITCODE = 0
-    & $Path @StepArgs
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not $Config) {
+    $Config = Join-Path $StackDir 'setup.conf'
+}
+if (-not (Test-Path -LiteralPath $Config -PathType Leaf)) {
+    [Console]::Error.WriteLine("FAIL: config file not found: $Config")
+    exit 2
 }
 
-Invoke-Step -Label '1/5 - trace-routing ingest pipeline' -Path (Join-Path $C 'backends/elastic/scripts/setup-trace-routing.ps1') -StepArgs $es
-Invoke-Step -Label '2/5 - prompts-audit index' -Path (Join-Path $C 'backends/elastic/scripts/setup-prompt-audit.ps1') -StepArgs $es
-$kb['Sources'] = @('claude-code', 'otelcol-sidecar')
-Invoke-Step -Label '3/5 - Kibana saved objects' -Path (Join-Path $C 'backends/elastic/scripts/import-kibana-objects.ps1') -StepArgs $kb
-Invoke-Step -Label '4/5 - local Claude Code settings (telemetry env)' `
-    -Path (Join-Path $C 'agents/claude-code/scripts/render-otel.ps1') `
-    -StepArgs @{ TargetDir = $StackDir; LogsEndpoint = "$OtlpEndpoint/v1/logs"; TracesEndpoint = "$OtlpEndpoint/v1/traces"; MetricsEndpoint = "$OtlpEndpoint/v1/metrics" }
-Invoke-Step -Label '5/5 - local Claude Code MCP config (.mcp.json)' `
-    -Path (Join-Path $C 'agents/claude-code/scripts/render-mcp.ps1') `
-    -StepArgs @{ TargetDir = $StackDir }
+foreach ($line in Get-Content -LiteralPath $Config) {
+    if ($line -match '^\s*#' -or $line -notmatch '=') {
+        continue
+    }
+    $k, $v = $line -split '=', 2
+    switch ($k.Trim()) {
+        'elasticsearch.url' {
+            $EsUrl = $v.Trim()
+        }
+        'kibana.url' {
+            $KibanaUrl = $v.Trim()
+        }
+        'collector.otlp_endpoint' {
+            $OtlpEndpoint = $v.Trim()
+        }
+    }
+}
+foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'collector.otlp_endpoint' = $OtlpEndpoint }.GetEnumerator()) {
+    if (-not $req.Value) {
+        [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key '$($req.Key)'.")
+        exit 2
+    }
+}
 
-Write-Host "[setup] done - run 'claude' here; verify with smoke-test.sh (and resilience-test.sh)."
+filter Indent { "  $_" }
 
+Write-Host '[setup] 1/5 - trace-routing ingest pipeline'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-trace-routing.ps1') -EsUrl $EsUrl 6>&1 | Indent
 
+Write-Host ''
+Write-Host '[setup] 2/5 - prompts-audit index'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-prompt-audit.ps1') -EsUrl $EsUrl 6>&1 | Indent
+
+Write-Host ''
+Write-Host '[setup] 3/5 - Kibana saved objects (data views + saved searches)'
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code', 'otelcol-sidecar' 6>&1 | Indent
+
+Write-Host ''
+Write-Host '[setup] 4/5 - local Claude Code settings (telemetry env)'
+& (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-otel.ps1') -TargetDir $StackDir -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics" 6>&1 | Indent
+
+Write-Host ''
+Write-Host '[setup] 5/5 - local Claude Code MCP config (.mcp.json)'
+& (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-mcp.ps1') -TargetDir $StackDir 6>&1 | Indent
+
+Write-Host ''
+Write-Host "[setup] done - run 'claude' from this directory; verify with scripts/smoke-test.sh (and scripts/resilience-test.sh)."
 
