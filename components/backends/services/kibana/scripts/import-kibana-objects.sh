@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 #
-# import-kibana-objects.sh — the Elastic backend's single Kibana saved-objects
-# importer for every source (agent / path).
+# import-kibana-objects.sh — the Kibana service's single saved-objects importer
+# for every source (agent / path / cross-agent audit).
 #
-# Kibana objects are consumed by Kibana, a backend service, so all per-source
-# NDJSON lives under this backend, namespaced by source: kibana/<source>/ (e.g.
-# kibana/claude-code/, kibana/codex-cli/, kibana/otelcol-sidecar/).
+# Kibana objects are consumed by Kibana, so every per-source NDJSON bundle lives
+# under this service component, namespaced by source: <source>/ (e.g.
+# claude-code/, codex-cli/, otelcol-sidecar/, agent-audit/). Backends select
+# which sources to import; the importer itself carries no per-backend selection.
 #
 # Usage: pass the source namespace(s) to import as positional arguments:
 #
 #   scripts/import-kibana-objects.sh claude-code
 #   scripts/import-kibana-objects.sh claude-code otelcol-sidecar
 #   scripts/import-kibana-objects.sh codex-cli
+#   scripts/import-kibana-objects.sh agent-audit
 #
 # Within every source directory files import in category
 # order: data-views → saved-searches → dashboard, so data views exist before the
@@ -32,7 +34,7 @@ set -euo pipefail
 KIBANA_URL=${KIBANA_URL:-http://localhost:5601}
 
 # Resolve and enter the component root (parent of this scripts/ directory) so the
-# kibana/ NDJSON paths resolve regardless of the caller's cwd.
+# per-source NDJSON paths resolve regardless of the caller's cwd.
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$COMPONENT_DIR"
@@ -84,7 +86,7 @@ echo "[import] importing Kibana saved objects into $KIBANA_URL…"
 
 # Each requested source namespace.
 for src in "$@"; do
-  import_dir "kibana/$src"
+  import_dir "$src"
 done
 
 echo

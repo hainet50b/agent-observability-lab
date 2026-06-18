@@ -51,7 +51,7 @@ Write-Host '[setup] 2/5 - prompts-audit index'
 
 Write-Host ''
 Write-Host '[setup] 3/5 - Kibana saved objects (data views + saved searches)'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 4/5 - local Claude Code settings (telemetry env)'
@@ -63,4 +63,5 @@ Write-Host '[setup] 5/5 - local Claude Code MCP config (.mcp.json)'
 
 Write-Host ''
 Write-Host "[setup] done - run 'claude' from this directory; verify with scripts/smoke-test.sh."
+
 

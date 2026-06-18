@@ -56,6 +56,27 @@
 <p>Verified live: <code>docker compose config -q</code> green for all five stacks; the rendered config for <code>claude-code-elastic</code> shows the same container names / host ports / mounts as before, with bind sources now pointing at the fragment <code>config/</code> files. <code>docker compose up -d</code> brought the 3-fragment <code>elastic</code> backend healthy and <code>smoke-test.sh</code> reached PASS (all three OTLP probes landed); the 2-fragment <code>elastic-audit</code> backend came up with Elasticsearch + Kibana and <em>no</em> APM Server. The only script-lint findings are in <code>stacks/codex-cli-elastic/.codex/.tmp/plugins/&hellip;</code> — a gitignored third-party Codex plugin cache, not project source and not touched here; this task changed zero shell scripts.</p>
 </section>
 
+<section>
+<h2>Backends decomposition 2/4 — consolidate Kibana assets and the importer into <code>services/kibana/</code></h2>
+<time>2026-06-19</time>
+
+<h3>Judgement points</h3>
+<p>The single biggest call: <code>agent-audit.ndjson</code> was a flat self-contained file (two index-patterns + their two searches), but the generic importer only picks up files whose names end in <code>data-views</code> / <code>saved-searches</code> / <code>dashboard</code> (it globs per category, in dependency order). Rather than special-case the importer to also import non-category files — which would complicate the one shared script four other stacks depend on — I <strong>split</strong> agent-audit into <code>agent-audit/data-views.ndjson</code> + <code>agent-audit/saved-searches.ndjson</code>, making it structurally identical to <code>claude-code</code> and <code>codex-cli</code>. The searches reference their data views by id, and data-views import first, so the cross-file reference resolves exactly as it does for the other sources (verified live: zero <code>missingReferences</code> warnings). The PRD's &ldquo;move <code>agent-audit.ndjson</code> &hellip; (one namespaced source)&rdquo; reads as &ldquo;agent-audit gets its own source dir like the others&rdquo;, not &ldquo;keep it one file&rdquo;, so the split is in-scope and is the cleaner re-org.</p>
+<p>The importer moved to <code>services/kibana/scripts/</code>, so its component root is now the kibana service dir and the per-source bundles sit directly beneath it — I dropped the old <code>kibana/&lt;source&gt;</code> path prefix to plain <code>&lt;source&gt;</code> (the PRD target is literally <code>services/kibana/&lt;source&gt;/</code>, collapsing SPEC's <code>kibana/&lt;source&gt;</code> notation because the service is itself named kibana). Updated header comments on both <code>.sh</code>/<code>.ps1</code> to describe the kibana <em>service</em> owning every source (agent / path / cross-agent audit) and to note the importer carries no per-backend selection — the backend/stack passes it in. Used <code>git mv</code> for the source dirs and the importer so history follows the files.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>Stack <code>README.md</code> import-path/Layout text still shows the old <code>backends/elastic*/scripts/</code> locations — left untouched on purpose: PRD Phase 4 explicitly owns README alignment, and Phase 2's verify is about import mechanics, not docs. No executable reference to the old paths remains (grep-confirmed across <code>*.sh</code>/<code>*.ps1</code>/compose).</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None new — Phases 3 (ES assets) and 4 (full-matrix + README) already capture the remaining decomposition work.</p>
+
+<h3>Change summary</h3>
+<p>Every Kibana saved-object bundle now lives once under <code>components/backends/services/kibana/&lt;source&gt;/</code> (claude-code, codex-cli, otelcol-sidecar, and the newly-split agent-audit), and the single generic importer that loads them moved alongside into <code>services/kibana/scripts/</code>. The duplicated fixed-file <code>elastic-audit</code> importer is gone; the audit stacks now import via the same generic script with <code>agent-audit</code> as the source argument.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live against the running Kibana (<code>localhost:5601</code>): the relocated <code>.sh</code> and <code>.ps1</code> importers both imported the split <code>agent-audit</code> source cleanly (2 data views, then 2 searches, references resolved) and the multi-object <code>claude-code</code> source (3 + 9). Gates: <code>docker compose config -q</code> green for all five stacks; <code>shfmt</code>/<code>shellcheck</code> clean on every touched script (the only findings are in the gitignored <code>.codex/.tmp</code> plugin cache, not project source); <code>Invoke-ScriptAnalyzer</code> clean on all six touched <code>.ps1</code>. Worth a glance: the split agent-audit files carry hand-written export-summary trailing lines (informational only — Kibana ignores them on import).</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

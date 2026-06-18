@@ -1,0 +1,3 @@
+{"id":"agent-audit-user-prompts","type":"index-pattern","managed":false,"attributes":{"name":"Agent Audit — User Prompts","title":"logs-agent_audit.user_prompt-*","timeFieldName":"@timestamp"},"references":[],"coreMigrationVersion":"9.4.2"}
+{"id":"agent-audit-tool-calls","type":"index-pattern","managed":false,"attributes":{"name":"Agent Audit — Tool Calls","title":"logs-agent_audit.tool_call-*","timeFieldName":"@timestamp"},"references":[],"coreMigrationVersion":"9.4.2"}
+{"exportedCount":2,"missingRefCount":0,"missingReferences":[]}

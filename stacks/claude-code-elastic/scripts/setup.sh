@@ -38,7 +38,7 @@ echo "[setup] 2/5 — prompts-audit index"
 
 echo
 echo "[setup] 3/5 — Kibana saved objects (data views + saved searches)"
-"$components_dir/backends/elastic/scripts/import-kibana-objects.sh" claude-code | indent
+"$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" claude-code | indent
 
 echo
 echo "[setup] 4/5 — local Claude Code settings (telemetry env)"

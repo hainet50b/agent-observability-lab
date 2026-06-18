@@ -56,7 +56,8 @@ Write-Host '[setup] 3/4 - Codex session config (.codex/config.toml: [otel] + Ela
 
 Write-Host ''
 Write-Host '[setup] 4/4 - Kibana saved objects (data views + saved searches)'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'codex-cli' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'codex-cli' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh.'
+

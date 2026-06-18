@@ -56,8 +56,9 @@ Write-Host '[setup] 4/5 - local Claude Code MCP config (.mcp.json)'
 
 Write-Host ''
 Write-Host '[setup] 5/5 - Kibana saved objects: Agent Audit data views + saved searches'
-& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'agent-audit' 6>&1 | Indent
 
 Write-Host ''
 Write-Host "[setup] done - run 'claude' from this directory; verify with scripts/verify-agent-audit.ps1."
+
 

@@ -42,7 +42,7 @@ echo "[setup] 3/4 — .codex/config.toml: UserPromptSubmit + PostToolUse Agent A
 
 echo
 echo "[setup] 4/4 — Kibana saved objects: Agent Audit data views + saved searches"
-"$components_dir/backends/elastic-audit/scripts/import-kibana-objects.sh" | indent
+"$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" agent-audit | indent
 
 echo
 echo "[setup] done ✓ — point a Codex session at this directory (see ../README.md); verify with scripts/verify-agent-audit.sh and scripts/verify-tool-call-audit.sh."
