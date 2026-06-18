@@ -3681,6 +3681,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Rework Claude Code — Hook Executions into Claude Code — Hooks</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Rename-in-place via <code>jq</code>: <code>id</code> (<code>claude-code-hook-executions</code> → <code>claude-code-hooks</code>), title, description, columns; kept the single <code>message: claude_code.hook_execution_complete</code> pill, both refs, the sort. No <code>exportedCount</code> change. Deleted the stale live id.</li>
+      <li>Added <code>num_non_blocking_error</code> / <code>num_cancelled</code> for the full outcome set per the task. Noted in the description that <code>hook_source</code> here is the coarse policy flag, distinct from the granular provenance on the deleted Hook Registered.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. <code>trace.id</code> deferred to the traces diff.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Renamed <strong>Claude Code — Hook Executions</strong> to <strong>Claude Code — Hooks</strong> (the Hooks node), refreshing its columns to the full hook-outcome set with <code>@timestamp</code> lead and no identity. Still a single-pill view on <code>claude_code.hook_execution_complete</code>.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> new object has one <code>message</code> pill, 2 refs, the specified columns; import reports <code>success: true, successCount: 12</code>; old id deleted (HTTP 200).</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
