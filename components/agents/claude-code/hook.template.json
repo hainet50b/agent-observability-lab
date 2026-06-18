@@ -1,0 +1,14 @@
+{
+  "_comment": {
+    "docs": ["https://code.claude.com/docs/en/hooks"]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "@@HOOK_COMMAND@@", "timeout": 3 }
+        ]
+      }
+    ]
+  }
+}
