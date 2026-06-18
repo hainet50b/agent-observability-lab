@@ -4005,6 +4005,37 @@
     </ul>
   </section>
 
+  <section class="entry">
+    <h2>Claude Code audit hook (2/3): <code>render-hook</code> registers the capture hook with an injected <code>--config</code></h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Same JSON key-merge shape as <code>render-otel</code>, but for the <code>hooks</code> block.</strong> <code>render-hook.{sh,ps1}</code> merges the <code>hooks</code> object from <code>hook.template.json</code> into <code>&lt;target&gt;/.claude/settings.local.json</code> — writes <code>{ "hooks": {…} }</code> if absent, adds <code>hooks</code> only if the file has none, never clobbers an existing <code>hooks</code>. This composes cleanly with <code>render-otel</code>'s <code>env</code> merge: verified that rendering into an <code>env</code>-only file yields both keys (the audit stack uses only <code>render-hook</code>, but the create-if-absent contract must not fight a co-resident <code>env</code>).</li>
+      <li><strong>The <code>--config</code> path is injected into the hook command, per SPEC.</strong> <code>@@HOOK_COMMAND@@</code> is substituted with this platform's capture script absolute path plus <code>--config &lt;abs target&gt;/.claude/agent-audit.conf</code> — exactly the form the task specifies (<code>&lt;abs capture-prompt.(sh|ps1)&gt; --config &lt;abs agent-audit.conf&gt;</code>). The capture hook does no ambient config discovery; render-hook is what wires the absolute conf path in. I followed the task's literal command shape (script path first, no interpreter prefix) rather than reintroducing the old <code>powershell -File</code> wrapper — the per-OS split is render-hook.sh → <code>capture-prompt.sh</code>, render-hook.ps1 → <code>capture-prompt.ps1</code>.</li>
+      <li><strong><code>jq</code> for the substitution+merge (bash), built-in cmdlets (PS) — render is setup tooling, not the fleet hook.</strong> The bash version sets <code>.hooks.UserPromptSubmit[0].hooks[0].command</code> then takes <code>.hooks</code> (which also drops <code>_comment</code>); PS removes nothing extra because it reads <code>.hooks</code> after setting the command. Absolute paths are computed by <code>cd…pwd</code> / <code>Resolve-Path</code> so the injected config path is absolute regardless of cwd.</li>
+      <li><strong>Runs before <code>render-agent-audit</code> in the 3/3 ordering — and that's fine.</strong> render-hook only writes the conf <em>path</em> into the command string; the conf file itself is rendered by the next step. The <code>mkdir .claude</code> here is harmless and idempotent.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. No stack wires this yet — the <code>claude-code-elastic-audit</code> stack (task 3/3) is the consumer.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None new — task 3/3 (the <code>claude-code-elastic-audit</code> stack) wires <code>setup-agent-audit → render-hook → render-agent-audit → render-mcp →</code> the elastic-audit Kibana import, and is the last open task.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>New <code>components/agents/claude-code/scripts/render-hook.{sh,ps1}</code> register Claude Code's prompt-capture audit hook by merging the <code>hooks</code> block into <code>.claude/settings.local.json</code>, wiring the hook <code>command</code> to this platform's <code>capture-prompt</code> script with an injected <code>--config &lt;abs agent-audit.conf&gt;</code>. Create-if-absent and never-clobber, so it coexists with an existing <code>env</code> block and is a no-op on re-run.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified both shells</strong> on temp dirs: the rendered <code>command</code> is exactly <code>&lt;abs capture-prompt.(sh|ps1)&gt; --config &lt;abs&gt;/.claude/agent-audit.conf</code> with <code>timeout</code> preserved and no <code>_comment</code>; re-running is a no-op; and merging into an <code>env</code>-only file produces <code>{env, hooks}</code> with <code>env</code> intact.</li>
+      <li><strong>Gates:</strong> <code>shfmt -d</code> empty + <code>shellcheck</code> clean on the new <code>.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on the new <code>.ps1</code>; <code>docker compose config -q</code> passes for all four stacks.</li>
+    </ul>
+  </section>
+
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
