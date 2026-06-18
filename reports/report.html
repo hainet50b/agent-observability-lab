@@ -3311,6 +3311,37 @@
       <li><strong>Verified functionally for both shells:</strong> running all four <code>render-*.sh</code> and all four <code>render-*.ps1</code> into a fresh temp dir produced an identical <code>.codex/config.toml</code> (1861 bytes — <code>[otel]</code> + <code>[[hooks.UserPromptSubmit]]</code>/<code>[[hooks.PostToolUse]]</code> + <code>[mcp_servers.elasticsearch]</code>) and <code>agent-audit.conf</code> (523 bytes), with <strong>zero unresolved <code>@@</code> placeholders</strong>. Gates: <code>shfmt -d</code> empty + <code>shellcheck</code> clean on the four touched <code>*.sh</code>; <code>Invoke-ScriptAnalyzer</code> clean on the four touched <code>*.ps1</code>; all four stacks pass <code>docker compose config -q</code>.</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Add a <code>redacted</code> content mode to the audit capture hooks</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li><strong>Marker only on a present side (parity with <code>plaintext</code>).</strong> The spec says <code>redacted</code> puts <code>[REDACTED]</code> in <code>.text</code>. I gated the marker on the side actually having content — <code>capture-tool-call</code> writes <code>[REDACTED]</code> only when <code>tool_input</code> / <code>tool_response</code> were present, otherwise <code>.text</code> stays <code>null</code> with <code>length</code> 0, exactly as <code>plaintext</code> already behaves. This keeps "absent field → null" consistent across all three modes rather than fabricating a marker for a field that never existed. <code>capture-user-prompt</code> already early-exits on a missing prompt, so its redacted path always emits the marker.</li>
+      <li><strong>Body-form branch became a <code>case</code> / chained <code>if</code>.</strong> The two-way <code>plaintext</code>/else split is now three-way (<code>plaintext</code> → real, <code>redacted</code> → <code>[REDACTED]</code>, <code>encrypted</code>/anything-else → <code>null</code>). In the <code>.sh</code> hooks I used a <code>case "$content"</code> with the existing unindented-label style; in the <code>.ps1</code> hooks a chained <code>if/elseif/else</code> expression that <code>Invoke-Formatter</code> leaves untouched.</li>
+      <li><strong><code>.length</code> is computed before the body-form branch and never touched by it</strong> — so the true character count is recorded identically in all three modes. Verified live: the same prompt/input/output produced lengths 11 / 8 / 25 under <code>redacted</code>, <code>plaintext</code>, and <code>encrypted</code> alike.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>The <code>encrypted</code> mode still only nulls <code>.text</code> and reserves <code>.encrypted_text</code> — actually sealing a body into <code>.encrypted_text</code> remains unbuilt and is the natural next increment now that <code>redacted</code> exercises the same body-form seam.</li>
+      <li>There is no automated smoke test covering the Codex audit hooks (the lint-command smoke gate only runs <code>claude-code-elastic</code>'s). A <code>codex-cli-elastic-audit</code> hook smoke test (the capture-server harness used here, made permanent) would catch document-shaping regressions automatically.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>The audit capture hooks gained a third content mode, <code>redacted</code>, between <code>plaintext</code> and <code>encrypted</code>: it delivers the document with a fixed <code>[REDACTED]</code> marker in the body's <code>.text</code> while keeping the true <code>.length</code> — so you can verify the whole delivery path (identity, routing, strict mapping, landing) without exposing prompt or tool content. Applied to all four hooks (<code>capture-user-prompt</code> and <code>capture-tool-call</code>, both <code>.sh</code> and <code>.ps1</code>), plus the template's <code>content</code> comment.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified end to end against a local capture server</strong> (a stand-in for the Agent Audit data stream): each hook was run in <code>redacted</code>, <code>plaintext</code>, and <code>encrypted</code> modes for both shells. <code>redacted</code> → <code>user_prompt.text</code> exactly <code>[REDACTED]</code> (length 11), tool-call <code>input.text</code>/<code>output.text</code> both <code>[REDACTED]</code> (lengths 8/25); <code>plaintext</code> and <code>encrypted</code> outputs were unchanged from before, and the <code>.sh</code> and <code>.ps1</code> documents were byte-equivalent.</li>
+      <li>Gates: <code>shfmt -d</code> empty + <code>shellcheck</code> clean on both touched <code>*.sh</code>; <code>Invoke-Formatter</code> no-op + <code>Invoke-ScriptAnalyzer</code> clean on both touched <code>*.ps1</code>; all four stacks pass <code>docker compose config -q</code>.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

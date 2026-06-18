@@ -14,8 +14,9 @@
 # external deps — ConvertFrom-StringData, no jq/TOML parser; see SPEC/agent-audit.md
 # "Delivery and authorization"). This hook reads only the tool_call stream's keys:
 # capture.tool_call.enabled (false => skip), capture.tool_call.content (plaintext =>
-# .text; encrypted => null, sealing TBD), plus the shared elasticsearch.url / .api_key
-# / .timeout_ms and the per-stream elasticsearch.data_stream.tool_call. Config path:
+# .text; redacted => [REDACTED] marker; encrypted => null, sealing TBD), plus the shared
+# elasticsearch.url / .api_key / .timeout_ms and the per-stream
+# elasticsearch.data_stream.tool_call. Config path:
 #   INJECTED via -Config <abs path> from the rendered hook command (no ambient discovery).
 #
 # Field mapping (Codex raw payload -> canonical document):
@@ -165,11 +166,17 @@ try {
     $inLen   = if ($null -ne $inText)  { ([string]$inText).Length }  else { 0 }
     $outLen  = if ($null -ne $outText) { ([string]$outText).Length } else { 0 }
 
-    # content=plaintext carries .text; any other content nulls it (sealing into
-    # encrypted_text is a later increment). length is the true char count regardless.
-    $plain        = ($content -eq 'plaintext')
-    $inTextField  = if ($plain) { $inText }  else { $null }
-    $outTextField = if ($plain) { $outText } else { $null }
+    # Body form by capture.tool_call.content: plaintext carries the real serialized
+    # tool I/O; redacted carries a fixed [REDACTED] marker in each present side
+    # (verifies the delivery path without exposing tool content); encrypted (or
+    # anything else) nulls them (sealing into encrypted_text is a later increment).
+    # length is the true char count regardless.
+    $inTextField = if ($content -eq 'plaintext') { $inText }
+    elseif ($content -eq 'redacted' -and $null -ne $inText) { '[REDACTED]' }
+    else { $null }
+    $outTextField = if ($content -eq 'plaintext') { $outText }
+    elseif ($content -eq 'redacted' -and $null -ne $outText) { '[REDACTED]' }
+    else { $null }
 
     # Reshape raw Codex payload -> canonical agent_audit.tool_call document.
     $record = [ordered]@{

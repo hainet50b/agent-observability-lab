@@ -12,8 +12,9 @@
 # external deps — ConvertFrom-StringData, no jq/TOML parser; see SPEC/agent-audit.md
 # "Delivery and authorization"). This hook reads only the user_prompt stream's keys:
 # capture.user_prompt.enabled (false => skip), capture.user_prompt.content (plaintext
-# => .text; encrypted => null, sealing TBD), plus the shared elasticsearch.url /
-# .api_key / .timeout_ms and the per-stream elasticsearch.data_stream.user_prompt. Path:
+# => .text; redacted => [REDACTED] marker; encrypted => null, sealing TBD), plus the
+# shared elasticsearch.url / .api_key / .timeout_ms and the per-stream
+# elasticsearch.data_stream.user_prompt. Path:
 #   INJECTED via -Config <abs path> from the rendered hook command (no ambient discovery).
 #
 # Field mapping (Codex raw payload -> canonical document):
@@ -152,9 +153,13 @@ try {
     $promptText = $rawObj.prompt
     $promptLen  = if ($null -ne $promptText) { ([string]$promptText).Length } else { 0 }
 
-    # content=plaintext carries prompt.text; any other content nulls it (sealing into
+    # Body form by capture.user_prompt.content: plaintext carries the real prompt;
+    # redacted carries a fixed [REDACTED] marker (verifies the delivery path without
+    # exposing the prompt); encrypted (or anything else) nulls it (sealing into
     # encrypted_text is a later increment). length is the true char count regardless.
-    $textField = if ($content -eq 'plaintext') { $promptText } else { $null }
+    $textField = if ($content -eq 'plaintext') { $promptText }
+    elseif ($content -eq 'redacted' -and $null -ne $promptText) { '[REDACTED]' }
+    else { $null }
 
     # Reshape raw Codex payload -> canonical agent_audit.user_prompt document.
     $record = [ordered]@{

@@ -21,8 +21,9 @@
 # Delivery config (read at run time from agent-audit.conf, NOT hard-coded) — this
 # hook reads only the `user_prompt` stream's keys:
 #   capture.user_prompt.enabled   — false => skip this stream (fail-open, no delivery)
-#   capture.user_prompt.content   — plaintext populates .text; encrypted leaves
-#                                    .text/.encrypted_text null (sealing not built yet)
+#   capture.user_prompt.content   — plaintext populates .text; redacted writes a
+#                                    [REDACTED] marker (true .length kept); encrypted
+#                                    leaves .text/.encrypted_text null (sealing not built)
 #   elasticsearch.url / .api_key / .timeout_ms          — shared connection
 #   elasticsearch.data_stream.user_prompt               — this stream's destination
 # Config path is INJECTED, not discovered: the rendered hook command in config.toml
@@ -302,14 +303,16 @@ EOF
   fi
 fi
 
-# plaintext mode populates user_prompt.text; any other content (encrypted) leaves it
-# null — sealing into encrypted_text is a later increment. .length is the true char
-# count regardless, so the audit trail still records that a prompt of that size occurred.
-if [ "$content" = plaintext ]; then
-  text_field=$(jv_esc "$prompt_esc")
-else
-  text_field=null
-fi
+# Body form by capture.user_prompt.content: plaintext stores the real prompt; redacted
+# stores a fixed [REDACTED] marker (verifies the delivery path — identity, routing,
+# strict mapping, landing — without exposing the prompt); encrypted (or anything else)
+# leaves .text null — sealing into encrypted_text is a later increment. .length is the
+# true char count regardless, so the audit trail still records a prompt of that size.
+case "$content" in
+plaintext) text_field=$(jv_esc "$prompt_esc") ;;
+redacted) text_field='"[REDACTED]"' ;;
+*) text_field=null ;;
+esac
 
 # Assemble the canonical agent_audit.user_prompt document with printf (no jq). Lifted
 # values (prompt/session/turn/model, provider claims) are already JSON-escaped; the

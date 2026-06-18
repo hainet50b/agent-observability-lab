@@ -22,8 +22,9 @@
 # Delivery config (read at run time from agent-audit.conf, NOT hard-coded) — this
 # hook reads only the `tool_call` stream's keys:
 #   capture.tool_call.enabled   — false => skip this stream (fail-open, no delivery)
-#   capture.tool_call.content   — plaintext populates .text; encrypted leaves
-#                                 .text/.encrypted_text null (sealing not built yet)
+#   capture.tool_call.content   — plaintext populates .text; redacted writes a
+#                                 [REDACTED] marker (true .length kept); encrypted
+#                                 leaves .text/.encrypted_text null (sealing not built)
 #   elasticsearch.url / .api_key / .timeout_ms        — shared connection
 #   elasticsearch.data_stream.tool_call               — this stream's destination
 # Config path is INJECTED, not discovered: the rendered hook command in config.toml
@@ -291,15 +292,23 @@ EOF
   fi
 fi
 
-# plaintext mode populates input/output .text; any other content (encrypted) leaves
+# Body form by capture.tool_call.content: plaintext stores the real serialized tool
+# I/O; redacted stores a fixed [REDACTED] marker in each present side (verifies the
+# delivery path without exposing tool content); encrypted (or anything else) leaves
 # them null — sealing into encrypted_text is a later increment. .length is the true
-# char count regardless, so the audit trail records that a tool call of that size occurred.
+# char count regardless, so the audit trail records a tool call of that size.
 in_text=null
 out_text=null
-if [ "$content" = plaintext ]; then
+case "$content" in
+plaintext)
   [ -n "$in_raw" ] && in_text=$(printf '"%s"' "$(jesc "$in_raw")")
   [ -n "$out_raw" ] && out_text=$(printf '"%s"' "$(jesc "$out_raw")")
-fi
+  ;;
+redacted)
+  [ -n "$in_raw" ] && in_text='"[REDACTED]"'
+  [ -n "$out_raw" ] && out_text='"[REDACTED]"'
+  ;;
+esac
 
 # Assemble the canonical agent_audit.tool_call document with printf (no jq). Lifted
 # values are already JSON-escaped; shell-derived identity is escaped by jv_raw.
