@@ -3516,6 +3516,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Add a Claude Code — Turn Timeline (Events) saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Modelled on the existing pill-less <strong>Event Overview</strong> object: a <code>search</code> on <code>claude-code-events</code> with an empty <code>filter[]</code> and a single index reference (no <code>filter[n].meta.index</code> ref needed). <code>@timestamp</code> desc sort.</li>
+      <li>Kept all per-event-type discriminator columns even though any given row populates only its own (e.g. <code>labels.hook_name</code> only on hook events) — that sparsity is the point of a union timeline; all field paths verified present in live <code>field_caps</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None. <code>trace.id</code> column deferred to the traces diff per the task.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None — the next task deletes the now-superseded Event Overview.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added <strong>Claude Code — Turn Timeline (Events)</strong> — an unfiltered, all-event-types timeline (one row per event, <code>@timestamp</code> desc) with <code>message</code> as the "what" plus the union of per-activity discriminator columns. Scope to a turn by adding a <code>labels.prompt_id</code> filter in Discover. The Claude saved-search set is now 17.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> all 18 NDJSON lines parse; import reports <code>success: true, successCount: 17, errors: 0</code>; the object has no filter pill and an empty query bar.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
