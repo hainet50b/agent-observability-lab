@@ -3460,6 +3460,34 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Add a Claude Code — Turns saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Mirrored the just-shipped Conversations entry and Codex's Turns view — same ES|QL house style, <code>isTextBasedQuery: true</code>, empty <code>sort</code>, no <code>references</code> (query carries <code>FROM</code>). Built the line with <code>jq --rawfile</code> for safe escaping.</li>
+      <li>Columns and query taken verbatim from the task; the only key difference from Conversations is grouping <code>BY prompt_id = labels.prompt_id</code> and carrying <code>conversation_id = VALUES(session.id)</code>.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li><strong>Mid-run telemetry-schema drift (resolved with the human).</strong> Partway through this task the live stack briefly switched to Claude Code v2.1.181's new OpenTelemetry GenAI schema (<code>gen_ai.request.attempt</code>, only <code>labels.client_request_id</code> / <code>numeric_labels.attempt</code>) under which every legacy <code>claude_code.*</code> / <code>labels.prompt_id</code> field vanished — so the as-written tasks couldn't be live-verified. I paused and raised it; the human reverted the telemetry settings, the legacy schema returned, and verification proceeded normally. Flagging in case the new schema is the intended future direction (it would require re-speccing the whole Claude view set).</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>Consider a spec task to track Claude Code's move to OTel GenAI semantic conventions (the <code>gen_ai.*</code> log family) — if/when that becomes the default emission, the entire Claude saved-search catalogue needs re-mapping.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Added a <strong>Claude Code — Turns</strong> saved search — an ES|QL per-turn usage rollup (one row per <code>labels.prompt_id</code>: prompts, LLM requests, tool calls, hooks, token sums, cost, with the owning <code>conversation_id</code>), the turn-level companion to Conversations. The Claude saved-search set is now 16.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack</strong> (after the legacy schema was restored): the ES|QL query returns one row per turn (a recent turn shows 1 prompt / 2 LLM requests / 2 tool calls / $0.22); all 17 NDJSON lines parse with <code>jq</code>; import reports <code>success: true, successCount: 16, errors: 0</code>.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No shell/PowerShell scripts were touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
