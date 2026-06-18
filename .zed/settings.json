@@ -1,0 +1,15 @@
+{
+  "lsp": {
+    "powershell-es": {
+      "settings": {
+        "powershell": {
+          "codeFormatting": {
+            "preset": "Stroustrup",
+            "openBraceOnSameLine": true,
+            "ignoreOneLineBlock": true
+          }
+        }
+      }
+    }
+  }
+}
