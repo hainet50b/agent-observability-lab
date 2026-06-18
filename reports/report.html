@@ -3544,6 +3544,33 @@
       <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
     </ul>
   </section>
+  <section>
+    <h2>Delete the Claude Code — Event Overview saved search</h2>
+
+    <h3>Judgement points</h3>
+    <ul>
+      <li>Removed the object via a <code>jq select(.id != …)</code> pass and rebuilt the trailing summary line with <code>exportedCount</code> 17 → 16 (<code>missingReferences</code> unchanged). Also deleted the live object so an already-populated Kibana matches a fresh import.</li>
+    </ul>
+
+    <h3>Unresolved / workarounds</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Next PRD suggestions</h3>
+    <ul>
+      <li>None.</li>
+    </ul>
+
+    <h3>Change summary</h3>
+    <p>Deleted <strong>Claude Code — Event Overview</strong>, superseded by the richer <strong>Turn Timeline (Events)</strong> (same unfiltered all-event timeline, more per-activity columns). The underlying events stay in <code>logs-apm.app.claude_code*</code>, so nothing is lost. The Claude saved-search set is back to 16.</p>
+
+    <h3>Review highlights</h3>
+    <ul>
+      <li><strong>Verified against the live stack:</strong> the file imports <code>success: true, successCount: 16</code>; a Saved Objects fetch of <code>claude-code-event-overview</code> returns 404 (gone from Discover); the rest open unchanged.</li>
+      <li>Gate: all four stacks pass <code>docker compose config -q</code>. No scripts touched.</li>
+    </ul>
+  </section>
   <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
