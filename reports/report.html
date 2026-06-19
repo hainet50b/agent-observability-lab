@@ -260,6 +260,43 @@ prompt-redaction processor; the three follow-on ingest-control tasks will add
 <code>drop</code>/<code>remove</code> processors to the same file.</p>
 </section>
 
+<section>
+<h2>Drop Claude Code raw API-body events at ingest (OTEL_LOG_RAW_API_BODIES)</h2>
+
+<h3>Judgement points</h3>
+<p>Added a single <code>drop</code> processor as the <em>first</em> processor in
+<code>logs-apm.app@custom-claude-code.pipeline.json</code>, ahead of the existing prompt-redaction
+<code>set</code>. Discarding the whole document before any field work is both cheaper and clearer
+than redacting fields on a doc that is about to vanish. The condition keys off the top-level
+<code>message</code> (<code>ctx.message == 'claude_code.api_request_body' || ... == 'claude_code.api_response_body'</code>)
+exactly as the task specified — this catches the doc regardless of whether the body arrived inline
+(<code>labels.body</code>) or by file reference (<code>labels.body_ref</code>), since the discriminator
+is the event type, not the body field. Mirrors the <code>drop</code> idiom already used in Codex's
+<code>logs-apm.app@custom-codex_cli_rs</code> pipeline.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The two remaining sibling tasks (tool-argument field-drop via <code>OTEL_LOG_TOOL_DETAILS</code>,
+tool-output drop via <code>OTEL_LOG_TOOL_CONTENT</code>) extend this same file and are unblocked.
+The tool-output task notes its <code>drop</code> can fold into this one's <code>if</code> — worth doing
+so all whole-doc drops read as one processor.</p>
+
+<h3>Change summary</h3>
+<p>Claude Code's raw API-body events (<code>claude_code.api_request_body</code> /
+<code>claude_code.api_response_body</code>), which carry the entire conversation and full model
+response, are now dropped at the Elasticsearch ingest layer before storage — so they never land
+even if a client sets <code>OTEL_LOG_RAW_API_BODIES</code>, closing a path that otherwise bypasses
+the prompt-redaction control.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live via <code>_ingest/pipeline/.../_simulate</code>: both API-body event types are
+dropped (inline-body and file-ref variants), while <code>user_prompt</code> (still redacted) and
+<code>tool_result</code> pass through untouched. The drop is whole-document — there is no surviving
+metadata-only record of these events, which is the intended posture.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 {
-  "description": "Claude Code app-logs sub-pipeline: force-redacts prompt text regardless of the client OTEL_LOG_USER_PROMPTS gate.",
+  "description": "Claude Code app-logs sub-pipeline: force-redacts prompt text regardless of the client OTEL_LOG_USER_PROMPTS gate, and drops raw API-body events regardless of OTEL_LOG_RAW_API_BODIES.",
   "processors": [
+    { "drop": { "if": "ctx.message == 'claude_code.api_request_body' || ctx.message == 'claude_code.api_response_body'" } },
     { "set": { "field": "labels.prompt", "value": "<REDACTED>", "override": true, "if": "ctx.labels?.prompt != null" } }
   ]
 }
