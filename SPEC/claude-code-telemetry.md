@@ -188,6 +188,8 @@ scoped to **`traces-apm-agents_claude_code*`**, so it needs no `service.name`
 filter; the `agents_` prefix also gives a cross-agent glob
 **`traces-apm-agents_*`** (claude_code, codex, …) that excludes non-agent traces.
 (Spans captured before the pipeline was installed remain in `traces-apm-default`.)
+The same `traces-apm@custom-claude-code` sub-pipeline also force-redacts
+`labels.user_prompt` to `<REDACTED>` (see [Content-exposure gates](#content-exposure-gates)).
 
 **Why isolate traces specifically — and only traces:**
 
@@ -312,8 +314,17 @@ each gate changes — by data stream, document, and field:
 | `logs-apm.app.claude_code-default` | `message: claude_code.user_prompt` | `labels.prompt` | `<REDACTED>` | verbatim prompt text |
 | `traces-apm-agents_claude_code` | `labels.span_type: interaction` (the `claude_code.interaction` root, `processor.event: transaction`) | `labels.user_prompt` | `<REDACTED>` | verbatim prompt text |
 
+- **This stack force-redacts at ingest, overriding the gate.** The per-agent APM
+  `@custom` sub-pipelines — `logs-apm.app@custom-claude-code` (events) and
+  `traces-apm@custom-claude-code` (traces) — unconditionally set `labels.prompt`
+  and `labels.user_prompt` to `<REDACTED>`, so the **stored** value is always
+  `<REDACTED>` even when a client sets `OTEL_LOG_USER_PROMPTS=1` (the `1` column
+  above is what the agent *emits*, not what lands). A deliberate backend control:
+  a client cannot expose prompt text via the gate, and slash-command text (e.g.
+  `/exit`) — which the agent never redacts — is masked too. `prompt_length` /
+  `user_prompt_length` still land.
 - One flag governs both data streams — the event field and the trace-span field
-  flip together; nothing else changes.
+  flip together at emission; nothing else changes.
 - No retroactivity — documents ingested while the gate was off stay
   `<REDACTED>`; only new emissions carry text.
 - No side effects — no other `message` type gains content; `labels.tool_input` /
