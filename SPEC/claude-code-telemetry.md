@@ -376,6 +376,13 @@ each gate changes — by data stream, document, and field:
 | --- | --- | --- | --- | --- |
 | `logs-apm.app.claude_code-default` | `message: tool.output` — a new document type | `labels.output` (Bash: command stdout) / `labels.content` (Read: file contents) / `labels.diff` + `labels.file_path` (Edit: structured diff) | documents don't exist | verbatim tool output |
 
+- **This stack drops the `tool.output` documents at ingest.** The per-agent
+  `logs-apm.app@custom-claude-code` sub-pipeline `drop`s every `message: tool.output`
+  event, so tool output (`labels.output` / `content` / `diff` / `file_path`) **never
+  lands** regardless of the gate — the same whole-doc drop used for
+  `OTEL_LOG_RAW_API_BODIES`, matching the gate-off state (the documents don't exist
+  when off). The `1` column above and the bullets below describe what the agent
+  *emits*, not what is stored in this stack.
 - The upstream docs describe this as a `tool.output` *span event* on
   `claude_code.tool.execution` (60 KB cap, requires tracing). **Physically it
   lands as a document in the events data stream**, not in the traces stream —
