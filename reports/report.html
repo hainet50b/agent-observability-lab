@@ -159,6 +159,60 @@
 <p>Rendered both ways into a throwaway target: <code>render-hook.sh</code> emits both events as command-string hooks (POSIX), and <code>render-hook.ps1</code> emits both as exec-form hooks (<code>powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &lt;capture-*.ps1&gt; --config &lt;conf&gt;</code>) — the resulting <code>hooks</code> object has exactly <code>UserPromptSubmit, PostToolUse</code> with the matching capture script per event. <code>render-agent-audit.sh</code> writes the conf with both <code>user_prompt</code> and <code>tool_call</code> blocks. Gates: <code>docker compose config -q</code> green for all five stacks; <code>shfmt -d</code> + <code>shellcheck</code> clean on <code>render-hook.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on <code>render-hook.ps1</code>.</p>
 </section>
 
+<section>
+<h2>(claude tool-call 3/3) Add verify-tool-call-audit.{sh,ps1} + update stack README</h2>
+
+<h3>Judgement points</h3>
+<p>Mirroring Codex's <code>verify-tool-call-audit.{sh,ps1}</code> meant composing from two proven
+siblings: the <strong>tool-call assertions</strong> (event.action/dataset, tool identity, serialized
+input/output bodies + lengths) from Codex's <code>verify-tool-call-audit</code>, and the
+<strong>rendered-hook driving</strong> (read <code>command</code> + <code>args[]</code> from
+<code>settings.local.json</code> and spawn that process, covering both the exec form and the
+<code>sh -c</code> command-string form) plus the <strong>Claude identity assertions</strong>
+(provider <code>anthropic</code>/<code>claude-code</code>, no <code>model</code>, no
+<code>user.email</code>, account/org from <code>~/.claude.json</code>) from this stack's
+<code>verify-agent-audit</code>. Registration is checked with <code>jq .hooks.PostToolUse</code> on
+<code>settings.local.json</code>, not a <code>config.toml</code> grep.</p>
+<p>Key Claude-vs-user_prompt difference encoded in the payload/assertions: Claude's
+<code>PostToolUse</code> <em>does</em> carry a <code>turn_id</code> (unlike its turn-less
+<code>UserPromptSubmit</code>), so the payload sends <code>turn_id: "verify-turn-1"</code> and the
+script asserts it is captured (not null). The payload also includes
+<code>cwd</code>/<code>transcript_path</code>/<code>permission_mode</code> precisely so the strict
+mapping must drop them — the doc landing at all proves the drop.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The live verification could not run the script's own <code>docker compose up -d</code> path: the
+user's <em>telemetry</em> stack (<code>claude-code-elastic</code>, with <code>aol-apm-server</code>)
+was running, and it shares the fixed <code>aol-*</code> container names/ports with the audit stack,
+so they cannot co-run. Rather than tear down the running telemetry stack, I verified the new path
+non-disruptively against the already-healthy live Elasticsearch: provisioned the audit
+<code>tool_call</code> template + stream additively, regenerated the stale <code>.claude/</code> (so
+it picks up the <code>PostToolUse</code> hook and <code>tool_call</code> conf keys from tasks 1/3 and
+2/3), drove the rendered hook with the synthetic payload exactly as the script does, confirmed every
+assertion against the landed doc, then removed the additive assets to leave the cluster as found. The
+only script lines not exercised this way are the boilerplate compose-up + health-wait (copied verbatim
+from the proven <code>verify-agent-audit.sh</code>).</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The header comment of <code>components/agents/claude-code/scripts/setup-audit.sh</code> still says
+it "Renders the UserPromptSubmit audit hook registration" (singular) — stale since task 2/3 made
+<code>render-hook</code> emit both <code>UserPromptSubmit</code> and <code>PostToolUse</code>. A small
+follow-up task could correct that comment to name both events.</p>
+
+<h3>Change summary</h3>
+<p>The <code>claude-code-elastic-audit</code> stack now has a <code>verify-tool-call-audit</code>
+script (bash + PowerShell) that drives the rendered <code>PostToolUse</code> hook end-to-end and
+confirms the canonical tool-call audit document lands in
+<code>logs-agent_audit.tool_call-default</code>. Claude Code tool-call capture moved from "deferred"
+to "wired" throughout the stack README.</p>
+
+<h3>Review highlights</h3>
+<p>Confirm the README intro/diagram/"Why a separate stack" now reading <code>UserPromptSubmit</code>
++ <code>PostToolUse</code> matches your intent. The verified live doc: <code>action=tool-call</code>,
+<code>turn_id=verify-turn-1</code>, no <code>model</code>, serialized input length 47 / output length
+9, <code>user.id</code> present with no <code>user.email</code>.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

@@ -5,13 +5,13 @@
 > Server** and no OTLP telemetry.
 
 ```
-Claude Code hook    ──HTTP (direct)──▶  Elasticsearch  ──▶  Kibana
-(UserPromptSubmit)                      :9200               :5601
+Claude Code hooks               ──HTTP (direct)──▶  Elasticsearch  ──▶  Kibana
+(UserPromptSubmit, PostToolUse)                     :9200               :5601
 ```
 
-This stack captures **what a Claude session was asked to do** — each submitted
-prompt — by writing canonical audit documents straight to Elasticsearch from a
-fail-open Claude Code hook. There is **no APM Server** here: audit is a direct
+This stack captures **what a Claude session did** — each submitted prompt and
+each completed tool call — by writing canonical audit documents straight to
+Elasticsearch from fail-open Claude Code hooks. There is **no APM Server** here: audit is a direct
 hook → Elasticsearch path that never traverses the OTLP / APM pipeline (see
 [`../../SPEC/agent-audit.md`](../../SPEC/agent-audit.md)). For the OpenTelemetry
 **telemetry** view (metrics / events / traces over APM Server), use the sibling
@@ -19,8 +19,8 @@ hook → Elasticsearch path that never traverses the OTLP / APM pipeline (see
 
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
 > `127.0.0.1`. Never expose this publicly. Audit documents capture prompt text
-> (plaintext in lab mode) — don't run a session containing secrets against this
-> stack, and never commit captured audit data into the repo.
+> and tool I/O (plaintext in lab mode) — don't run a session containing secrets
+> against this stack, and never commit captured audit data into the repo.
 
 > ⚠️ **Cannot run alongside the other Elastic stacks.** This stack reuses the
 > Elastic backend's fixed `aol-*` container names and host ports (`9200` /
@@ -34,12 +34,12 @@ hook → Elasticsearch path that never traverses the OTLP / APM pipeline (see
 Telemetry and audit are composed as **separate stacks** — not for physical
 isolation (the lab is single-node) but to keep each stack's load-bearing set
 legible. This stack's compose visibly carries **no APM Server**, and its agent
-home (`.claude`) carries `settings.local.json` (the `UserPromptSubmit` audit-hook
-registration — Claude registers hooks in settings, not a separate file),
-`agent-audit.conf` (the hook delivery config), and `.mcp.json` (the Elasticsearch
-MCP), with no telemetry `env`. The two stacks own separate Compose projects,
-volumes, and agent homes. It reuses the `elastic-audit` backend wholesale, adding
-only Claude Code's audit hook. See
+home (`.claude`) carries `settings.local.json` (the `UserPromptSubmit` +
+`PostToolUse` audit-hook registrations — Claude registers hooks in settings, not a
+separate file), `agent-audit.conf` (the hook delivery config), and `.mcp.json`
+(the Elasticsearch MCP), with no telemetry `env`. The two stacks own separate
+Compose projects, volumes, and agent homes. It reuses the `elastic-audit` backend
+wholesale, adding only Claude Code's audit hooks. See
 [`../../SPEC/agent-audit.md`](../../SPEC/agent-audit.md) "Where this runs".
 
 ## Data streams
@@ -49,9 +49,9 @@ Audit records are **agent-cross-cutting**: the AI agent (Claude Code / Codex CLI
 name. The streams are provisioned by `scripts/setup.sh`:
 
 - `logs-agent_audit.user_prompt-default` — one document per submitted prompt
-  (the `UserPromptSubmit` hook). **This is the stream Claude Code writes to today.**
-- `logs-agent_audit.tool_call-default` — provisioned by the shared backend script
-  for the cross-agent schema; Claude Code does not capture tool calls yet.
+  (the `UserPromptSubmit` hook).
+- `logs-agent_audit.tool_call-default` — one document per completed tool call
+  (the `PostToolUse` hook).
 
 Both use **strict** mappings (an unexpected field fails the index rather than
 silently growing the audit schema) and a 30-day retention default.
@@ -59,7 +59,7 @@ silently growing the audit schema) and a 30-day retention default.
 ## Prerequisites
 
 - Docker with a running daemon (`docker compose`).
-- `curl` and `jq` (used by `setup.sh` and the verify script).
+- `curl` and `jq` (used by `setup.sh` and the verify scripts).
 - Claude Code (`claude`), to generate real audit records.
 
 ## Quick Tour
@@ -80,8 +80,8 @@ Kibana is then at <http://localhost:5601>. The two backend services
 (`aol-elasticsearch`, `aol-kibana`) are the `elastic-audit` backend — the same
 local Elasticsearch as the telemetry stack, **minus APM Server**. `scripts/setup.sh`
 runs the post-up bootstrap in one shot — it provisions the Agent Audit data streams
-and their strict index templates, registers the `UserPromptSubmit` hook in
-`.claude/settings.local.json`, renders the hook delivery config to
+and their strict index templates, registers the `UserPromptSubmit` + `PostToolUse`
+hooks in `.claude/settings.local.json`, renders the hook delivery config to
 `.claude/agent-audit.conf`, writes the Elasticsearch MCP to `.mcp.json` (all in this
 directory), and imports the Agent Audit Kibana **data views** and **saved searches**.
 Steps are idempotent / create-if-absent, so re-run it any time. Both scripts read
@@ -93,9 +93,10 @@ they fail fast if the file is missing or a key is empty rather than assuming loc
 
 `scripts/setup.sh` wrote a self-contained Claude home at
 `stacks/claude-code-elastic-audit/.claude/` (gitignored) carrying the audit
-config — `settings.local.json` (the `UserPromptSubmit` hook registration, with the
-hook command's `--config` pointing at the absolute `agent-audit.conf` path) and
-`agent-audit.conf` (the hook's Elasticsearch delivery config) — plus a project
+config — `settings.local.json` (the `UserPromptSubmit` + `PostToolUse` hook
+registrations, with each hook command's `--config` pointing at the absolute
+`agent-audit.conf` path) and `agent-audit.conf` (the hooks' Elasticsearch delivery
+config) — plus a project
 `.mcp.json` (the Elasticsearch MCP server). There is no telemetry `env` — this stack
 does no telemetry. Because Claude Code loads project settings from the launch
 directory, just run `claude` **from this stack directory**:
@@ -111,26 +112,28 @@ The first launch prompts to trust the project-scoped Elasticsearch MCP server
 `~/.claude.json` `oauthAccount`; without an OAuth session those fields stay `null`
 (valid — the workstation `user.id` is still derived).
 
-Then submit a prompt or two. Each prompt you submit is reshaped into a canonical
-`agent_audit.user_prompt` document and POSTed (fail-open, short timeout) to the
-local audit data stream. Lab mode stores the captured text in **plaintext** for
-searchability; production-oriented deployments should use encrypted content and
-restricted read access.
+Then do a little work in the session. Each prompt you submit and each tool call
+Claude completes is reshaped into a canonical `agent_audit.*` document and POSTed
+(fail-open, short timeout) to the local audit data streams. Lab mode stores the
+captured text in **plaintext** for searchability; production-oriented deployments
+should use encrypted content and restricted read access.
 
 ### 3. Verify the audit path (optional)
 
 ```sh
 scripts/verify-agent-audit.sh        # UserPromptSubmit -> user_prompt stream
+scripts/verify-tool-call-audit.sh    # PostToolUse      -> tool_call stream
 ```
 
-It follows the 3A pattern: **Arrange** brings the stack up and waits for
-Elasticsearch health; **Act** feeds a synthetic Claude `UserPromptSubmit` payload
-through the configured hook (injecting the delivery config via `--config`, exactly
-as a real session invokes it); **Assert** confirms the canonical audit document
-landed in `logs-agent_audit.user_prompt-default`; **Cleanup** deletes the synthetic
-document. It needs `docker` (running daemon), `curl`, `jq`, and a completed
-`setup.sh`; it **SKIPs** (exit 0) when the daemon is unreachable or setup has not
-run. Override the ES endpoint with `ES_URL` (`-EsUrl` for the `.ps1`).
+Each follows the 3A pattern: **Arrange** brings the stack up and waits for
+Elasticsearch health; **Act** feeds a synthetic Claude hook payload through the
+**rendered** hook exactly as Claude spawns it (reading the command + `args[]` from
+`settings.local.json`, with the delivery config already baked into `--config`);
+**Assert** confirms the canonical audit document landed in the right stream;
+**Cleanup** deletes the synthetic document. They need `docker` (running daemon),
+`curl`, `jq`, and a completed `setup.sh`; they **SKIP** (exit 0) when the daemon is
+unreachable or setup has not run. Override the ES endpoint with `ES_URL` (`-EsUrl`
+for the `.ps1`).
 
 ### 4. See the audit records
 
@@ -158,16 +161,13 @@ docker compose down -v     # also wipe captured audit records
 ## What's deferred
 
 Wired now: the composition (Elasticsearch + Kibana, no APM Server), the Agent Audit
-data streams with strict mappings, the fail-open `UserPromptSubmit` hook, the
-Elasticsearch MCP, and the Agent Audit data views + saved searches. Authored later,
-with the human:
+data streams with strict mappings, the fail-open `UserPromptSubmit` + `PostToolUse`
+hooks, the Elasticsearch MCP, and the Agent Audit data views + saved searches.
+Authored later, with the human:
 
-- **Prompt sealing** — lab mode stores captured prompt text in plaintext; an
+- **Prompt / tool-I/O sealing** — lab mode stores captured text in plaintext; an
   encrypted mode (null `text`, populated `encrypted_text`) is reserved in the
   schema but not built.
-- **Tool-call capture for Claude Code** — only `UserPromptSubmit` is captured today;
-  a `PostToolUse` audit hook (writing `logs-agent_audit.tool_call-default`, as Codex
-  CLI already does) is a later increment.
 
 ## Layout
 
@@ -177,10 +177,12 @@ claude-code-elastic-audit/
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / Kibana)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh                            # bootstrap: audit streams + settings.local.json (hook) + agent-audit.conf + .mcp.json + Kibana import
+   ├─ setup.sh                            # bootstrap: audit streams + settings.local.json (hooks) + agent-audit.conf + .mcp.json + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
    ├─ verify-agent-audit.sh               # UserPromptSubmit -> user_prompt stream verification
-   └─ verify-agent-audit.ps1              # PowerShell mirror
+   ├─ verify-agent-audit.ps1              # PowerShell mirror
+   ├─ verify-tool-call-audit.sh           # PostToolUse -> tool_call stream verification
+   └─ verify-tool-call-audit.ps1          # PowerShell mirror
 ```
 
 `setup.{sh,ps1}` calls the component bootstrap scripts directly. The
@@ -192,10 +194,11 @@ config, the asset libraries (the Agent Audit data-stream index templates under
 `elasticsearch/index-templates/`; the Agent Audit data views and saved searches
 under `kibana/agent-audit/`), and the generic appliers that load them. The Claude
 Code agent component (`../../components/agents/claude-code/`) owns only
-agent-runtime config — the audit hook (`hooks/capture-user-prompt.{sh,ps1}`), the hook
-delivery-config template, and the render scripts (`render-hook`,
-`render-agent-audit`, `render-mcp`). `scripts/setup.sh` registers the hook in
-this directory's gitignored `.claude/settings.local.json`, renders the delivery
+agent-runtime config — the audit hooks (`hooks/capture-user-prompt.{sh,ps1}`,
+`hooks/capture-tool-call.{sh,ps1}`), the hook delivery-config template, and the
+render scripts (`render-hook`, `render-agent-audit`, `render-mcp`). `scripts/setup.sh`
+registers the hooks in this directory's gitignored `.claude/settings.local.json`,
+renders the delivery
 config into `.claude/agent-audit.conf`, writes `.mcp.json`, provisions the audit
 data streams, and imports those Kibana objects.
 ```
