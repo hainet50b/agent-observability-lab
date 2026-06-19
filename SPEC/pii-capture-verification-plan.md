@@ -76,8 +76,9 @@ Verify:
       definitions hot-reload if the settings file existed at startup
 - [x] ES ingest of the **plaintext** record — built & verified live: the
       `prompts-audit` index (`dynamic: strict`, keyword envelope + `prompt`
-      text + reserved `prompt_cipher`), `setup-prompt-audit.{sh,ps1}` (idempotent
-      create), and the `capture-prompt.{sh,ps1}` `UserPromptSubmit` hook
+      text + reserved `prompt_cipher`), the elasticsearch service's `import-indices.{sh,ps1}` applier
+      (idempotent create, selected by the `elastic` backend's `setup-elasticsearch`),
+      and the `capture-prompt.{sh,ps1}` `UserPromptSubmit` hook
       (envelope from `~/.claude.json`, POST straight to ES, silent stdout, always
       exit 0). Both .sh and .ps1 paths land a document; strict mapping rejects
       stray fields (HTTP 400)

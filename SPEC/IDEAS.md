@@ -60,6 +60,15 @@ then layer CMS sealing on top (swap `prompt` → `prompt_cipher`).
 
 ## Lab structure — CONFIRMED
 
+> **Superseded (backends-decomposition refactor).** Any file layout this doc
+> sketches — here and in *What's left* below — predates the service-fragment
+> split. The audit-store assets now live
+> under `components/backends/services/elasticsearch/` (applied via the `elastic`
+> / `elastic-audit` backends' `setup-elasticsearch`); Kibana assets live under
+> `components/backends/services/kibana/<source>/`. See `SPEC/SPEC.md` for the
+> authoritative current shape — the rationale below still holds, only the paths
+> moved.
+
 This feature is agent-non-specific store + Claude-specific capture, so it
 splits cleanly and rides into BOTH existing stacks with no new stack:
 

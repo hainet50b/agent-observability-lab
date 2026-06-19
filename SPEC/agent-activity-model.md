@@ -1,7 +1,7 @@
 # Agent activity model — the shape behind the Kibana saved searches
 
 The per-agent saved searches
-(`components/backends/elastic/kibana/<agent>/saved-searches.ndjson`) are **not** a
+(`components/backends/services/kibana/<source>/saved-searches.ndjson`) are **not** a
 1:1 catalogue of telemetry events. They are designed **top-down** from an
 agent-agnostic activity model, and each view is then filled with whatever
 telemetry that agent happens to emit. A new agent is onboarded by **mapping its

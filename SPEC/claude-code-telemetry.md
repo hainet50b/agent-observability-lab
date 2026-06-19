@@ -6,7 +6,7 @@ from live sessions (`service.name = claude-code`, Claude Code 2.1.159, Stack
 fields can change. This is the agent-knowledge companion to the stack's Quick
 Tour (`stacks/claude-code-elastic/README.md`); the Kibana views built on these
 signals ship as importable NDJSON in
-`components/backends/elastic/kibana/claude-code/` — curated Discover **saved
+`components/backends/services/kibana/claude-code/` — curated Discover **saved
 searches** rather than extra data views (a data view holds only an index-pattern
 + time field, not a stored query or columns).
 
@@ -176,9 +176,11 @@ unlike the metrics/events streams, whose dataset embeds the service
 co-mingle, and a data view can't store a `service.name` filter to separate them.
 
 This stack therefore **physically isolates the agent's spans by routing**: a
-`reroute` processor in the **`traces-apm@custom`** ingest pipeline (installed by
-`scripts/setup-trace-routing.sh`, which the `traces-apm@default-pipeline` already
-hooks) sends docs with `service.name: claude-code` to a dedicated
+`reroute` processor in the **`traces-apm@custom`** ingest pipeline — the standard
+Elastic APM extension point the managed `traces-apm@default-pipeline` already
+hooks, installed here by the `elastic` backend's `scripts/setup-elasticsearch.sh`
+(via the elasticsearch service's `import-ingest-pipelines` applier) — sends docs
+with `service.name: claude-code` to a dedicated
 **`traces-apm-agents_claude_code`** data stream — it still matches `traces-apm-*`,
 so it keeps the full APM trace mappings; everything else (including any co-tenant
 production app traces) stays in `traces-apm-default`. The traces data view is
