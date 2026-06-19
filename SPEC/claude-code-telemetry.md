@@ -343,6 +343,18 @@ each gate changes — by data stream, document, and field:
 | `logs-apm.app.claude_code-default` | `message: claude_code.tool_decision` | `labels.tool_parameters` | absent | same shape — shows *what* the accept/reject decision was about |
 | `logs-apm.app.claude_code-default` | `message: claude_code.mcp_server_connection` | `labels.server_name` | absent | the configured MCP server name (e.g. `elasticsearch`) — this event otherwise has no server-name field at all |
 
+- **This stack field-drops the tool-argument fields at ingest.** The per-agent
+  `logs-apm.app@custom-claude-code` sub-pipeline `remove`s `labels.tool_input` and
+  `labels.tool_parameters` (ignore-missing), so on stored `tool_result` /
+  `tool_decision` documents those two fields are **absent** — identical to the
+  `OTEL_LOG_TOOL_DETAILS=0` shape (not `<REDACTED>`), so a client cannot expose
+  tool arguments via the gate. Scope is **only** those two argument fields;
+  `labels.server_name` on `mcp_server_connection` (the MCP server label, not
+  sensitive) and the `*_size_bytes` / `tool_name` / decision fields are kept.
+  (Contrast `OTEL_LOG_USER_PROMPTS`, redacted to `<REDACTED>` because the field
+  exists even when off, and `OTEL_LOG_RAW_API_BODIES`, whole-doc dropped because
+  the documents don't exist when off — each ingest control matches that gate's
+  own off-state for the sensitive payload.)
 - The command / path detail lives **inside the `tool_input` / `tool_parameters`
   JSON strings** — no flat `labels.full_command` / `labels.file_path` fields
   materialize on events.
