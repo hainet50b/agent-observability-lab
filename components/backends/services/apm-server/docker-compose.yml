@@ -1,11 +1,3 @@
-# APM Server service fragment — shared, agent- and backend-agnostic.
-#
-# The Elastic-native OTLP receiver (OTLP/HTTP + OTLP/gRPC on 8200) that agent
-# telemetry is pointed at; writes directly to Elasticsearch. Composed into the
-# `elastic` backend via `docker compose include:` alongside the elasticsearch
-# fragment, so it carries no top-level `name:`. Demo posture; do NOT expose
-# publicly.
-
 services:
   apm-server:
     image: docker.elastic.co/apm/apm-server:9.4.2
@@ -13,20 +5,14 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-    # strict.perms is relaxed because apm-server.yml is bind-mounted from the
-    # host and will not be owned by the in-container apm-server user; -e logs to
-    # stderr so `docker compose logs apm-server` is useful during verification.
+    # strict.perms=false: apm-server.yml is bind-mounted, not owned by the in-container user
     command: ["--strict.perms=false", "-e"]
     volumes:
       - ./config/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
     ports:
-      # OTLP/HTTP and OTLP/gRPC are both served on 8200. Localhost-only — demo
-      # posture, never exposed publicly.
       - "127.0.0.1:8200:8200"
     healthcheck:
-      # The apm-server image ships no curl/wget, so probe the OTLP port with a
-      # bash /dev/tcp request: the root endpoint returns "200" once the server
-      # is accepting traffic (no auth is configured).
+      # the image ships no curl/wget; probe the OTLP port via bash /dev/tcp (root returns 200 when ready)
       test:
         [
           "CMD",
