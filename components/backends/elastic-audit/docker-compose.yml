@@ -1,19 +1,3 @@
-# Elastic-audit backend — reusable, agent-agnostic composition (owns no services).
-#
-# The same Elasticsearch + Kibana store as the `elastic` backend, but WITHOUT
-# APM Server: the audit concern is a direct hook → Elasticsearch write that
-# never traverses the OTLP / APM path, so the OTLP receiver fragment is
-# deliberately not included. A stack composing this backend visibly carries no
-# APM Server — its load-bearing set is legible (see SPEC/SPEC.md "Repository
-# shape" and SPEC/agent-audit.md "Where this runs"). Not a stack on its own — it
-# carries no top-level `name:`, so the including stack owns the Compose project
-# name. Single-node, security-disabled local demo; do NOT expose publicly.
-#
-# ⚠️ Reuses the same aol-* container names and host ports (9200 / 5601) as the
-# `elastic` backend. An <agent>-elastic-audit stack and its telemetry sibling
-# (<agent>-elastic) are ALTERNATIVES, not co-run — `docker compose down` one
-# before bringing the other up.
-
 include:
   - ../services/elasticsearch/docker-compose.yml
   - ../services/kibana/docker-compose.yml
