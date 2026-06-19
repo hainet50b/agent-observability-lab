@@ -213,6 +213,53 @@ to "wired" throughout the stack README.</p>
 9, <code>user.id</code> present with no <code>user.email</code>.</p>
 </section>
 
+<section>
+<h2>Force-redact Claude Code prompt text at ingest</h2>
+<time>2026-06-19</time>
+
+<h3>Judgement points</h3>
+<p>Created the new per-agent app-logs sub-pipeline
+<code>components/backends/services/elasticsearch/claude-code/logs-apm.app@custom-claude-code.pipeline.json</code>
+with a single <code>set</code> processor mirroring Codex's prompt-redaction shape
+(<code>override: true</code>, guarded by <code>ctx.labels?.prompt != null</code>), and added a
+matching <code>set labels.user_prompt</code> processor <em>before</em> the existing
+<code>reroute</code> in <code>traces-apm@custom-claude-code.pipeline.json</code> (redact-then-reroute
+reads as the natural order). Used the angle-bracket marker <code>&lt;REDACTED&gt;</code> exactly as
+the task dictates so ingest- and client-side redaction are indistinguishable — deliberately NOT
+Codex's <code>[REDACTED]</code>. Kept each pipeline's <code>description</code> carrying the "why"
+(regardless of the client gate), which the processor JSON alone can't convey. No wiring touched:
+the shared <code>logs-apm.app@custom</code> / <code>traces-apm@custom</code> routers already dispatch
+on <code>service.name: claude-code</code> and <code>import-elasticsearch-assets.sh</code>
+auto-applies every <code>*.pipeline.json</code> in the concern dir.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None. Verified live on the running cluster: applied the <code>claude-code</code> concern (both
+pipelines acknowledged), then <code>_simulate</code> confirmed (1) events <code>labels.prompt</code>
+"my secret prompt /exit" → <code>&lt;REDACTED&gt;</code> with <code>prompt_length</code> intact, and
+the processor correctly skipped when <code>labels.prompt</code> is absent; (2) the trace interaction
+root's <code>labels.user_prompt</code> → <code>&lt;REDACTED&gt;</code> with
+<code>user_prompt_length</code> intact and the reroute to
+<code>traces-apm-agents_claude_code</code> still firing. Compose-config gate and the
+<code>claude-code-elastic</code> smoke test both PASS.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The next three tasks (raw API-body drop, tool-argument field-drop, tool-output drop) all extend
+this same <code>logs-apm.app@custom-claude-code</code> file and are now unblocked — they can be
+taken in order.</p>
+
+<h3>Change summary</h3>
+<p>Claude Code prompt text is now scrubbed to <code>&lt;REDACTED&gt;</code> at the Elasticsearch
+ingest layer — both the <code>user_prompt</code> event and the interaction trace root — so a prompt
+can never land in storage even if a client turns on <code>OTEL_LOG_USER_PROMPTS</code> (this also
+masks slash-command text the agent never redacts). The <code>*_length</code> fields survive.</p>
+
+<h3>Review highlights</h3>
+<p>Confirm <code>&lt;REDACTED&gt;</code> (angle brackets) is the intended marker, indistinguishable
+from Claude Code's own client redaction. The new events sub-pipeline currently holds only the
+prompt-redaction processor; the three follow-on ingest-control tasks will add
+<code>drop</code>/<code>remove</code> processors to the same file.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

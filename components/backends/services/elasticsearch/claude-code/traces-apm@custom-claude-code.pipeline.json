@@ -1,6 +1,7 @@
 {
-  "description": "Claude Code traces sub-pipeline: reroutes spans to traces-apm-agents_claude_code.",
+  "description": "Claude Code traces sub-pipeline: force-redacts the interaction-root user prompt regardless of the client OTEL_LOG_USER_PROMPTS gate, then reroutes spans to traces-apm-agents_claude_code.",
   "processors": [
+    { "set": { "field": "labels.user_prompt", "value": "<REDACTED>", "override": true, "if": "ctx.labels?.user_prompt != null" } },
     { "reroute": { "namespace": "agents_claude_code" } }
   ]
 }

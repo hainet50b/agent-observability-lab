@@ -1,0 +1,6 @@
+{
+  "description": "Claude Code app-logs sub-pipeline: force-redacts prompt text regardless of the client OTEL_LOG_USER_PROMPTS gate.",
+  "processors": [
+    { "set": { "field": "labels.prompt", "value": "<REDACTED>", "override": true, "if": "ctx.labels?.prompt != null" } }
+  ]
+}
