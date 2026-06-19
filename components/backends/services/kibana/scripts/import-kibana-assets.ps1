@@ -97,5 +97,3 @@ Write-Host ""
 Write-Host "PASS: Kibana saved objects imported into $KibanaUrl (sources: $($Sources -join ', '))."
 Write-Host "Open Discover (Open menu) for the saved searches, or the data-view selector"
 Write-Host "for the Metrics / Events / Traces views."
-
-

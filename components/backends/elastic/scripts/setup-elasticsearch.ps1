@@ -24,4 +24,3 @@ $ComponentDir = Split-Path -Parent $ScriptDir
 $EsScripts = Join-Path $ComponentDir '../services/elasticsearch/scripts'
 
 & (Join-Path $EsScripts 'import-elasticsearch-assets.ps1') -EsUrl $EsUrl -Concerns (@('shared') + $Sources)
-

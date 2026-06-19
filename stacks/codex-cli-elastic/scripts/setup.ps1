@@ -42,18 +42,13 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'ap
 
 filter Indent { "  $_" }
 
-Write-Host '[setup] 1/3 - Elasticsearch backend assets (@custom routers + per-agent sub-pipelines)'
+Write-Host '[setup] 1/3 - Elasticsearch backend assets'
 & (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl -Sources 'codex-cli' 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 2/3 - Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)'
+Write-Host '[setup] 2/3 - Codex session config'
 & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $StackDir -OtlpEndpoint $OtlpEndpoint 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 3/3 - Kibana saved objects (data views + saved searches)'
+Write-Host '[setup] 3/3 - Kibana saved objects'
 & (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl -Sources 'codex-cli' 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh.'
-
-

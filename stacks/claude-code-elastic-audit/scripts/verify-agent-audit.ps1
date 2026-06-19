@@ -176,5 +176,3 @@ try {
 finally {
     Pop-Location
 }
-
-

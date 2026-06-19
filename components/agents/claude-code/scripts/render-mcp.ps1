@@ -40,4 +40,3 @@ $cfg.PSObject.Properties.Remove('_comment')
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out) | Out-Null
 $cfg | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $out -Encoding utf8
 Write-Host "wrote $out"
-

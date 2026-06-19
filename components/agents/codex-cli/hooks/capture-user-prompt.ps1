@@ -228,5 +228,3 @@ catch {
     Log "capture failed ($_) — prompt proceeds uncaptured"
 }
 exit 0
-
-

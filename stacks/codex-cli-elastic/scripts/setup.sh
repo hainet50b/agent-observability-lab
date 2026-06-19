@@ -29,16 +29,13 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/3 — Elasticsearch backend assets (@custom routers + per-agent sub-pipelines)"
+echo "[setup] 1/3 — Elasticsearch backend assets"
 "$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" codex-cli | indent
 
 echo
-echo "[setup] 2/3 — Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)"
+echo "[setup] 2/3 — Codex session config"
 "$components_dir/agents/codex-cli/scripts/setup-telemetry.sh" "$stack_dir" "$otlp_endpoint" | indent
 
 echo
-echo "[setup] 3/3 — Kibana saved objects (data views + saved searches)"
+echo "[setup] 3/3 — Kibana saved objects"
 "$components_dir/backends/elastic/scripts/setup-kibana.sh" codex-cli | indent
-
-echo
-echo "[setup] done ✓ — point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

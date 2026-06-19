@@ -29,16 +29,13 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/3 — Elasticsearch backend assets (@custom routers + per-agent sub-pipelines)"
+echo "[setup] 1/3 — Elasticsearch backend assets"
 "$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" claude-code | indent
 
 echo
-echo "[setup] 2/3 — Kibana saved objects (data views + saved searches)"
+echo "[setup] 2/3 — Kibana saved objects"
 "$components_dir/backends/elastic/scripts/setup-kibana.sh" claude-code otelcol-sidecar | indent
 
 echo
-echo "[setup] 3/3 — Claude Code telemetry config (OTel env + .mcp.json)"
+echo "[setup] 3/3 — Claude Code telemetry config"
 "$components_dir/agents/claude-code/scripts/setup-telemetry.sh" "$stack_dir" "$otlp_endpoint" | indent
-
-echo
-echo "[setup] done ✓ — run 'claude' from this directory; verify with scripts/smoke-test.sh (and scripts/resilience-test.sh)."

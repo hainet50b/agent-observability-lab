@@ -244,5 +244,3 @@ catch {
     Log "capture failed ($_) — tool call proceeds uncaptured"
 }
 exit 0
-
-
