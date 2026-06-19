@@ -12,6 +12,8 @@ This is an infrastructure / demo repository, not an application codebase. The "c
 
 ## Comments and leanness
 
+**Leanness comes first, so a comment is the exception, not the habit** — be deliberately conservative about adding one, and prefer to let the code or config speak for itself rather than annotate it. The default is no comment.
+
 Aim for code and scripts that are **self-explanatory so a comment is unnecessary** — clear names and obvious structure carry the meaning. Reach for a comment only when the code genuinely cannot: a non-obvious **why** (a constraint, a gotcha, a deliberate deviation), never to restate the **what** the code already shows.
 
 Keep every artifact **as lean as possible so its load-bearing parts stand out** — cut incidental scaffolding and decorative or drive-by comments that bury (and drift from) the essential lines, so a reader can see at a glance which code actually does the work. This applies doubly to generated / rendered artifacts and data files (rendered configs, saved-object NDJSON, a JSON template's `_comment`): a comment baked into a template propagates into every rendered output and into users' files. Keep durable rationale at its single source — the template once, `SPEC/`, or the immutable PRD task — never copied across artifacts.
