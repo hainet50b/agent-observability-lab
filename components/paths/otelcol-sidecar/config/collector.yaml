@@ -1,29 +1,4 @@
-# otelcol-sidecar Collector config — Phase 3d (host-identity enrichment).
-#
-# Minimal pipeline shared by all three signals: receive OTLP (gRPC + HTTP) from
-# the local agent, detect host identity, batch, and forward to the Elastic
-# backend's APM Server over OTLP/HTTP. The exporter's sending_queue is backed by
-# the file_storage extension, so telemetry the agent emits while the central
-# backend is unreachable is persisted to disk and drained on reconnect rather
-# than lost — the reason the sidecar exists.
-#
-# Phase 3c adds the Collector's own health telemetry via service.telemetry (see
-# the service: block below). A silently-dead sidecar is an audit hole, so the
-# Collector reports on itself — over a path that is SEPARATE from the data
-# pipelines and so does not ride the agent payload's file_storage queue.
-#
-# Phase 3d adds a resourcedetection processor to every pipeline (before batch):
-# Claude Code's native telemetry carries no host identity, so the local Collector
-# stamps host.name (the machine's own name) and host.id (the organization's
-# asset ID, injected via the env detector) onto each relayed signal. See the
-# processors: block.
-
 extensions:
-  # Persists the exporter sending_queue to disk so queued telemetry survives a
-  # backend outage AND a Collector restart (the queue directory is a named
-  # volume — see docker-compose.yml). One instance per exporter keeps the design
-  # forward-looking: a future multi-backend fan-out queues each backend
-  # independently under its own subtree.
   file_storage/queue:
     directory: /var/lib/otelcol/file_storage
 
@@ -36,40 +11,6 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
-  # Stamp host identity onto every passing signal. Claude Code's native telemetry
-  # carries OS/arch resource attributes (host.os.*, host.architecture) but NO
-  # host.name / host.hostname, so a document can be attributed to a person
-  # (labels.user_email) and a session (session.id) but not to a DEVICE. A local
-  # Collector is the natural place to add device identity to everything it relays.
-  #
-  # Two complementary identities are added:
-  #   host.name — the machine's OWN name (intrinsic), from the `system` detector
-  #               (the OS hostname).
-  #   host.id   — the ORGANIZATION's asset number, INJECTED via the `env`
-  #               detector, which reads it from the Collector's
-  #               OTEL_RESOURCE_ATTRIBUTES env var (set in docker-compose.yml,
-  #               default aol-demo-asset-0001). This is the join axis to an asset
-  #               inventory — the lab analogue of an MDM writing the per-device
-  #               asset number into the Collector service definition at install
-  #               time. host.id is an ECS/APM-modeled field, so it lands as a
-  #               top-level, aggregatable host.id rather than flattening into
-  #               labels.* the way a custom attribute key would.
-  #
-  #   detectors: [env, system] — first-listed wins on conflict, so the injected
-  #                            organizational host.id beats the `system`
-  #                            detector's own machine-id host.id (which is
-  #                            default-off here — the *intrinsic* alternative a
-  #                            real fleet might enable instead).
-  #   override: false        — only ADD where absent; never clobber the agent's
-  #                            existing host.os.* / host.architecture (or any
-  #                            host.id / host.name the agent itself supplied).
-  #   hostname_sources: [os] — use the OS hostname (no cloud-metadata lookups).
-  #
-  # Container caveat: running in a container, the `system` detector reports the
-  # CONTAINER's hostname — set deterministically via the service `hostname:` in
-  # docker-compose.yml — NOT the laptop's. The dockerized stack demonstrates the
-  # mechanism; a real fleet runs the Collector as a host service (systemd/launchd)
-  # where it picks up the true machine name.
   resourcedetection:
     detectors: [env, system]
     system:
@@ -78,63 +19,28 @@ processors:
   batch: {}
 
 exporters:
-  # otlp_http is the OTLP/HTTP exporter (the `otlphttp` spelling is a deprecated
-  # alias in this Collector version).
   otlp_http:
-    # Reached by Compose service name: `include:` merges this path component and
-    # the Elastic backend into one Compose project, so `apm-server` resolves on
-    # the shared default network. http/protobuf is the default and is the wire
-    # format the APM Server decodes.
     endpoint: http://apm-server:8200
     retry_on_failure:
-      # When a batch can't be delivered (backend down, transient error) it is
-      # retried with backoff instead of dropped; retries that exhaust their
-      # backoff are re-enqueued onto the durable sending_queue below.
       enabled: true
     sending_queue:
-      # Durable queue: accepted telemetry is enqueued and exported
-      # asynchronously, and the queue is persisted to disk via file_storage. If
-      # the APM Server is unreachable, the agent's exports are still accepted by
-      # the always-up local Collector and buffered on disk, then flushed when the
-      # link recovers — no permanent loss during a central-backend outage.
       enabled: true
       storage: file_storage/queue
 
 service:
-  # Collector self-telemetry. service.telemetry is a SEPARATE subsystem from the
-  # data pipelines below: these metrics describe the Collector's OWN health and
-  # are exported straight to the APM Server — they do NOT ride the agent
-  # payload's file_storage sending_queue (so a broken central link, which is
-  # exactly when the queue backs up, does not also lose the signal that reports
-  # it). The single most useful metric is otelcol_exporter_queue_size — a growing
-  # persistent queue means the link to the central backend is failing while the
-  # agent keeps working locally against the always-up Collector.
   telemetry:
     resource:
-      # A recognizable service.name so the self-metrics are distinguishable in
-      # Elasticsearch from claude-code and the smoke-test producers (they land in
-      # metrics-apm.app.otelcol_sidecar-default, keyed by this name). The
-      # array-of-attributes form is the current schema (the inline-map form is
-      # deprecated and warns on startup).
       attributes:
         - name: service.name
           value: otelcol-sidecar
     metrics:
-      # Push the internal metrics to the same APM Server over OTLP rather than
-      # exposing the default Prometheus scrape endpoint (:8888): the backend
-      # already speaks OTLP and nothing scrapes the sidecar in this demo.
       readers:
         - periodic:
-            # Export every 15s (milliseconds), in line with the lab's lowered
-            # intervals so self-metrics show up quickly in the demo.
             interval: 15000
             exporter:
               otlp:
-                # Same APM Server as the data pipeline, reached by Compose
-                # service name; http/protobuf is the wire format APM decodes.
                 protocol: http/protobuf
                 endpoint: http://apm-server:8200
-  # The durable queue is only active while its backing extension is enabled.
   extensions: [file_storage/queue]
   pipelines:
     metrics:

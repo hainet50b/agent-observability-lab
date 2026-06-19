@@ -1,24 +1,3 @@
-# claude-code-otelcol-elastic — otelcol-sidecar path, Elastic backend (composition).
-#
-# Same Elastic backend + Claude Code agent as claude-code-elastic, but with a
-# local OpenTelemetry Collector inserted between the agent and the APM Server:
-#
-#   Claude Code ──OTLP──▶ otel-collector ──OTLP──▶ APM Server ──▶ Elasticsearch
-#
-# The agent points at the always-reachable local Collector (:4318) instead of
-# the APM Server directly. The backend services / config / Kibana NDJSON /
-# bootstrap scripts live in ../../components/backends/elastic/; the Collector and
-# its config live in ../../components/paths/otelcol-sidecar/. Both are pulled in
-# via `include:` below. Per-stack glue (the smoke test, the routing shims) lives
-# alongside this file under scripts/.
-#
-# ⚠️ This stack reuses the Elastic backend's fixed aol-* container names and host
-# ports (9200 / 5601 / 8200), so it CANNOT run at the same time as
-# claude-code-elastic — `docker compose down` one before bringing up the other.
-#
-# `name:` is set explicitly so the Compose project name is claude-code-otelcol-elastic
-# (and not derived from an included file's own `name:`).
-
 name: claude-code-otelcol-elastic
 
 include:
