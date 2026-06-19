@@ -297,6 +297,50 @@ dropped (inline-body and file-ref variants), while <code>user_prompt</code> (sti
 metadata-only record of these events, which is the intended posture.</p>
 </section>
 
+<section>
+<h2>Field-drop Claude Code tool-argument fields at ingest (<code>OTEL_LOG_TOOL_DETAILS</code>)</h2>
+
+<h3>Judgement points</h3>
+<p>The task specified <code>remove</code> of <code>labels.tool_input</code> and
+<code>labels.tool_parameters</code> with <code>ignore_missing: true</code>. I used a <em>single</em>
+<code>remove</code> processor with a field <em>array</em> (<code>["labels.tool_input",
+"labels.tool_parameters"]</code>) rather than two processors — it is the leaner, idiomatic ES form
+and <code>SPEC/claude-code-telemetry.md</code> describes it as one <code>remove</code> of both. No
+<code>if</code> condition is needed: <code>ignore_missing</code> already makes it a no-op on every
+other event type, and these two fields only ever appear on <code>tool_result</code> /
+<code>tool_decision</code>, so an explicit <code>message</code> guard would be redundant.</p>
+<p>Placed the processor <em>after</em> the existing prompt-redaction <code>set</code> in the same
+<code>logs-apm.app@custom-claude-code</code> sub-pipeline (the dependency named in the task), and
+extended the pipeline <code>description</code> to mention the new behaviour. Deliberately a field
+<em>removal</em>, not a <code>&lt;REDACTED&gt;</code> marker — removing the field reproduces the
+<code>OTEL_LOG_TOOL_DETAILS=0</code> shape exactly, so a client cannot expose tool arguments by
+flipping the gate on.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>One unchecked task remains: drop Claude Code tool-output events (<code>message: tool.output</code>,
+<code>OTEL_LOG_TOOL_CONTENT</code>) — the natural next increment in this same sub-pipeline.</p>
+
+<h3>Change summary</h3>
+<p>Verbatim tool arguments — Bash commands, file paths, Write/Edit content, search queries carried in
+<code>labels.tool_input</code> / <code>labels.tool_parameters</code> when a client sets
+<code>OTEL_LOG_TOOL_DETAILS=1</code> — are now stripped at the Elasticsearch ingest layer before
+storage, so stored <code>tool_result</code> / <code>tool_decision</code> events look identical to the
+gate-off shape regardless of the client setting. Non-sensitive fields
+(<code>tool_name</code>, the <code>*_size_bytes</code> counts, decision fields, and the MCP
+<code>server_name</code> label) are left untouched.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live via <code>_ingest/pipeline/.../_simulate</code>: on <code>tool_result</code> both
+argument fields are removed while <code>tool_name</code> / <code>tool_input_size_bytes</code> /
+<code>success</code> survive; on <code>tool_decision</code> <code>tool_parameters</code> is removed
+while <code>decision</code> / <code>prompt_id</code> survive; and a
+<code>mcp_server_connection</code> doc passes through with its <code>server_name</code> intact. Smoke
+test still reaches PASS.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
