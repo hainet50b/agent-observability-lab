@@ -53,7 +53,7 @@ Write-Host '[setup] 3/4 - .codex/config.toml: UserPromptSubmit + PostToolUse Age
 
 Write-Host ''
 Write-Host '[setup] 4/4 - Kibana saved objects: Agent Audit data views + saved searches'
-& (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'agent-audit' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl 6>&1 | Indent
 
 Write-Host ''
 Write-Host "[setup] done - point a Codex session at this directory (see ../README.md); verify with scripts/verify-agent-audit.ps1 and scripts/verify-tool-call-audit.ps1."

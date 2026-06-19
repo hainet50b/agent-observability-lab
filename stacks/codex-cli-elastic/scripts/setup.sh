@@ -39,7 +39,7 @@ echo "[setup] 2/3 — Codex session config (.codex/config.toml: [otel] + Elastic
 
 echo
 echo "[setup] 3/3 — Kibana saved objects (data views + saved searches)"
-"$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" codex-cli | indent
+"$components_dir/backends/elastic/scripts/setup-kibana.sh" codex-cli | indent
 
 echo
 echo "[setup] done ✓ — point a Codex session at this directory (see ../README.md); verify with scripts/smoke-test.sh."

@@ -34,7 +34,7 @@ echo "[setup] 1/4 — Elasticsearch backend assets (trace-routing/logs-drop pipe
 
 echo
 echo "[setup] 2/4 — Kibana saved objects (data views + saved searches)"
-"$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" claude-code | indent
+"$components_dir/backends/elastic/scripts/setup-kibana.sh" claude-code | indent
 
 echo
 echo "[setup] 3/4 — local Claude Code settings (telemetry env)"

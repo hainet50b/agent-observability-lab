@@ -47,7 +47,7 @@ Write-Host '[setup] 1/4 - Elasticsearch backend assets (trace-routing/logs-drop 
 
 Write-Host ''
 Write-Host '[setup] 2/4 - Kibana saved objects (data views + saved searches)'
-& (Join-Path $ComponentsDir 'backends/services/kibana/scripts/import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 3/4 - local Claude Code settings (telemetry env)'

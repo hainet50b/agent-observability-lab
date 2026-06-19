@@ -45,7 +45,7 @@ echo "[setup] 4/5 — local Claude Code MCP config (.mcp.json)"
 
 echo
 echo "[setup] 5/5 — Kibana saved objects: Agent Audit data views + saved searches"
-"$components_dir/backends/services/kibana/scripts/import-kibana-objects.sh" agent-audit | indent
+"$components_dir/backends/elastic-audit/scripts/setup-kibana.sh" | indent
 
 echo
 echo "[setup] done ✓ — run 'claude' from this directory; verify with scripts/verify-agent-audit.sh."
