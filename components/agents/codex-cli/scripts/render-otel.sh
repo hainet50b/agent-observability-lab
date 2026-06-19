@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
+#
+# render-otel.sh — render the Codex [otel] config.toml block from the agent-owned
+# template ../templates/otel.template.toml. The caller supplies the three FULL
+# per-signal OTLP endpoints; this script does no path construction (the
+# /v1/<signal> path is the receiver's to choose, not the agent's).
+#
+# Usage: render-otel.sh <target-dir> <logs-endpoint> <traces-endpoint> <metrics-endpoint>
+
 set -euo pipefail
 
-otlp_endpoint=${1:-}
-target_dir=${2:-}
+target_dir=${1:-}
+logs_endpoint=${2:-}
+traces_endpoint=${3:-}
+metrics_endpoint=${4:-}
 
-if [ -z "$otlp_endpoint" ] || [ -z "$target_dir" ]; then
-  echo "Usage: render-otel.sh <otlp-endpoint> <target-dir>" >&2
+if [ -z "$target_dir" ] || [ -z "$logs_endpoint" ] || [ -z "$traces_endpoint" ] || [ -z "$metrics_endpoint" ]; then
+  echo "Usage: render-otel.sh <target-dir> <logs-endpoint> <traces-endpoint> <metrics-endpoint>" >&2
   exit 2
 fi
 
@@ -26,4 +36,7 @@ template="$component_dir/templates/otel.template.toml"
 }
 
 mkdir -p "$target_dir/.codex"
-sed -e "s#@@OTLP_ENDPOINT@@#$otlp_endpoint#" "$template" >"$config"
+sed -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
+  -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
+  -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
+  "$template" >"$config"

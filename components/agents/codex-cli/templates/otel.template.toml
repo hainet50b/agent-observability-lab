@@ -6,16 +6,16 @@ environment = "dev"
 log_user_prompt = false
 
 [otel.exporter.otlp-http]
-endpoint = "@@OTLP_ENDPOINT@@/v1/logs"
+endpoint = "@@OTLP_LOGS_ENDPOINT@@"
 protocol = "binary"
 headers = {}
 
 [otel.trace_exporter.otlp-http]
-endpoint = "@@OTLP_ENDPOINT@@/v1/traces"
+endpoint = "@@OTLP_TRACES_ENDPOINT@@"
 protocol = "binary"
 headers = {}
 
 [otel.metrics_exporter.otlp-http]
-endpoint = "@@OTLP_ENDPOINT@@/v1/metrics"
+endpoint = "@@OTLP_METRICS_ENDPOINT@@"
 protocol = "binary"
 headers = {}

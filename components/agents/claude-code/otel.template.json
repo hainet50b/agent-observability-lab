@@ -1,8 +1,6 @@
 {
   "_comment": {
-    "docs": [
-      "https://code.claude.com/docs/en/monitoring-usage"
-    ]
+    "docs": ["https://code.claude.com/docs/en/monitoring-usage"]
   },
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
