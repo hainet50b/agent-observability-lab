@@ -1,8 +1,8 @@
 #!/usr/bin/env pwsh
-# import-kibana-objects.ps1 — the Kibana service's single saved-objects importer
+# import-kibana-assets.ps1 — the Kibana service's single saved-objects importer
 # for every source (agent / path / cross-agent audit).
 #
-# PowerShell mirror of import-kibana-objects.sh (same pairing as ralph.sh /
+# PowerShell mirror of import-kibana-assets.sh (same pairing as ralph.sh /
 # ralph.ps1). Kibana objects are consumed by Kibana, so every per-source NDJSON
 # bundle lives under this service component, namespaced by source: <source>/
 # (e.g. claude-code/, codex-cli/, otelcol-sidecar/, agent-audit/). Backends
@@ -16,10 +16,10 @@
 # Override the Kibana base URL with -KibanaUrl or the KIBANA_URL env var
 # (default below).
 #
-#   ./scripts/import-kibana-objects.ps1 -Sources claude-code
-#   ./scripts/import-kibana-objects.ps1 -Sources claude-code,otelcol-sidecar
-#   ./scripts/import-kibana-objects.ps1 -KibanaUrl http://localhost:5601 -Sources codex-cli
-#   ./scripts/import-kibana-objects.ps1 -Sources agent-audit
+#   ./scripts/import-kibana-assets.ps1 -Sources claude-code
+#   ./scripts/import-kibana-assets.ps1 -Sources claude-code,otelcol-sidecar
+#   ./scripts/import-kibana-assets.ps1 -KibanaUrl http://localhost:5601 -Sources codex-cli
+#   ./scripts/import-kibana-assets.ps1 -Sources agent-audit
 #
 # Run from anywhere — it locates its own component directory like the .sh version.
 

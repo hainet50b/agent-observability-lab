@@ -43,8 +43,7 @@ scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 
 Kibana is then at <http://localhost:5601>. `scripts/setup.sh` runs every post-up
 bootstrap step in one shot — it installs the trace-routing ingest pipeline
-(isolates Claude Code's spans into `traces-apm-agents_claude_code`), creates the
-`prompts-audit` index, and imports the Kibana saved objects — and is idempotent,
+(isolates Claude Code's spans into `traces-apm-agents_claude_code`) and imports the Kibana saved objects — and is idempotent,
 so re-run it any time (e.g. after editing saved objects). Both scripts read their
 target endpoints — Elasticsearch, the APM OTLP endpoint, and Kibana — from
 `setup.conf` at the stack root, or another file you pass (`setup.sh <config>` /
@@ -217,81 +216,6 @@ docker compose down        # keep the Elasticsearch volume
 docker compose down -v     # also wipe ingested telemetry
 ```
 
-## Prompt audit trail (independent of OTLP)
-
-A separate, opt-in capability that answers **"when / who / what prompt"** for
-compliance — built on a path that is **completely independent of the OTLP
-analytics pipeline** above. A Claude Code `UserPromptSubmit` hook captures each
-prompt **at the source** (full text, before any `OTEL_LOG_USER_PROMPTS`
-redaction/truncation) and POSTs one document straight to a dedicated
-Elasticsearch index, `prompts-audit` — it does **not** travel through the APM
-Server, so metrics/events/traces keep flowing untouched. Because it is a plain
-agent hook, it carries zero extra infrastructure and can be pushed to an entire
-fleet via [managed settings](https://code.claude.com/docs/en/monitoring-usage.md).
-
-> ⚠️ **Plaintext phase.** Prompts are stored as-is for now; local public-key
-> sealing (`prompt` → `prompt_cipher`, openable only with the central
-> investigator key) is a later phase. Until then, treat the store as sensitive
-> and don't audit real-secret sessions against a shared backend.
-
-**1. The store** is created by `scripts/setup.sh` (Quick Tour step 1) — the
-`prompts-audit` index, with a `dynamic: strict` mapping: a searchable keyword
-**envelope** (`agent`, `user_email`, `organization`, `session_id`, `hostname`),
-the `prompt` text, and a reserved `prompt_cipher` field for the sealing phase.
-`cwd` is deliberately **not** stored — a working-directory path is PII (it leaks
-project / client / user names). `session_id` equals the OTLP `session.id`, so an
-audit document **joins back** to that session's analytics telemetry.
-
-**2. The capture hook is already registered** by `scripts/setup.sh` (step 1) —
-it writes the `hooks` block into the generated `.claude/settings.local.json`
-alongside the telemetry `env`, so launching `claude` from this stack directory
-audits prompts automatically. To register it **manually elsewhere** (e.g. in
-`~/.claude/settings.json` for all your projects, or `managed-settings.json` for
-org-wide enforcement), add a `hooks` block pointing at the capture script
-`components/agents/claude-code/hooks/capture-prompt.sh` (PowerShell mirror:
-`capture-prompt.ps1`) by its absolute path:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/abs/path/to/components/agents/claude-code/hooks/capture-prompt.sh",
-            "timeout": 6
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-On Windows, point the command at PowerShell instead:
-`powershell -NoProfile -ExecutionPolicy Bypass -File C:\abs\path\...\hooks\capture-prompt.ps1`
-(`powershell` is the stock Windows PowerShell 5.1, present on every machine;
-`pwsh`/PowerShell 7 also works). Put the block in `~/.claude/settings.json` (all
-your projects), a launch-dir `.claude/settings.local.json` (just here), or
-`managed-settings.json` (org-wide enforcement). The hook needs **nothing
-installed** beyond what ships with the OS — the `.sh` uses only `curl` + `awk`
-(POSIX base; no `jq`), the `.ps1` only built-in PowerShell — so it runs unchanged
-across a fleet. It is **best-effort and side-effect-only**: writes nothing to
-stdout (so it never injects into the prompt), always exits 0, and fails fast
-(`--max-time 5`), so if Elasticsearch is unreachable your prompt proceeds
-unaudited rather than blocked. Identity is resolved locally from `~/.claude.json`
-(`.oauthAccount`); override the endpoint with `PROMPTS_AUDIT_ES_URL` (default
-`http://localhost:9200`).
-
-**3. Submit a prompt, then look at the store** (no Kibana asset yet — a data
-view / saved search is a later increment):
-
-```sh
-curl -s 'http://localhost:9200/prompts-audit/_search?pretty' \
-  -H 'Content-Type: application/json' -d '{"sort":[{"@timestamp":"desc"}]}'
-```
-
 ## Verify the pipeline
 
 `scripts/smoke-test.sh` checks the full **OTLP → APM Server → Elasticsearch** path
@@ -368,7 +292,7 @@ claude-code-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / APM OTLP / Kibana)
 └─ scripts/
-   ├─ setup.sh                            # one-shot bootstrap: trace-routing + prompts-audit + Kibana import
+   ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
    └─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
 ```
@@ -379,9 +303,9 @@ backend (`../../components/backends/elastic/`) is a thin `include:` of the
 script that selects its assets — it owns no asset files. The service fragments
 under `../../components/backends/services/` own the service definitions and
 config, the asset libraries (the `traces-apm@custom` / `logs-apm.app@custom`
-ingest pipelines and the `prompts-audit` index under `elasticsearch/`; the
+ingest pipelines under `elasticsearch/`; the
 Claude Code data views and saved searches under `kibana/claude-code/`), and the
 generic Elasticsearch / Kibana appliers that load them. The Claude Code agent
 component (`../../components/agents/claude-code/`) owns only agent-runtime
-config — the prompt-capture **hooks** and the **settings template + render
+config — the **settings template + render
 scripts** (the `.claude/settings.local.json` content), no Kibana assets.

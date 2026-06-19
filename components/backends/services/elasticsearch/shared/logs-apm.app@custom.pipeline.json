@@ -1,0 +1,6 @@
+{
+  "description": "APM app-logs @custom router. The fixed Elastic extension point logs-apm.app@custom (called by the managed logs-apm.app@default-pipeline) dispatches to the per-agent sub-pipeline logs-apm.app@custom-<service.name> when one is installed. Agent-agnostic: carries no per-agent logic — each agent's drops/redactions live in its own sub-pipeline, selected per stack. ignore_missing_pipeline lets a stack install only the agents it composes; docs from agents with no sub-pipeline pass through untouched.",
+  "processors": [
+    { "pipeline": { "name": "logs-apm.app@custom-{{service.name}}", "ignore_missing_pipeline": true } }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "description": "Claude Code traces sub-pipeline — invoked by the traces-apm@custom router only for service.name=claude-code, so no service.name guard is needed here. Reroutes the agent's spans to the dedicated traces-apm-agents_claude_code data stream — it still matches traces-apm-*, so it keeps the full APM trace mappings while staying isolated from co-tenant (e.g. production app) traces in traces-apm-default. See SPEC/claude-code-telemetry.md.",
+  "processors": [
+    { "reroute": { "namespace": "agents_claude_code" } }
+  ]
+}

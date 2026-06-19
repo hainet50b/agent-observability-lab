@@ -1,0 +1,9 @@
+{
+  "description": "Codex CLI app-logs sub-pipeline — invoked by the logs-apm.app@custom router only for service.name=codex_cli_rs, so no service.name guard is needed here. (1) Drops the three verified high-volume, content-free streaming-delta events (response.output_text.delta, response.function_call_arguments.delta, response.custom_tool_call_input.delta) — together ~91% of the event/log_only stream; the complete value lands on the terminal .done event. Explicit allowlist, NOT endsWith('.delta'): a wildcard would blindly drop unverified/future .delta kinds (refusal, reasoning-summary, …) — a new kind joins only once its reconstructability is verified. (2) Redacts raw tool I/O (labels.arguments / labels.output) on the codex.tool_result log_only twin and the user-prompt text (labels.prompt) on the codex.user_prompt log_only twin to [REDACTED] at ingest, so sensitive content never persists in ES; the trace_safe metadata twins are untouched. See SPEC/codex-cli-telemetry.md.",
+  "processors": [
+    { "drop": { "if": "ctx.labels?.event_kind == 'response.output_text.delta' || ctx.labels?.event_kind == 'response.function_call_arguments.delta' || ctx.labels?.event_kind == 'response.custom_tool_call_input.delta'" } },
+    { "set": { "field": "labels.arguments", "value": "[REDACTED]", "override": true, "if": "ctx.labels?.arguments != null" } },
+    { "set": { "field": "labels.output", "value": "[REDACTED]", "override": true, "if": "ctx.labels?.output != null" } },
+    { "set": { "field": "labels.prompt", "value": "[REDACTED]", "override": true, "if": "ctx.labels?.prompt != null" } }
+  ]
+}

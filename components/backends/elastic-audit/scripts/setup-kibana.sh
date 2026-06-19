@@ -19,4 +19,4 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 KIBANA_SCRIPTS="$COMPONENT_DIR/../services/kibana/scripts"
 
-"$KIBANA_SCRIPTS/import-kibana-objects.sh" agent-audit
+"$KIBANA_SCRIPTS/import-kibana-assets.sh" agent-audit

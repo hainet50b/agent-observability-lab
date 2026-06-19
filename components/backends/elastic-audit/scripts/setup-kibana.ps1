@@ -20,4 +20,4 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $KibanaScripts = Join-Path $ComponentDir '../services/kibana/scripts'
 
-& (Join-Path $KibanaScripts 'import-kibana-objects.ps1') -KibanaUrl $KibanaUrl -Sources 'agent-audit'
+& (Join-Path $KibanaScripts 'import-kibana-assets.ps1') -KibanaUrl $KibanaUrl -Sources 'agent-audit'

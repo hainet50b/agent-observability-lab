@@ -1,0 +1,6 @@
+{
+  "description": "APM traces @custom router. The fixed Elastic extension point traces-apm@custom (called by the managed traces-apm@default-pipeline) dispatches to the per-agent sub-pipeline traces-apm@custom-<service.name> when one is installed. Agent-agnostic: per-agent span drops and the reroute to each agent's dedicated traces-apm-agents_<agent> data stream live in the sub-pipeline, selected per stack. ignore_missing_pipeline lets a stack install only the agents it composes; other producers stay in traces-apm-default.",
+  "processors": [
+    { "pipeline": { "name": "traces-apm@custom-{{service.name}}", "ignore_missing_pipeline": true } }
+  ]
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# import-kibana-objects.sh — the Kibana service's single saved-objects importer
+# import-kibana-assets.sh — the Kibana service's single saved-objects importer
 # for every source (agent / path / cross-agent audit).
 #
 # Kibana objects are consumed by Kibana, so every per-source NDJSON bundle lives
@@ -10,10 +10,10 @@
 #
 # Usage: pass the source namespace(s) to import as positional arguments:
 #
-#   scripts/import-kibana-objects.sh claude-code
-#   scripts/import-kibana-objects.sh claude-code otelcol-sidecar
-#   scripts/import-kibana-objects.sh codex-cli
-#   scripts/import-kibana-objects.sh agent-audit
+#   scripts/import-kibana-assets.sh claude-code
+#   scripts/import-kibana-assets.sh claude-code otelcol-sidecar
+#   scripts/import-kibana-assets.sh codex-cli
+#   scripts/import-kibana-assets.sh agent-audit
 #
 # Within every source directory files import in category
 # order: data-views → saved-searches → dashboard, so data views exist before the
@@ -25,7 +25,7 @@
 # Prerequisites: curl, jq. Override the Kibana base URL with KIBANA_URL if you
 # publish a different port than the default below.
 #
-#   KIBANA_URL=http://localhost:5601  scripts/import-kibana-objects.sh claude-code
+#   KIBANA_URL=http://localhost:5601  scripts/import-kibana-assets.sh claude-code
 #
 # Run from anywhere — it locates its own component directory like the others.
 
@@ -80,7 +80,7 @@ import_dir() {
   done
 }
 
-[ "$#" -ge 1 ] || fail "usage: import-kibana-objects.sh <source>... (e.g. claude-code)"
+[ "$#" -ge 1 ] || fail "usage: import-kibana-assets.sh <source>... (e.g. claude-code)"
 
 echo "[import] importing Kibana saved objects into $KIBANA_URL…"
 

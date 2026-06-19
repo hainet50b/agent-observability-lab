@@ -30,7 +30,7 @@ export ES_URL KIBANA_URL
 indent() { sed 's/^/  /'; }
 
 echo "[setup] 1/3 — Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)"
-"$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" | indent
+"$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" codex-cli | indent
 
 echo
 echo "[setup] 2/3 — Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)"

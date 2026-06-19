@@ -43,7 +43,7 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'ap
 filter Indent { "  $_" }
 
 Write-Host '[setup] 1/3 - Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl -Sources 'claude-code' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 2/3 - Kibana saved objects (data views + saved searches)'
