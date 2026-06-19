@@ -29,7 +29,7 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/3 — Elasticsearch backend assets (trace-routing/logs-drop pipelines + prompts-audit index)"
+echo "[setup] 1/3 — Elasticsearch backend assets (@custom routers + per-agent sub-pipelines)"
 "$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" claude-code | indent
 
 echo

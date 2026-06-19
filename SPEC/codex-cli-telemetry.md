@@ -23,10 +23,7 @@ live in `components/agents/codex-cli/kibana/`.
   physical (datasets, the trace namespace `agents_codex_cli_rs`) carries the
   `codex_cli_rs` token.
 - **Three data streams:** `metrics-apm.app.codex_cli_rs-default` (metrics),
-  `logs-apm.app.codex_cli_rs-default` (events), and traces. ⚠️ **Traces are not yet
-  isolated** — Codex spans land in the service-agnostic `traces-apm-default` until
-  the `traces-apm@custom-codex_cli_rs` reroute matches the real `service.name` (`codex_cli_rs` →
-  `agents_codex_cli_rs`; see [Trace data model](#trace-data-model)). APM also
+  `logs-apm.app.codex_cli_rs-default` (events), and traces. Traces are **isolated by routing** — the `traces-apm@custom-codex_cli_rs` sub-pipeline reroutes Codex spans (`service.name: codex_cli_rs`) off the service-agnostic `traces-apm-default` to a dedicated `agents_codex_cli_rs` data stream (see [Trace data model](#trace-data-model)). APM also
   auto-creates an empty `metrics-apm.service_summary.1m-default` marker.
 - **Where the value/type lives:** a metric's value is in a field *named after the
   metric* (e.g. `codex.turn.token_usage`); an event's type is in
@@ -173,8 +170,8 @@ transport- and component-oriented.
 
 Same APM constraint as Claude Code: all OTLP spans default to the service-agnostic
 `traces-apm-default` (no per-service trace dataset), so isolation is by **routing**.
-The fix (PRD) reroutes `service.name: codex_cli_rs` → namespace
-**`agents_codex_cli_rs`** in `traces-apm@custom-codex_cli_rs` (data stream
+Isolation reroutes `service.name: codex_cli_rs` → namespace
+**`agents_codex_cli_rs`** in the `traces-apm@custom-codex_cli_rs` sub-pipeline (data stream
 `traces-apm-agents_codex_cli_rs`, still matching `traces-apm-*` so it inherits APM
 trace mappings). The cross-agent glob **`traces-apm-agents_*`** then catches
 claude_code, codex_cli_rs, … while excluding non-agent traces. The reasons to
