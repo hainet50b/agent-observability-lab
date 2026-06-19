@@ -4,8 +4,8 @@
 # hook (see render-hook.ps1); the pwsh shebang is only for direct execution on
 # POSIX (where powershell.exe does not exist) and implies no PS7 runtime requirement.
 #
-# capture-prompt.ps1 — Claude Code UserPromptSubmit audit hook
-# (PowerShell mirror of capture-prompt.sh; same .sh/.ps1 pairing as the repo's
+# capture-user-prompt.ps1 — Claude Code UserPromptSubmit audit hook
+# (PowerShell mirror of capture-user-prompt.sh; same .sh/.ps1 pairing as the repo's
 # other scripts). See that file's header for the full rationale. In short: fires
 # once per submitted prompt, reshapes Claude's raw hook payload into the canonical
 # `agent_audit.user_prompt` document defined in SPEC/agent-audit.md, and POSTs it
@@ -46,7 +46,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-function Log($m) { [Console]::Error.WriteLine("[capture-prompt] $m") }
+function Log($m) { [Console]::Error.WriteLine("[capture-user-prompt] $m") }
 
 # Coerce an empty/whitespace value to $null so the JSON carries null, not "".
 function NullIfEmpty($v) { if ([string]::IsNullOrWhiteSpace([string]$v)) { return $null } return [string]$v }

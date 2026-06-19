@@ -4,7 +4,7 @@
 # (PowerShell mirror of render-agent-audit.sh).
 #
 # Fills @@ES_URL@@ (the backend's Elasticsearch base URL) into the flat key=value
-# delivery config the capture-prompt hook reads. create-if-absent: an existing
+# delivery config the capture-user-prompt hook reads. create-if-absent: an existing
 # agent-audit.conf is left untouched (your edits survive). UTF-8 no BOM.
 #
 # Usage: render-agent-audit.ps1 -EsUrl <url> -TargetDir <dir>

@@ -3,7 +3,7 @@
 # render-agent-audit.sh — render the Claude Code agent's Agent Audit delivery
 # config at <target>/.claude/agent-audit.conf from ../agent-audit.template.conf.
 #
-# The capture-prompt hook reads its delivery config (Elasticsearch endpoint,
+# The capture-user-prompt hook reads its delivery config (Elasticsearch endpoint,
 # per-stream destination, capture posture) from a flat key=value agent-audit.conf
 # — zero external deps, no jq/TOML parser (SPEC/agent-audit.md "Delivery and
 # authorization"). This fills the one value that is the stack's to supply,

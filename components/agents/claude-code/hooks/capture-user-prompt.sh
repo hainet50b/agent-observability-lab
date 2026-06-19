@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# capture-prompt.sh — Claude Code UserPromptSubmit audit hook (POSIX/bash).
+# capture-user-prompt.sh — Claude Code UserPromptSubmit audit hook (POSIX/bash).
 #
 # PURPOSE — deliver the canonical Agent Audit user-prompt document. Registered on
 # Claude Code's `UserPromptSubmit` event (see ../scripts/render-hook.sh and the
@@ -63,7 +63,7 @@
 
 set -u
 
-log() { echo "[capture-prompt] $*" >&2; }
+log() { echo "[capture-user-prompt] $*" >&2; }
 done0() { exit 0; } # every path is success — never block the prompt
 
 STREAM=user_prompt

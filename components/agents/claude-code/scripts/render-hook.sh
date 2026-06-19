@@ -6,7 +6,7 @@
 # Claude Code registers hooks in settings (not a separate hooks file). This merges
 # the `hooks` block from the agent-owned template ../hook.template.json into the
 # target's settings.local.json, substituting @@HOOK_COMMAND@@ with THIS platform's
-# capture-prompt.sh absolute path plus `--config <abs>/.claude/agent-audit.conf`.
+# capture-user-prompt.sh absolute path plus `--config <abs>/.claude/agent-audit.conf`.
 # The config path is INJECTED into the hook command (SPEC/agent-audit.md "Delivery
 # and authorization") — a shipped hook never discovers its own config.
 #
@@ -28,7 +28,7 @@ fi
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/hook.template.json"
-CAPTURE="$COMPONENT_DIR/hooks/capture-prompt.sh"
+CAPTURE="$COMPONENT_DIR/hooks/capture-user-prompt.sh"
 out="$target/.claude/settings.local.json"
 
 [ -f "$TEMPLATE" ] || {

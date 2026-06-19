@@ -192,7 +192,7 @@ config, the asset libraries (the Agent Audit data-stream index templates under
 `elasticsearch/index-templates/`; the Agent Audit data views and saved searches
 under `kibana/agent-audit/`), and the generic appliers that load them. The Claude
 Code agent component (`../../components/agents/claude-code/`) owns only
-agent-runtime config — the audit hook (`hooks/capture-prompt.{sh,ps1}`), the hook
+agent-runtime config — the audit hook (`hooks/capture-user-prompt.{sh,ps1}`), the hook
 delivery-config template, and the render scripts (`render-hook`,
 `render-agent-audit`, `render-mcp`). `scripts/setup.sh` registers the hook in
 this directory's gitignored `.claude/settings.local.json`, renders the delivery

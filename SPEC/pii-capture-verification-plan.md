@@ -76,7 +76,7 @@ Verify:
       definitions hot-reload if the settings file existed at startup
 - [x] ES ingest of the **plaintext** record — built & verified live: a
       `dynamic: strict` keyword envelope + `prompt` text (+ reserved `prompt_cipher`),
-      written by the `capture-prompt.{sh,ps1}` `UserPromptSubmit` hook (envelope from
+      written by the `capture-user-prompt.{sh,ps1}` `UserPromptSubmit` hook (envelope from
       `~/.claude.json`, POST straight to ES, silent stdout, always exit 0; both .sh and
       .ps1 land a document, strict mapping rejects stray fields → HTTP 400). The
       prototype's standalone `prompts-audit` index has since been **superseded** by the

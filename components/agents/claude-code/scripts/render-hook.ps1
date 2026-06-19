@@ -5,7 +5,7 @@
 # Merges the `hooks` block from ../hook.template.json into the target's
 # settings.local.json, rendering the UserPromptSubmit hook in EXEC FORM so it runs
 # on Windows: `command: "powershell"` with an `args` array that spawns THIS
-# platform's capture-prompt.ps1 directly (no shell), passing
+# platform's capture-user-prompt.ps1 directly (no shell), passing
 # `--config <abs>/.claude/agent-audit.conf` (the config path is INJECTED into the
 # hook command — a shipped hook never discovers its own config; see
 # SPEC/agent-audit.md "Delivery and authorization").
@@ -34,7 +34,7 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $Template = Join-Path $ComponentDir 'hook.template.json'
-$Capture = Join-Path (Join-Path $ComponentDir 'hooks') 'capture-prompt.ps1'
+$Capture = Join-Path (Join-Path $ComponentDir 'hooks') 'capture-user-prompt.ps1'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -58,7 +58,7 @@ $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
 $conf = Join-Path $targetAbs '.claude/agent-audit.conf'
 
 # Take the template's hook entry (preserving its `type` / `timeout`), then rewrite
-# it into exec form: command = powershell, args spawn capture-prompt.ps1 directly.
+# it into exec form: command = powershell, args spawn capture-user-prompt.ps1 directly.
 # Dropping the template's _comment. The `@@HOOK_COMMAND@@` placeholder is not used
 # here — exec form sets `command` + `args` rather than a single command string.
 $tpl = Get-Content -Raw -LiteralPath $Template | ConvertFrom-Json

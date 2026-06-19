@@ -9,7 +9,7 @@
 #   Act     — feed a synthetic UserPromptSubmit payload (unique session_id) on
 #             stdin to the RENDERED hook exactly as Claude spawns it — read the
 #             command + args[] straight from .claude/settings.local.json and run
-#             that process. (Driving capture-prompt.ps1 directly would not catch a
+#             that process. (Driving capture-user-prompt.ps1 directly would not catch a
 #             broken rendered hook command, e.g. a non-exec-form hook Git Bash
 #             cannot run on Windows — the class of gap this verification guards.)
 #   Assert  — poll logs-agent_audit.user_prompt-default for the document.
@@ -19,7 +19,7 @@
 # is the ASSERTION (doc present in ES), not the hook's exit code.
 #
 # The hook is spawned as the rendered command/args (on Windows, exec form:
-# `powershell -NoProfile … -File capture-prompt.ps1 --config <conf>`), a real child
+# `powershell -NoProfile … -File capture-user-prompt.ps1 --config <conf>`), a real child
 # process, so the payload reaches its stdin ([Console]::In.ReadToEnd()) exactly as
 # Claude drives it.
 #
@@ -43,7 +43,7 @@ $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir = Split-Path -Parent $ScriptDir
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $StackDir)
-$HookPs1 = Join-Path $RepoRoot 'components/agents/claude-code/hooks/capture-prompt.ps1'
+$HookPs1 = Join-Path $RepoRoot 'components/agents/claude-code/hooks/capture-user-prompt.ps1'
 $ClaudeHome = Join-Path $StackDir '.claude'
 $Settings = Join-Path $ClaudeHome 'settings.local.json'
 

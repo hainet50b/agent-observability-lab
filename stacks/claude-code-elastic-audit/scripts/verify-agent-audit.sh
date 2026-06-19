@@ -15,7 +15,7 @@
 #             session_id) on stdin to the RENDERED hook exactly as Claude spawns
 #             it — read the command (+ args[] for the exec form) straight from
 #             .claude/settings.local.json and run that process. Driving
-#             capture-prompt.sh directly would not catch a broken rendered hook
+#             capture-user-prompt.sh directly would not catch a broken rendered hook
 #             command, the class of gap this verification guards.
 #   Assert  — query logs-agent_audit.user_prompt-default for the canonical
 #             agent_audit.user_prompt document carrying that conversation_id;
@@ -45,7 +45,7 @@ DATA_STREAM=logs-agent_audit.user_prompt-default
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd -- "$STACK_DIR/../.." && pwd)
-HOOK="$REPO_ROOT/components/agents/claude-code/hooks/capture-prompt.sh"
+HOOK="$REPO_ROOT/components/agents/claude-code/hooks/capture-user-prompt.sh"
 CLAUDE_HOME_DIR="$STACK_DIR/.claude"
 SETTINGS="$CLAUDE_HOME_DIR/settings.local.json"
 cd "$STACK_DIR"
@@ -112,7 +112,7 @@ payload=$(jq -nc --arg cid "$cid" '{
 
 # Spawn the hook EXACTLY as Claude does: read the rendered command (+ args[] for
 # the exec form) from settings.local.json and run it with the payload on stdin,
-# rather than invoking capture-prompt.sh directly — so a broken rendered hook
+# rather than invoking capture-user-prompt.sh directly — so a broken rendered hook
 # command is caught. Claude runs the exec form (command + args[]) as a direct child
 # process and a command-string hook through the shell; reproduce both. The config
 # path is already baked into the rendered hook. Fail-open: the assertion is the

@@ -80,7 +80,7 @@ components/
 │       # exact precedent: trace-routing.pipeline.json + setup-trace-routing.sh
 └── agents/claude-code/
     └── hooks/                                  ← NEW 3rd dir beside kibana/ scripts/
-        └── capture-prompt.sh                      (UserPromptSubmit capture)
+        └── capture-user-prompt.sh                      (UserPromptSubmit capture)
         # hook REGISTRATION is "agent config" → documented in stack READMEs
         # alongside the OTEL_* env block; NOT in docker-compose (no container)
 
@@ -158,7 +158,7 @@ P1 build phase, plaintext-ingest-first then CMS. Rough order, use judgement:
   - `backends/elastic/elasticsearch/prompts-audit.index.json` (mapping;
     `dynamic: strict`, envelope + `prompt` text + reserved `prompt_cipher`) and
     `backends/elastic/scripts/setup-prompt-audit.{sh,ps1}` (idempotent create).
-  - `agents/claude-code/hooks/capture-prompt.{sh,ps1}` (`UserPromptSubmit` →
+  - `agents/claude-code/hooks/capture-user-prompt.{sh,ps1}` (`UserPromptSubmit` →
     envelope from `~/.claude.json` → POST to `prompts-audit`; silent stdout,
     always exit 0, `--max-time` fail-fast). **No jq:** the `.sh` lifts JSON
     string values with `awk` (POSIX base) and assembles the doc with `printf`
