@@ -1,3 +1,11 @@
+# docs:
+#   https://opentelemetry.io/docs/collector/configuration/
+#   extension file_storage      → https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/filestorage
+#   receiver  otlp              → https://github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver
+#   processor resourcedetection → https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor
+#   processor batch             → https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor
+#   exporter  otlphttp          → https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter
+
 extensions:
   file_storage/queue:
     directory: /var/lib/otelcol/file_storage
