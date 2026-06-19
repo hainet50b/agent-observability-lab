@@ -25,7 +25,7 @@ live in `components/agents/codex-cli/kibana/`.
 - **Three data streams:** `metrics-apm.app.codex_cli_rs-default` (metrics),
   `logs-apm.app.codex_cli_rs-default` (events), and traces. ⚠️ **Traces are not yet
   isolated** — Codex spans land in the service-agnostic `traces-apm-default` until
-  the `traces-apm@custom` reroute matches the real `service.name` (`codex_cli_rs` →
+  the `traces-apm@custom-codex_cli_rs` reroute matches the real `service.name` (`codex_cli_rs` →
   `agents_codex_cli_rs`; see [Trace data model](#trace-data-model)). APM also
   auto-creates an empty `metrics-apm.service_summary.1m-default` marker.
 - **Where the value/type lives:** a metric's value is in a field *named after the
@@ -174,7 +174,7 @@ transport- and component-oriented.
 Same APM constraint as Claude Code: all OTLP spans default to the service-agnostic
 `traces-apm-default` (no per-service trace dataset), so isolation is by **routing**.
 The fix (PRD) reroutes `service.name: codex_cli_rs` → namespace
-**`agents_codex_cli_rs`** in `traces-apm@custom` (data stream
+**`agents_codex_cli_rs`** in `traces-apm@custom-codex_cli_rs` (data stream
 `traces-apm-agents_codex_cli_rs`, still matching `traces-apm-*` so it inherits APM
 trace mappings). The cross-agent glob **`traces-apm-agents_*`** then catches
 claude_code, codex_cli_rs, … while excluding non-agent traces. The reasons to
@@ -192,13 +192,13 @@ content (Codex's export carries none — see below). Two rules govern the design
 - **Leaf-only.** An ES ingest pipeline is stateless and per-document, so it cannot
   reparent children — only a span that is *never* a `parent.id` is safe to drop
   without orphaning descendants.
-- **Service-scoped.** `traces-apm@custom` and `logs-apm.app@custom` are **shared**
-  across every producer (claude-code, codex_cli_rs, smoke-test, future agents), so
-  **both drop conditions are gated on `ctx.service?.name == 'codex_cli_rs'`** to
-  confine the effect to Codex CLI — matching on span name / `event_kind` alone
-  would also hit any other producer that happens to emit the same value.
+- **Per-agent sub-pipeline.** The `@custom` pipelines are agent-agnostic routers that
+  dispatch by `service.name` to per-agent sub-pipelines, so both drops live in Codex's
+  own `…@custom-codex_cli_rs` sub-pipelines and need **no** in-pipeline `service.name`
+  gate — the router already confines them to Codex CLI, and a stack without Codex never
+  installs them.
 
-**Traces — `traces-apm@custom`, dropped *before* the reroutes** (so dropped spans
+**Traces — `traces-apm@custom-codex_cli_rs`, dropped *before* the reroute** (so dropped spans
 never reach routing):
 
 | `span.name` | role | leaf? | share |
@@ -213,20 +213,17 @@ production scale (hundreds of users) individual trace waterfalls are rarely
 opened (consumption is aggregate / dashboard), the volume is decisive (~0.86 TB /
 90 d in a 300-user × 150-turn/day × 1-replica model), and orphans self-heal within
 the data stream's retention. Condition:
-`ctx.service?.name == 'codex_cli_rs' && (ctx.span?.name == 'receiving' ||
-ctx.span?.name == 'handle_responses')`.
+`ctx.span?.name == 'receiving' || ctx.span?.name == 'handle_responses'`.
 
-**Logs — `logs-apm.app@custom`** (created if absent; the managed
-`logs-apm.app@default-pipeline` already calls it via `ignore_missing_pipeline`, so
-creating it activates it). Drop the three **verified** streaming-delta
+**Logs — `logs-apm.app@custom-codex_cli_rs`** (the agent-agnostic `logs-apm.app@custom`
+router — which the managed `logs-apm.app@default-pipeline` calls via
+`ignore_missing_pipeline` — dispatches to it on `service.name`). Drop the three **verified** streaming-delta
 `event_kind`s — together ~91% of the stream:
 
 ```
-ctx.service?.name == 'codex_cli_rs' && (
-     ctx.labels?.event_kind == 'response.output_text.delta'
-  || ctx.labels?.event_kind == 'response.function_call_arguments.delta'
-  || ctx.labels?.event_kind == 'response.custom_tool_call_input.delta'
-)
+   ctx.labels?.event_kind == 'response.output_text.delta'
+|| ctx.labels?.event_kind == 'response.function_call_arguments.delta'
+|| ctx.labels?.event_kind == 'response.custom_tool_call_input.delta'
 ```
 
 `?.` is required: `event_kind` is **absent** on the most valuable events

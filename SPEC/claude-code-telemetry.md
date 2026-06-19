@@ -176,11 +176,11 @@ unlike the metrics/events streams, whose dataset embeds the service
 co-mingle, and a data view can't store a `service.name` filter to separate them.
 
 This stack therefore **physically isolates the agent's spans by routing**: a
-`reroute` processor in the **`traces-apm@custom`** ingest pipeline — the standard
-Elastic APM extension point the managed `traces-apm@default-pipeline` already
-hooks, installed here by the `elastic` backend's `scripts/setup-elasticsearch.sh`
-(via the elasticsearch service's `import-ingest-pipelines` applier) — sends docs
-with `service.name: claude-code` to a dedicated
+`reroute` processor in the per-agent **`traces-apm@custom-claude-code`** sub-pipeline
+— which the agent-agnostic **`traces-apm@custom`** router (the managed
+`traces-apm@default-pipeline`'s extension point) dispatches to on
+`service.name: claude-code`, installed by the `elastic` backend's
+`setup-elasticsearch` — sends those spans to a dedicated
 **`traces-apm-agents_claude_code`** data stream — it still matches `traces-apm-*`,
 so it keeps the full APM trace mappings; everything else (including any co-tenant
 production app traces) stays in `traces-apm-default`. The traces data view is
