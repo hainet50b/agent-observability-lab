@@ -1,12 +1,4 @@
-# Kibana — shared service fragment.
-#
-# Demo posture (see SPEC invariants): plain HTTP to a security-disabled
-# Elasticsearch on the compose network, no auth. Do NOT expose this publicly.
-
-# Talk to the in-stack Elasticsearch over the compose network.
 elasticsearch.hosts: ["http://elasticsearch:9200"]
 
-# Listen on all interfaces inside the container; the published port is
-# restricted to 127.0.0.1 by docker-compose. Kept here (rather than in compose
-# env) so every Kibana setting lives in one place.
+# 0.0.0.0 inside the container; the published port is restricted to 127.0.0.1 by compose
 server.host: "0.0.0.0"

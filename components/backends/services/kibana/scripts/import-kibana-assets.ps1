@@ -1,27 +1,8 @@
 #!/usr/bin/env pwsh
-# import-kibana-assets.ps1 — the Kibana service's single saved-objects importer
-# for every source (agent / path / cross-agent audit).
-#
-# PowerShell mirror of import-kibana-assets.sh (same pairing as ralph.sh /
-# ralph.ps1). Kibana objects are consumed by Kibana, so every per-source NDJSON
-# bundle lives under this service component, namespaced by source: <source>/
-# (e.g. claude-code/, codex-cli/, otelcol-sidecar/, agent-audit/). Backends
-# select which sources to import; the importer carries no per-backend selection.
-#
-# Pass the source namespace(s) to import via -Sources. Within every directory
-# files import in category order data-views → saved-searches → dashboard, so
-# data views exist before the saved searches and dashboards that reference them.
-#
-# Prerequisites: PowerShell 7+ (curl is not required — uses Invoke-RestMethod).
-# Override the Kibana base URL with -KibanaUrl or the KIBANA_URL env var
-# (default below).
-#
-#   ./scripts/import-kibana-assets.ps1 -Sources claude-code
-#   ./scripts/import-kibana-assets.ps1 -Sources claude-code,otelcol-sidecar
-#   ./scripts/import-kibana-assets.ps1 -KibanaUrl http://localhost:5601 -Sources codex-cli
-#   ./scripts/import-kibana-assets.ps1 -Sources agent-audit
-#
-# Run from anywhere — it locates its own component directory like the .sh version.
+# Imports the Kibana saved objects for each SOURCE in -Sources (a dir under this
+# component) via the _import?overwrite=true API. Within each dir, files load in
+# dependency order: data-views → saved-searches → dashboard. PowerShell 7+;
+# -KibanaUrl or KIBANA_URL env overrides the base URL.
 
 [CmdletBinding()]
 param(
@@ -32,10 +13,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Resolve the component root (parent of this scripts/ directory). Per-source
-# paths are built absolutely from it (see Import-File) so they resolve
-# regardless of the caller's cwd — without Set-Location, which runs in the
-# caller's PowerShell session and would leave their shell parked here.
+# component root; per-source paths are built absolutely from it (no Set-Location — it would park the caller's shell here)
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 
@@ -69,9 +47,7 @@ function Import-File {
     Write-Host "[import] $rel -> $($result.successCount) object(s) imported"
 }
 
-# Import every NDJSON in a directory in dependency category order: data views
-# before the saved searches and dashboards that reference them. Missing
-# categories are skipped silently (not every source ships all three).
+# data-views → saved-searches → dashboard; missing categories are skipped.
 function Import-Dir {
     param([string]$Dir)
 
@@ -88,7 +64,6 @@ function Import-Dir {
 
 Write-Host "[import] importing Kibana saved objects into $KibanaUrl…"
 
-# Each requested source namespace.
 foreach ($src in $Sources) {
     Import-Dir -Dir "$src"
 }

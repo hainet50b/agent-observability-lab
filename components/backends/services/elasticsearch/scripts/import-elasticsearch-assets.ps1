@@ -1,23 +1,10 @@
 #!/usr/bin/env pwsh
-# import-elasticsearch-assets.ps1 — the Elasticsearch service's single concern
-# importer for every asset type (PowerShell mirror of import-elasticsearch-assets.sh).
-#
-# Each name in -Concerns is a CONCERN whose assets live at <concern>/ under this
-# service component, one file per ES object, typed by filename suffix:
-#   *.pipeline.json  -> PUT _ingest/pipeline/<name>                 (replace; idempotent)
-#   *.template.json  -> install index template, create <name>-default data stream
-#                       if absent, sync the mapping
-#   *.index.json     -> create concrete index <name> if absent
-# <name> is the filename minus its type suffix. Carries no per-backend selection —
-# the calling backend passes the concerns its identity calls for. Mirror of the
-# kibana service's import-kibana-assets.ps1 (concern-first, type by suffix).
-#
-# Prerequisites: PowerShell 7+ (uses Invoke-RestMethod). Override the Elasticsearch
-# base URL with -EsUrl or the ES_URL env var (default below).
-#
-#   ./scripts/import-elasticsearch-assets.ps1 -Concerns shared,codex-cli
-#
-# Run from anywhere — it locates its own component dir like the .sh version.
+# Applies the Elasticsearch assets for each CONCERN in -Concerns (a dir under this
+# component). Files are typed by suffix: *.pipeline.json → ingest pipeline,
+# *.template.json → index template + <name>-default data stream + mapping sync,
+# *.index.json → index. Idempotent: PUTs replace; streams/indices created only if
+# absent; a template's mapping is re-synced each run (a strict mapping still accepts
+# added fields). PowerShell 7+; -EsUrl or ES_URL env overrides the base URL.
 
 [CmdletBinding()]
 param(
@@ -120,8 +107,7 @@ function Invoke-Index($Name, $File) {
     Write-Host "[apply] index '$Name' created"
 }
 
-# Import one concern: pipelines, then templates, then indices. Missing types are
-# skipped silently — a concern need not ship all three.
+# pipelines, then templates, then indices; a concern need not ship all three.
 function Import-Concern($Concern) {
     $dir = Join-Path $ComponentDir $Concern
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) {

@@ -14,12 +14,11 @@ services:
     healthcheck:
       # the image ships no curl/wget; probe the OTLP port via bash /dev/tcp (root returns 200 when ready)
       test:
-        [
-          "CMD",
-          "bash",
-          "-c",
-          'exec 3<>/dev/tcp/localhost/8200; printf "GET / HTTP/1.0\r\n\r\n" >&3; read -t 5 line <&3; case "$$line" in *200*) exit 0;; *) exit 1;; esac',
-        ]
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/localhost/8200; printf "GET / HTTP/1.0\r\n\r\n" >&3; read -t 5 line <&3; case "$$line" in *200*) exit 0;; *) exit 1;; esac
       interval: 10s
       timeout: 10s
       retries: 30

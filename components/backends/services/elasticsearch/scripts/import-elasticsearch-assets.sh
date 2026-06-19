@@ -1,26 +1,9 @@
 #!/usr/bin/env bash
-#
-# import-elasticsearch-assets.sh — the Elasticsearch service's single concern
-# importer for every asset type. Each argument is a CONCERN whose assets live at
-# <concern>/ under this service component, one file per ES object, typed by
-# filename suffix:
-#   *.pipeline.json  -> PUT _ingest/pipeline/<name>                 (replace; idempotent)
-#   *.template.json  -> install composable index template, create the
-#                       <name>-default data stream if absent, sync the mapping
-#   *.index.json     -> create concrete index <name> if absent
-# <name> is the filename minus its type suffix. Carries no per-backend selection —
-# the calling backend passes the concerns its identity calls for; each asset's
-# rationale lives in its JSON body / SPEC. Mirror of the kibana service's
-# import-kibana-assets.sh (concern-first directory, type by filename suffix).
-#
-# Idempotent: pipeline/template PUTs replace in place; data streams and indices
-# are created only if absent; a template's mapping is re-synced every run (adding
-# fields to a strict mapping is allowed) to keep live streams forward-compatible.
-#
-#   ES_URL=http://localhost:9200 \
-#     scripts/import-elasticsearch-assets.sh shared codex-cli
-#
-# Prerequisites: curl, jq. Run from anywhere — it locates its own component dir.
+# Applies the Elasticsearch assets for each CONCERN arg (a dir under this component).
+# Files are typed by suffix: *.pipeline.json → ingest pipeline, *.template.json →
+# index template + <name>-default data stream + mapping sync, *.index.json → index.
+# Idempotent: PUTs replace; streams/indices created only if absent; a template's
+# mapping is re-synced each run (a strict mapping still accepts added fields). Needs curl, jq.
 
 set -euo pipefail
 
@@ -116,9 +99,7 @@ apply_index() {
   echo "[apply] index '$name' created ✓"
 }
 
-# Import one concern: pipelines, then templates, then indices (our assets carry no
-# cross-type dependency; a stable order keeps output readable). Missing types are
-# skipped silently — a concern need not ship all three.
+# pipelines, then templates, then indices; a concern need not ship all three.
 import_concern() {
   concern=$1
   [ -d "$concern" ] || fail "concern dir not found: $COMPONENT_DIR/$concern"

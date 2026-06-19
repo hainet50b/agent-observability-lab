@@ -1,29 +1,13 @@
-# Elasticsearch — shared service fragment.
-#
-# Demo posture (see SPEC invariants): single-node, security disabled, plain
-# HTTP on localhost. Do NOT expose this publicly or point it at sensitive data.
-# Heap sizing (ES_JAVA_OPTS) lives in docker-compose.yml — it is a process env
-# read by the startup script, not a YAML setting.
-
-# Match the upstream Docker image default so log lines and any cross-container
-# tooling keep the familiar name.
 cluster.name: "docker-cluster"
 
-# Bind on all interfaces inside the container; the published port is
-# restricted to 127.0.0.1 by docker-compose.
+# 0.0.0.0 inside the container; the published port is restricted to 127.0.0.1 by compose
 network.host: 0.0.0.0
 
-# Form a one-node cluster; skip the production bootstrap checks that assume a
-# multi-node topology.
 discovery.type: single-node
 
-# Security off across the board: no auth, no TLS on HTTP or transport. This is
-# the deliberate demo posture — never re-enable selectively without rethinking
-# the whole stack.
 xpack.security.enabled: false
 xpack.security.http.ssl.enabled: false
 xpack.security.transport.ssl.enabled: false
 
-# Lock the JVM heap into RAM so the kernel never swaps it (paired with the
-# container's memlock=unlimited ulimit in docker-compose.yml).
+# pairs with the container's memlock=unlimited ulimit — locks the JVM heap so it's never swapped
 bootstrap.memory_lock: true
