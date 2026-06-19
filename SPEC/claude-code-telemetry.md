@@ -307,6 +307,23 @@ one `tool_result` event but several spans (`tool` + `blocked_on_user` +
 The four `OTEL_LOG_*` gates ship as `0` in the telemetry config examples. What
 each gate changes — by data stream, document, and field:
 
+**At a glance — each gate's exposure and this stack's ingest control:**
+
+| Gate | What it exposes (stream · document · field) | Ingest control | Mechanism |
+| --- | --- | --- | --- |
+| `OTEL_LOG_USER_PROMPTS` | events `claude_code.user_prompt` → `labels.prompt`; traces `interaction` → `labels.user_prompt` | overwrite to `<REDACTED>` | `set` (redact) |
+| `OTEL_LOG_TOOL_DETAILS` | events `claude_code.tool_result` / `tool_decision` → `labels.tool_input` / `tool_parameters` | remove the fields | `remove` (field) |
+| `OTEL_LOG_TOOL_CONTENT` | events `message: tool.output` (whole doc) → `labels.output` / `content` / `diff` | discard the document | `drop` (whole-doc) |
+| `OTEL_LOG_RAW_API_BODIES` | events `claude_code.api_request_body` / `api_response_body` (whole docs) → `labels.body` | discard the documents | `drop` (whole-doc) |
+
+All four controls live in the per-agent `logs-apm.app@custom-claude-code`
+sub-pipeline (plus `traces-apm@custom-claude-code` for the trace-side
+`user_prompt`), and each **reproduces that gate's own off-state** for the
+sensitive payload — a field that is `<REDACTED>` when off stays `<REDACTED>`, a
+field that is absent when off is removed, a document that does not exist when off
+is dropped — so a client cannot widen exposure by turning a gate on. Per-gate
+detail follows.
+
 ### `OTEL_LOG_USER_PROMPTS`
 
 | Data stream | Documents | Field | `0` (default) | `1` |
