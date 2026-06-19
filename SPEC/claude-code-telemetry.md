@@ -406,6 +406,14 @@ each gate changes — by data stream, document, and field:
 | --- | --- | --- | --- | --- |
 | `logs-apm.app.claude_code-default` | `message: claude_code.api_request_body` (one per API attempt) / `claude_code.api_response_body` (one per response) | `labels.body` (+ `labels.body_length`, `labels.body_truncated`) | documents don't exist | Messages API request/response JSON — see the truncation chain |
 
+- **This stack drops both documents at ingest.** The per-agent
+  `logs-apm.app@custom-claude-code` sub-pipeline `drop`s every
+  `claude_code.api_request_body` / `claude_code.api_response_body` event, so raw
+  API bodies **never land** regardless of the client gate or mode (inline
+  `labels.body` or `file:<dir>` `labels.body_ref`) — a deliberate backend control,
+  since the body bypasses the prompt-redaction of `labels.prompt`. The `1` column
+  above and the bullets below describe what the agent *emits*; in this stack the
+  documents are discarded before storage.
 - Unlike `tool.output`, these documents carry the **full envelope** —
   `labels.user_*`, `prompt_id`, `model`, `query_source` (plus `request_id` on
   responses) — and `trace.id` / `span.id` when tracing is on.
@@ -423,8 +431,9 @@ each gate changes — by data stream, document, and field:
   `OTEL_LOG_USER_PROMPTS` / `OTEL_LOG_TOOL_DETAILS` / `OTEL_LOG_TOOL_CONTENT`
   would reveal" is real behaviour. The one exception: extended thinking arrives
   as `"thinking":"<REDACTED>"` (its `signature` blob is kept).
-- Net effect on this stack: inline mode (`=1`) stores ~1 KB of the oldest
-  content per API call — of little audit value.
+- Net effect on this stack: **nothing lands** — the ingest drop (above) discards
+  both documents; were they kept, inline mode (`=1`) would store only ~1 KB of the
+  oldest content per API call, of little audit value.
 - **`file:<dir>` mode lifts the truncation chain entirely.** The same events
   keep flowing, but the inline `labels.body` is replaced by
   **`labels.body_ref`** (absolute path to an on-disk file),
