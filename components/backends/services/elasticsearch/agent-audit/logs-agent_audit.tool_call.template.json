@@ -3,7 +3,7 @@
   "data_stream": {},
   "priority": 200,
   "_meta": {
-    "description": "Strict mapping for direct agent-audit tool-call records (Codex PostToolUse). Agent-cross-cutting: AI-agent identity lives in agent_audit.agent.*, not in the data stream name. See SPEC/agent-audit.md.",
+    "description": "Strict mapping for agent-audit tool-call records.",
     "managed_by": "agent-observability-lab"
   },
   "template": {

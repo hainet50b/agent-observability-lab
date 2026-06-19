@@ -1,5 +1,5 @@
 {
-  "description": "Codex CLI traces sub-pipeline — invoked by the traces-apm@custom router only for service.name=codex_cli_rs, so no service.name guard is needed here. Drops the high-volume streaming leaf/intermediate spans (receiving, handle_responses) before routing, then reroutes the agent's spans to the dedicated traces-apm-agents_codex_cli_rs data stream (still traces-apm-*, so it keeps the full APM trace mappings). See SPEC/codex-cli-telemetry.md.",
+  "description": "Codex CLI traces sub-pipeline: drops streaming spans and reroutes to traces-apm-agents_codex_cli_rs.",
   "processors": [
     { "drop": { "if": "ctx.span?.name == 'receiving' || ctx.span?.name == 'handle_responses'" } },
     { "reroute": { "namespace": "agents_codex_cli_rs" } }
