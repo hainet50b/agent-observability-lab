@@ -90,7 +90,7 @@ Field ownership:
 
 ## Tool call documents
 
-Tool call audit documents in `logs-agent_audit.tool_call-default` record one tool invocation each, captured from Codex's `PostToolUse` hook (which carries both the tool input and its result). Canonical shape:
+Tool call audit documents in `logs-agent_audit.tool_call-default` record one tool invocation each, captured from the agent's `PostToolUse` hook (which carries both the tool input and its result — Codex CLI and Claude Code both fire it). The canonical shape below shows the Codex provider constants; the only per-agent difference is `agent_audit.agent.provider` / `.name` (`openai` / `codex-cli` for Codex CLI, `anthropic` / `claude-code` for Claude Code):
 
 ```json
 {
@@ -118,11 +118,11 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 `event.*`, `user.*`, `host.*`, `agent_audit.agent.*`, `conversation_id`, and `turn_id` carry the same meaning and identity derivation as user prompt documents. Tool-call-specific ownership:
 
 - `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
-- `agent_audit.tool_call.tool.name` ← Codex `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP trace_safe `codex.tool_result` `call_id`).
+- `agent_audit.tool_call.tool.name` ← the hook's `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP tool-result span's `call_id` — `codex.tool_result` for Codex CLI).
 - `agent_audit.tool_call.input` ← `tool_input`, `.output` ← `tool_response`. Both Codex fields are heterogeneous JSON (an object for MCP tools; a string or object for shell tools), so the sender **serializes each to a JSON string** into `.text`, with `.length` the character count. The strict mapping then sees one scalar per side, not the tool's arbitrary nested keys.
 - `capture.tool_call.content = plaintext` populates `.text`; `redacted` writes a `[REDACTED]` marker; `encrypted` nulls it and reserves `.encrypted_text` — all keep the true `.length`, set per stream (the same gate as the prompt body — see [Delivery and authorization](#delivery-and-authorization)).
 - No success / exit field — Codex's `tool_response` is opaque and not reliably parseable across tools.
-- Source is Codex `PostToolUse` **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict).
+- Source is the agent's `PostToolUse` hook **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict). Both Codex CLI's and Claude Code's `PostToolUse` payloads carry `tool_use_id` and `turn_id`, so the tool-call document populates `tool.call_id` and `turn_id` for **both** agents — unlike Claude Code's turn-less `UserPromptSubmit`, whose user-prompt document always has `turn_id: null` (see [Identity derivation](#identity-derivation)).
 
 ## Identity derivation
 
@@ -135,7 +135,7 @@ Identity fields are populated best-effort by the hook sender, **locally and with
   - `organization.id` / `organization.name` ← the `is_default` entry (fallback: first) of the `id_token` `https://api.openai.com/auth` → `organizations` array, mapping `.id` → `organization.id` and **`.title`** → `organization.name` (the claim has no `name` key — the human-readable label is `title`).
   - The `id_token` is a JWT whose payload (second `.`-separated segment) is base64url-decoded and read as JSON claims; it is **not** signature-verified (a local, trusted file). In API-key auth mode (no `id_token` / `tokens`) these fields stay `null`.
 
-  For **Claude Code** the store is `~/.claude.json` — its `oauthAccount` object, **plain JSON (no JWT to decode)**: `account.id` ← `accountUuid`, `account.name` ← `displayName`, `account.email` ← `emailAddress`, `organization.id` ← `organizationUuid`, `organization.name` ← `organizationName`. Any missing key leaves the field `null` (API-key / unauthenticated sessions have no `oauthAccount`). Claude's `UserPromptSubmit` hook payload carries **no turn id**, so `agent_audit.turn_id` is `null` (`conversation_id` ← `session_id` still links to the OTLP session); the payload also has no model (model reaches only `SessionStart` hooks), consistent with `agent_audit.agent.model` having been dropped from the schema.
+  For **Claude Code** the store is `~/.claude.json` — its `oauthAccount` object, **plain JSON (no JWT to decode)**: `account.id` ← `accountUuid`, `account.name` ← `displayName`, `account.email` ← `emailAddress`, `organization.id` ← `organizationUuid`, `organization.name` ← `organizationName`. Any missing key leaves the field `null` (API-key / unauthenticated sessions have no `oauthAccount`). Claude's `UserPromptSubmit` hook payload carries **no turn id**, so the user-prompt document's `agent_audit.turn_id` is `null` (`conversation_id` ← `session_id` still links to the OTLP session); the payload also has no model (model reaches only `SessionStart` hooks), consistent with `agent_audit.agent.model` having been dropped from the schema. This turn-less property is specific to `UserPromptSubmit`: Claude Code's `PostToolUse` payload **does** carry `turn_id` (and `tool_use_id`), so the tool-call document populates `agent_audit.turn_id` and `tool_call.tool.call_id` (see [Tool call documents](#tool-call-documents)).
 
 ## Mapping and lifecycle
 
