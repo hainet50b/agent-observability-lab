@@ -121,6 +121,25 @@
 <p>Per-stack results (fresh <code>down -v &amp;&amp; up -d</code> each): <code>claude-code-elastic</code> smoke PASS; <code>codex-cli-elastic</code> smoke PASS; <code>claude-code-otelcol-elastic</code> smoke + resilience PASS; <code>claude-code-elastic-audit</code> verify PASS (after the CR fix); <code>codex-cli-elastic-audit</code> both verify scripts PASS. Gates: <code>docker compose config -q</code> green for all five; <code>shfmt</code>/<code>shellcheck</code> clean on tracked <code>.sh</code> (incl. the edited verify); <code>Invoke-ScriptAnalyzer</code> clean on 26 tracked <code>.ps1</code>; backends contain only <code>docker-compose.yml</code> + <code>setup-elasticsearch.{sh,ps1}</code>. <strong>Please glance at</strong> the one-line <code>tr -d '\r'</code> fix in <code>verify-agent-audit.sh</code> — it is the only non-README change in this task; if you'd rather it had been a separate correction task, it's trivially revertible.</p>
 </section>
 
+<section>
+<h2>(claude tool-call 1/3) Add capture-tool-call.{sh,ps1} for Claude Code</h2>
+
+<h3>Judgement points</h3>
+<p>The two new hooks are a structural cross of two already-shipped, already-verified scripts: the <em>tool-call shape</em> (mapping, heterogeneous <code>tool_input</code>/<code>tool_response</code> serialize-to-string, <code>[REDACTED]</code> content gate, the <code>length</code>-as-char-count rule) comes verbatim from Codex's <code>capture-tool-call.{sh,ps1}</code>; the <em>identity block</em> comes verbatim from Claude's <code>capture-user-prompt.{sh,ps1}</code> (provider <code>anthropic</code>/<code>claude-code</code>; account/org lifted from <code>~/.claude.json</code>'s <code>oauthAccount</code> as plain JSON). I dropped Codex's <code>auth.json</code>/JWT/<code>base64</code>/<code>AWK_ORG</code> machinery entirely (Claude needs none), which also let me drop the bash <code>base64</code> precondition. Claude's <code>PostToolUse</code> payload field names (<code>session_id</code>, <code>turn_id</code>, <code>tool_name</code>, <code>tool_use_id</code>, <code>tool_input</code>, <code>tool_response</code>) match Codex's tool-call payload one-for-one, so no field renaming was needed — and unlike Claude's turn-less <code>UserPromptSubmit</code>, <code>PostToolUse</code> <em>does</em> carry <code>turn_id</code>, so <code>turn_id</code> is mapped (not nulled). Kept the content marker as <code>[REDACTED]</code> (square brackets — the audit-stream convention) rather than the <code>&lt;REDACTED&gt;</code> used by the unrelated ingest-redaction tasks. Set the <code>.sh</code> exec bit to <code>100755</code> to match the directly-invoked sibling <code>capture-user-prompt.sh</code> (the rendered hook command runs the script by absolute path, no <code>bash</code> prefix), even though Codex's equivalent happens to be <code>100644</code>.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None. This task is purely additive — the two files are not yet referenced by any compose file, hook template, or setup script, so no running stack's behaviour changed (wiring is task 2/3). I therefore verified by direct execution rather than a live end-to-end stack run.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>Nothing beyond what tasks 2/3 (register the <code>PostToolUse</code> hook + conf keys) and 3/3 (verify script + README) already cover.</p>
+
+<h3>Change summary</h3>
+<p>Claude Code now has a tool-call capture hook (bash + PowerShell mirror) that reshapes a <code>PostToolUse</code> payload into the canonical <code>agent_audit.tool_call</code> document and POSTs it straight to the local Agent Audit tool-call data stream — the Claude counterpart to Codex's existing one. It is not wired into any stack yet; that happens in the next two increments.</p>
+
+<h3>Review highlights</h3>
+<p>Both scripts were exercised against a synthetic <code>PostToolUse</code> payload with a one-shot local HTTP listener capturing the body: each emits a <strong>byte-equivalent, valid</strong> canonical document — provider <code>anthropic</code>/<code>claude-code</code>, account/org from <code>oauthAccount</code>, <code>conversation_id</code>←<code>session_id</code>, <code>turn_id</code>←<code>turn_id</code>, <code>tool.name</code>/<code>tool.call_id</code>, <code>input</code>/<code>output</code> serialized to JSON strings with matching <code>length</code> (48/11), and <code>cwd</code>/<code>permission_mode</code> dropped. The <code>.ps1</code> was run under <code>powershell.exe</code> (Windows PowerShell 5.1, the fleet runtime) with <code>-NoProfile -ExecutionPolicy Bypass -File</code>, matching how the exec-form hook spawns it. Both fail open (exit 0) on an unreachable destination. Gates: <code>docker compose config -q</code> green for all five stacks; <code>shfmt -d</code> + <code>shellcheck</code> clean on the new <code>.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on the new <code>.ps1</code>.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
