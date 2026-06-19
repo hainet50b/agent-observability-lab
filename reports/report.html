@@ -341,6 +341,44 @@ while <code>decision</code> / <code>prompt_id</code> survive; and a
 test still reaches PASS.</p>
 </section>
 
+<section>
+<h2>Drop Claude Code tool-output events at ingest (<code>OTEL_LOG_TOOL_CONTENT</code>)</h2>
+
+<h3>Judgement points</h3>
+<p>The task offered two shapes — a sibling <code>drop</code> processor or folding the new
+condition into the existing API-body <code>drop</code> — and I folded
+<code>ctx.message == 'tool.output'</code> into that first processor's <code>if</code>. Both are
+whole-document drops keyed on the same top-level <code>message</code> field, so one boolean keeps the
+pipeline lean (CONVENTIONS leanness) with no behavioural difference from a second processor. Updated
+the pipeline <code>description</code> to name the new <code>OTEL_LOG_TOOL_CONTENT</code> control
+alongside the existing three. Whole-doc drop (not field-remove) because the entire
+<code>tool.output</code> document is gate-added — matching the <code>OTEL_LOG_TOOL_CONTENT=0</code>
+state where these documents simply don't exist.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>This completes the Claude Code ingest-redaction series (prompt text, raw API bodies,
+tool-argument fields, tool output) — all four controls now live in one
+<code>logs-apm.app@custom-claude-code</code> sub-pipeline. No <code>- [ ]</code> tasks remain in the
+PRD. If a fifth client gate surfaces, it slots into the same file the same way.</p>
+
+<h3>Change summary</h3>
+<p>Claude Code <code>tool.output</code> telemetry events — verbatim command stdout, file contents
+from Read, and Edit diffs — are now dropped at the Elasticsearch ingest layer before storage, so they
+never land regardless of whether a client enables <code>OTEL_LOG_TOOL_CONTENT</code>, closing the last
+tool-content path that bypassed the other ingest controls.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live via <code>_ingest/pipeline/logs-apm.app@custom-claude-code/_simulate</code>: a
+<code>tool.output</code> doc drops; a normal <code>claude_code.tool_result</code> doc still passes
+through (with its <code>tool_input</code> / <code>tool_parameters</code> field-dropped and
+<code>tool_name</code> retained); <code>user_prompt</code> still redacts <code>labels.prompt</code> to
+<code>&lt;REDACTED&gt;</code>; <code>api_request_body</code> still drops. The drop is correctly scoped —
+no non-<code>tool.output</code> event type is affected.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
