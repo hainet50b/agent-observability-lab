@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #
-# render-hook.sh — register the Claude Code prompt-capture audit hook in
+# render-hook.sh — register the Claude Code audit hooks in
 # <target>/.claude/settings.local.json (POSIX/bash).
 #
 # Claude Code registers hooks in settings (not a separate hooks file). This merges
 # the `hooks` block from the agent-owned template ../hook.template.json into the
-# target's settings.local.json, substituting @@HOOK_COMMAND@@ with THIS platform's
-# capture-user-prompt.sh absolute path plus `--config <abs>/.claude/agent-audit.conf`.
-# The config path is INJECTED into the hook command (SPEC/agent-audit.md "Delivery
+# target's settings.local.json, substituting @@USER_PROMPT_COMMAND@@ /
+# @@TOOL_CALL_COMMAND@@ with THIS platform's capture-user-prompt.sh /
+# capture-tool-call.sh absolute paths plus `--config <abs>/.claude/agent-audit.conf`.
+# UserPromptSubmit fires capture-user-prompt; PostToolUse fires capture-tool-call.
+# The config path is INJECTED into each hook command (SPEC/agent-audit.md "Delivery
 # and authorization") — a shipped hook never discovers its own config.
 #
 # JSON key-merge, create-if-absent: writes { "hooks": {…} } when the file is
@@ -28,7 +30,8 @@ fi
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/hook.template.json"
-CAPTURE="$COMPONENT_DIR/hooks/capture-user-prompt.sh"
+USER_PROMPT_CAPTURE="$COMPONENT_DIR/hooks/capture-user-prompt.sh"
+TOOL_CALL_CAPTURE="$COMPONENT_DIR/hooks/capture-tool-call.sh"
 out="$target/.claude/settings.local.json"
 
 [ -f "$TEMPLATE" ] || {
@@ -45,11 +48,17 @@ fi
 mkdir -p "$target/.claude"
 target_abs=$(cd -- "$target" && pwd)
 conf="$target_abs/.claude/agent-audit.conf"
-hook_cmd="$CAPTURE --config $conf"
+user_prompt_cmd="$USER_PROMPT_CAPTURE --config $conf"
+tool_call_cmd="$TOOL_CALL_CAPTURE --config $conf"
 
-# Substitute @@HOOK_COMMAND@@ in the template's fixed hook path, then take the
-# `hooks` block (this also drops the template's _comment).
-hooks_json=$(jq --arg cmd "$hook_cmd" '.hooks.UserPromptSubmit[0].hooks[0].command = $cmd | .hooks' "$TEMPLATE")
+# Substitute each event's command placeholder, then take the `hooks` block
+# (this also drops the template's _comment).
+hooks_json=$(jq \
+  --arg up "$user_prompt_cmd" \
+  --arg tc "$tool_call_cmd" \
+  '.hooks.UserPromptSubmit[0].hooks[0].command = $up
+   | .hooks.PostToolUse[0].hooks[0].command = $tc
+   | .hooks' "$TEMPLATE")
 
 if [ -e "$out" ]; then
   # File exists but has no hooks — add `hooks` only, leave everything else intact.

@@ -140,6 +140,25 @@
 <p>Both scripts were exercised against a synthetic <code>PostToolUse</code> payload with a one-shot local HTTP listener capturing the body: each emits a <strong>byte-equivalent, valid</strong> canonical document — provider <code>anthropic</code>/<code>claude-code</code>, account/org from <code>oauthAccount</code>, <code>conversation_id</code>←<code>session_id</code>, <code>turn_id</code>←<code>turn_id</code>, <code>tool.name</code>/<code>tool.call_id</code>, <code>input</code>/<code>output</code> serialized to JSON strings with matching <code>length</code> (48/11), and <code>cwd</code>/<code>permission_mode</code> dropped. The <code>.ps1</code> was run under <code>powershell.exe</code> (Windows PowerShell 5.1, the fleet runtime) with <code>-NoProfile -ExecutionPolicy Bypass -File</code>, matching how the exec-form hook spawns it. Both fail open (exit 0) on an unreachable destination. Gates: <code>docker compose config -q</code> green for all five stacks; <code>shfmt -d</code> + <code>shellcheck</code> clean on the new <code>.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on the new <code>.ps1</code>.</p>
 </section>
 
+<section>
+<h2>(claude tool-call 2/3) Register the PostToolUse hook</h2>
+
+<h3>Judgement points</h3>
+<p>The template now carries two named command placeholders (<code>@@USER_PROMPT_COMMAND@@</code> / <code>@@TOOL_CALL_COMMAND@@</code>) instead of the single <code>@@HOOK_COMMAND@@</code> — one per event — so each event's command is substituted independently in <code>render-hook.sh</code>. The <code>.ps1</code> ignores the placeholders (exec form sets <code>command: "powershell"</code> + an <code>args</code> array), so for it I rewrote the per-entry exec-form mutation as a single <code>foreach</code> over an <code>(entry, script)</code> pairing rather than a helper function — a <code>Set-*</code> helper tripped PSScriptAnalyzer's <code>PSUseShouldProcessForStateChangingFunctions</code> rule (the <code>Set</code> verb implies state change), and the loop is both lint-clean and leaner than duplicating the five-line mutation twice. <code>PostToolUse</code> reuses the same <code>timeout: 3</code> and the same injected <code>--config</code> path as <code>UserPromptSubmit</code>. Added the three <code>tool_call</code> keys to <code>agent-audit.template.conf</code> in the same shape Codex already ships (enabled/content + per-stream <code>data_stream.tool_call=logs-agent_audit.tool_call-default</code>).</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None. Create-if-absent is preserved on both renderers, so an existing <code>.claude/settings.local.json</code> (or an already-rendered <code>agent-audit.conf</code>) is not re-rendered — a stale local <code>.claude/</code> must be deleted to pick up the new <code>PostToolUse</code> hook and <code>tool_call</code> conf keys, as the task notes. The end-to-end "both hooks fire and land in ES" check is task 3/3's verify script; this task verified rendering shape only.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>Nothing beyond task 3/3 (verify script + README), which is already queued.</p>
+
+<h3>Change summary</h3>
+<p>Setting up a Claude Code audit stack now registers <em>two</em> hooks, not one: <code>UserPromptSubmit</code> → capture-user-prompt and <code>PostToolUse</code> → capture-tool-call, each pointed at the injected per-target audit config. The rendered config gains the <code>tool_call</code> stream knobs (enabled, plaintext, <code>logs-agent_audit.tool_call-default</code>).</p>
+
+<h3>Review highlights</h3>
+<p>Rendered both ways into a throwaway target: <code>render-hook.sh</code> emits both events as command-string hooks (POSIX), and <code>render-hook.ps1</code> emits both as exec-form hooks (<code>powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &lt;capture-*.ps1&gt; --config &lt;conf&gt;</code>) — the resulting <code>hooks</code> object has exactly <code>UserPromptSubmit, PostToolUse</code> with the matching capture script per event. <code>render-agent-audit.sh</code> writes the conf with both <code>user_prompt</code> and <code>tool_call</code> blocks. Gates: <code>docker compose config -q</code> green for all five stacks; <code>shfmt -d</code> + <code>shellcheck</code> clean on <code>render-hook.sh</code>; <code>Invoke-Formatter</code> applied + <code>Invoke-ScriptAnalyzer</code> clean on <code>render-hook.ps1</code>.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

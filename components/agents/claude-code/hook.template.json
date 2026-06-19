@@ -8,7 +8,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "@@HOOK_COMMAND@@",
+            "command": "@@USER_PROMPT_COMMAND@@",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@@TOOL_CALL_COMMAND@@",
             "timeout": 3
           }
         ]
