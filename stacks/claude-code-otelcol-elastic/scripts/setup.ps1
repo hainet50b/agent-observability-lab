@@ -40,14 +40,17 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'co
     }
 }
 
+$env:ES_URL = $EsUrl
+$env:KIBANA_URL = $KibanaUrl
+
 filter Indent { "  $_" }
 
 Write-Host '[setup] 1/3 - Elasticsearch backend assets'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl -Sources 'claude-code' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -Sources 'claude-code' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 2/3 - Kibana saved objects'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl -Sources 'claude-code', 'otelcol-sidecar' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'claude-code', 'otelcol-sidecar' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 3/3 - Claude Code telemetry config'

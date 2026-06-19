@@ -1,11 +1,3 @@
-# Elastic backend — reusable, agent-agnostic composition (owns no services).
-#
-# The full OTLP ingest path: Elasticsearch + Kibana + APM Server (the
-# Elastic-native OTLP receiver agent telemetry is pointed at), assembled by
-# `include:`ing the shared service fragments. Not a stack on its own — it
-# carries no top-level `name:`, so the including stack owns the Compose project
-# name. Single-node, security-disabled local demo; do NOT expose publicly.
-
 include:
   - ../services/elasticsearch/docker-compose.yml
   - ../services/kibana/docker-compose.yml

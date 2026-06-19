@@ -40,10 +40,13 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'ap
     }
 }
 
+$env:ES_URL = $EsUrl
+$env:KIBANA_URL = $KibanaUrl
+
 filter Indent { "  $_" }
 
 Write-Host '[setup] 1/3 - Elasticsearch backend assets'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl -Sources 'codex-cli' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -Sources 'codex-cli' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 2/3 - Codex session config'
@@ -51,4 +54,4 @@ Write-Host '[setup] 2/3 - Codex session config'
 
 Write-Host ''
 Write-Host '[setup] 3/3 - Kibana saved objects'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl -Sources 'codex-cli' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex-cli' 6>&1 | Indent

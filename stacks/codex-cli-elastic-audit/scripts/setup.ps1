@@ -37,10 +37,13 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl }.Ge
     }
 }
 
+$env:ES_URL = $EsUrl
+$env:KIBANA_URL = $KibanaUrl
+
 filter Indent { "  $_" }
 
 Write-Host '[setup] 1/3 - Agent Audit data streams'
-& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-elasticsearch.ps1') 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 2/3 - Codex audit config'
@@ -48,4 +51,4 @@ Write-Host '[setup] 2/3 - Codex audit config'
 
 Write-Host ''
 Write-Host '[setup] 3/3 - Kibana saved objects'
-& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') 6>&1 | Indent

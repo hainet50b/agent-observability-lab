@@ -8,15 +8,10 @@
 # template, create <name>-default data stream, sync strict mapping). Rationale
 # lives at its single source (the template JSON / SPEC/agent-audit.md), not here.
 
-[CmdletBinding()]
-param(
-    [string]$EsUrl = $(if ($env:ES_URL) { $env:ES_URL } else { 'http://localhost:9200' })
-)
-
 $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $EsScripts = Join-Path $ComponentDir '../services/elasticsearch/scripts'
 
-& (Join-Path $EsScripts 'import-elasticsearch-assets.ps1') -EsUrl $EsUrl -Concerns 'agent-audit'
+& (Join-Path $EsScripts 'import-elasticsearch-assets.ps1') -Concerns 'agent-audit'
