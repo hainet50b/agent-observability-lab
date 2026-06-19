@@ -28,20 +28,15 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/4 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
+echo "[setup] 1/3 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
 "$components_dir/backends/elastic-audit/scripts/setup-elasticsearch.sh" | indent
 
 echo
-echo "[setup] 2/4 — agent config: .codex/agent-audit.conf (audit delivery)"
-"$components_dir/agents/codex-cli/scripts/render-agent-audit.sh" "$ES_URL" "$stack_dir" | indent
+echo "[setup] 2/3 — Codex audit config (.codex/agent-audit.conf + UserPromptSubmit/PostToolUse hooks + Elasticsearch MCP)"
+"$components_dir/agents/codex-cli/scripts/setup-audit.sh" "$stack_dir" "$ES_URL" | indent
 
 echo
-echo "[setup] 3/4 — .codex/config.toml: UserPromptSubmit + PostToolUse Agent Audit hooks (render-hooks), then Elasticsearch MCP appended (render-mcp)"
-"$components_dir/agents/codex-cli/scripts/render-hooks.sh" "$stack_dir" | indent
-"$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$stack_dir" | indent
-
-echo
-echo "[setup] 4/4 — Kibana saved objects: Agent Audit data views + saved searches"
+echo "[setup] 3/3 — Kibana saved objects: Agent Audit data views + saved searches"
 "$components_dir/backends/elastic-audit/scripts/setup-kibana.sh" | indent
 
 echo

@@ -47,8 +47,7 @@ Write-Host '[setup] 1/3 - Elasticsearch backend assets (trace-routing/logs-drop 
 
 Write-Host ''
 Write-Host '[setup] 2/3 - Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)'
-& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-otel.ps1') -OtlpEndpoint $OtlpEndpoint -TargetDir $StackDir 6>&1 | Indent
-& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $StackDir 6>&1 | Indent
+& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $StackDir -OtlpEndpoint $OtlpEndpoint 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[setup] 3/3 - Kibana saved objects (data views + saved searches)'

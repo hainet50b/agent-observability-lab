@@ -39,20 +39,15 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl }.Ge
 
 filter Indent { "  $_" }
 
-Write-Host '[setup] 1/4 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)'
+Write-Host '[setup] 1/3 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)'
 & (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 2/4 - agent config: .codex/agent-audit.conf (audit delivery)'
-& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-agent-audit.ps1') -EsUrl $EsUrl -TargetDir $StackDir 6>&1 | Indent
+Write-Host '[setup] 2/3 - Codex audit config (.codex/agent-audit.conf + UserPromptSubmit/PostToolUse hooks + Elasticsearch MCP)'
+& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-audit.ps1') -TargetDir $StackDir -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 3/4 - .codex/config.toml: UserPromptSubmit + PostToolUse Agent Audit hooks (render-hooks), then Elasticsearch MCP appended (render-mcp)'
-& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-hooks.ps1') -TargetDir $StackDir 6>&1 | Indent
-& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $StackDir 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 4/4 - Kibana saved objects: Agent Audit data views + saved searches'
+Write-Host '[setup] 3/3 - Kibana saved objects: Agent Audit data views + saved searches'
 & (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl 6>&1 | Indent
 
 Write-Host ''

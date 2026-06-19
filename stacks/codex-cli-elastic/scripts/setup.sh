@@ -34,8 +34,7 @@ echo "[setup] 1/3 — Elasticsearch backend assets (trace-routing/logs-drop pipe
 
 echo
 echo "[setup] 2/3 — Codex session config (.codex/config.toml: [otel] + Elasticsearch MCP)"
-"$components_dir/agents/codex-cli/scripts/render-otel.sh" "$otlp_endpoint" "$stack_dir" | indent
-"$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$stack_dir" | indent
+"$components_dir/agents/codex-cli/scripts/setup-telemetry.sh" "$stack_dir" "$otlp_endpoint" | indent
 
 echo
 echo "[setup] 3/3 — Kibana saved objects (data views + saved searches)"

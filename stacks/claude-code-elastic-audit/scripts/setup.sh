@@ -28,23 +28,15 @@ export ES_URL KIBANA_URL
 
 indent() { sed 's/^/  /'; }
 
-echo "[setup] 1/5 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
+echo "[setup] 1/3 — Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)"
 "$components_dir/backends/elastic-audit/scripts/setup-elasticsearch.sh" | indent
 
 echo
-echo "[setup] 2/5 — register the UserPromptSubmit Agent Audit hook (.claude/settings.local.json)"
-"$components_dir/agents/claude-code/scripts/render-hook.sh" "$stack_dir" | indent
+echo "[setup] 2/3 — Claude Code audit config (UserPromptSubmit hook + agent-audit.conf + .mcp.json)"
+"$components_dir/agents/claude-code/scripts/setup-audit.sh" "$stack_dir" "$ES_URL" | indent
 
 echo
-echo "[setup] 3/5 — agent config: .claude/agent-audit.conf (audit delivery)"
-"$components_dir/agents/claude-code/scripts/render-agent-audit.sh" "$ES_URL" "$stack_dir" | indent
-
-echo
-echo "[setup] 4/5 — local Claude Code MCP config (.mcp.json)"
-"$components_dir/agents/claude-code/scripts/render-mcp.sh" "$stack_dir" | indent
-
-echo
-echo "[setup] 5/5 — Kibana saved objects: Agent Audit data views + saved searches"
+echo "[setup] 3/3 — Kibana saved objects: Agent Audit data views + saved searches"
 "$components_dir/backends/elastic-audit/scripts/setup-kibana.sh" | indent
 
 echo

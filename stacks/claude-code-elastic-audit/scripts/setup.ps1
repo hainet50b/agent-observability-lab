@@ -39,23 +39,15 @@ foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl }.Ge
 
 filter Indent { "  $_" }
 
-Write-Host '[setup] 1/5 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)'
+Write-Host '[setup] 1/3 - Agent Audit data streams (logs-agent_audit.user_prompt-default + .tool_call-default)'
 & (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-elasticsearch.ps1') -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 2/5 - register the UserPromptSubmit Agent Audit hook (.claude/settings.local.json)'
-& (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-hook.ps1') -TargetDir $StackDir 6>&1 | Indent
+Write-Host '[setup] 2/3 - Claude Code audit config (UserPromptSubmit hook + agent-audit.conf + .mcp.json)'
+& (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-audit.ps1') -TargetDir $StackDir -EsUrl $EsUrl 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[setup] 3/5 - agent config: .claude/agent-audit.conf (audit delivery)'
-& (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-agent-audit.ps1') -EsUrl $EsUrl -TargetDir $StackDir 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 4/5 - local Claude Code MCP config (.mcp.json)'
-& (Join-Path $ComponentsDir 'agents/claude-code/scripts/render-mcp.ps1') -TargetDir $StackDir 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 5/5 - Kibana saved objects: Agent Audit data views + saved searches'
+Write-Host '[setup] 3/3 - Kibana saved objects: Agent Audit data views + saved searches'
 & (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') -KibanaUrl $KibanaUrl 6>&1 | Indent
 
 Write-Host ''
