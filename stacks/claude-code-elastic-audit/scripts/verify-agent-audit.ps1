@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # verify-agent-audit.ps1 — claude-code-elastic-audit Agent Audit delivery verification
 # (PowerShell mirror of verify-agent-audit.sh; see that file's header for the full
 # rationale). Verifies the DIRECT Agent Audit path (UserPromptSubmit hook ->

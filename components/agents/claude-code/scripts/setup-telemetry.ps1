@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # setup-telemetry.ps1 — configure Claude Code for the telemetry concern
 # (PowerShell mirror of setup-telemetry.sh).
 #

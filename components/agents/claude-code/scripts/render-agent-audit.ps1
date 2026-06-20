@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # render-agent-audit.ps1 — render the Claude Code agent's Agent Audit delivery
 # config at <TargetDir>/.claude/agent-audit.conf from ../agent-audit.template.conf
 # (PowerShell mirror of render-agent-audit.sh).

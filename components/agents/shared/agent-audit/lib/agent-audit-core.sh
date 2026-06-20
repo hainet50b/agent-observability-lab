@@ -35,10 +35,6 @@ parse_args() {
     *) shift ;;
     esac
   done
-  [ -n "$config_file" ] || {
-    log "no --config <path> provided — skipping"
-    done0
-  }
 }
 
 require_stream() {
@@ -49,6 +45,17 @@ require_stream() {
     done0
     ;;
   esac
+}
+
+require_config() {
+  [ -n "$config_file" ] || {
+    log "no --config <path> provided — skipping"
+    done0
+  }
+  [ -f "$config_file" ] || {
+    log "no delivery config at $config_file — skipping"
+    done0
+  }
 }
 
 require_tools() {
@@ -137,10 +144,6 @@ jv_raw() { if [ -n "$1" ]; then printf '"%s"' "$(json::escape "$1")"; else print
 
 load_delivery_config() {
   local stream=$1
-  [ -f "$config_file" ] || {
-    log "no delivery config at $config_file — skipping"
-    done0
-  }
   enabled=$(cfg_get "capture.$stream.enabled")
   content=$(cfg_get "capture.$stream.content")
   es_url=$(cfg_get elasticsearch.url)
@@ -179,11 +182,7 @@ read_hook_payload() {
       done0
     }
     session_id=$(json::string_field "$payload" session_id)
-    if [ "$user_prompt_turn_id_supported" = true ]; then
-      turn_id=$(json::string_field "$payload" turn_id)
-    else
-      turn_id=""
-    fi
+    turn_id=$(json::string_field "$payload" turn_id)
     prompt_length=$(json::char_count "$escaped_prompt")
     ;;
   tool_call)
@@ -216,7 +215,7 @@ build_user_prompt_record() {
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
     "$provider" "$agent_name" \
     "$(jv_esc "$account_id")" "$(jv_esc "$account_name")" "$(jv_esc "$account_email")" \
-    "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
+    "$(jv_esc "$organization_id")" "$(jv_esc "$organization_name")" \
     "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
     "$prompt_text" "$prompt_length")
 }
@@ -241,7 +240,7 @@ build_tool_call_record() {
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
     "$provider" "$agent_name" \
     "$(jv_esc "$account_id")" "$(jv_esc "$account_name")" "$(jv_esc "$account_email")" \
-    "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
+    "$(jv_esc "$organization_id")" "$(jv_esc "$organization_name")" \
     "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
     "$(jv_esc "$tool_name")" "$(jv_esc "$call_id")" \
     "$input_text" "$input_length" \

@@ -27,13 +27,13 @@ function Assert-Config($Config) {
         Log 'no -Config <path> provided — skipping'; exit 0
     }
     $script:configFile = $Config
+    if (-not (Test-Path -LiteralPath $script:configFile)) {
+        Log "no delivery config at $script:configFile — skipping"; exit 0
+    }
 }
 
 function Import-DeliveryConfig($Stream) {
     try {
-        if (-not (Test-Path -LiteralPath $script:configFile)) {
-            Log "no delivery config at $script:configFile — skipping"; exit 0
-        }
         $cfg = Get-Content -Raw -LiteralPath $script:configFile | ConvertFrom-StringData
         $script:enabled = $cfg["capture.$Stream.enabled"]
         $script:content = $cfg["capture.$Stream.content"]
@@ -68,7 +68,7 @@ function Read-HookPayload($Stream) {
                 if (-not $script:promptText) { Log 'no prompt in payload — nothing to capture'; exit 0 }
                 $script:promptLength = $script:promptText.Length
                 $script:sessionId = NullIfEmpty $script:rawObj.session_id
-                $script:turnId = if ($script:UserPromptTurnIdSupported) { NullIfEmpty $script:rawObj.turn_id } else { $null }
+                $script:turnId = NullIfEmpty $script:rawObj.turn_id
             }
             'tool_call' {
                 $script:toolName = $script:rawObj.tool_name

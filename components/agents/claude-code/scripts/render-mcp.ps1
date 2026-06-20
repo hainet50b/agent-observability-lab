@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # render-mcp.ps1 — materialize the Claude Code agent's project-scoped MCP config
 # at <TargetDir>/.mcp.json from ../mcp.template.json (mirror of render-mcp.sh).
 #

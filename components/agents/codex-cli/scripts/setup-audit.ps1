@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # setup-audit.ps1 — configure Codex CLI for the audit concern
 # (PowerShell mirror of setup-audit.sh).
 #

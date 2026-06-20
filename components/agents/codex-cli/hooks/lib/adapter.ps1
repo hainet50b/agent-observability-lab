@@ -1,6 +1,5 @@
 $script:Provider = 'openai'
 $script:AgentName = 'codex-cli'
-$script:UserPromptTurnIdSupported = $true
 
 function ConvertFrom-Base64Url($Value) {
     $t = $Value.Replace('-', '+').Replace('_', '/')
@@ -9,7 +8,7 @@ function ConvertFrom-Base64Url($Value) {
 }
 
 function Get-CodexProviderIdentity($CodexHome) {
-    $r = [ordered]@{ account_id = $null; account_email = $null; account_name = $null; org_id = $null; org_name = $null }
+    $r = [ordered]@{ account_id = $null; account_name = $null; account_email = $null; organization_id = $null; organization_name = $null }
     try {
         $authFile = Join-Path $CodexHome 'auth.json'
         if (-not (Test-Path -LiteralPath $authFile)) { return $r }
@@ -20,13 +19,13 @@ function Get-CodexProviderIdentity($CodexHome) {
             $parts = ([string]$idToken).Split('.')
             if ($parts.Length -ge 2) {
                 $claims = ConvertFrom-Base64Url $parts[1] | ConvertFrom-Json
-                $r.account_email = $claims.email
                 $r.account_name = $claims.name
+                $r.account_email = $claims.email
                 $orgs = $claims.'https://api.openai.com/auth'.organizations
                 if ($orgs) {
                     $org = $orgs | Where-Object { $_.is_default -eq $true } | Select-Object -First 1
                     if (-not $org) { $org = $orgs | Select-Object -First 1 }
-                    if ($org) { $r.org_id = $org.id; $r.org_name = $org.title }
+                    if ($org) { $r.organization_id = $org.id; $r.organization_name = $org.title }
                 }
             }
         }
@@ -54,6 +53,6 @@ function Get-RuntimeIdentity {
         user         = [ordered]@{ id = $userId; name = $userName }
         host         = [ordered]@{ name = $hostName; hostname = $hostName }
         account      = [ordered]@{ id = $ident.account_id; name = $ident.account_name; email = $ident.account_email }
-        organization = [ordered]@{ id = $ident.org_id; name = $ident.org_name }
+        organization = [ordered]@{ id = $ident.organization_id; name = $ident.organization_name }
     }
 }

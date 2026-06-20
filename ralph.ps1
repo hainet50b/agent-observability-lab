@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # ralph.ps1 — Ralph Loop driver (PowerShell).
 #
 # Usage:

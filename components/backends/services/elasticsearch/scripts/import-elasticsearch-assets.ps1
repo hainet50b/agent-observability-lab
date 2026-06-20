@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # Applies the Elasticsearch assets for each CONCERN in -Concerns (a dir under this
 # component). Files are typed by suffix: *.ilm.json → ILM policy, *.component.json →
 # component template, *.pipeline.json → ingest pipeline, *.template.json → index

@@ -3,7 +3,6 @@
 
 provider='anthropic'
 agent_name='claude-code'
-user_prompt_turn_id_supported=false
 CLAUDE_CONFIG=${CLAUDE_CONFIG:-$HOME/.claude.json}
 
 derive_runtime_identity() {
@@ -17,7 +16,7 @@ derive_runtime_identity() {
   [ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
   host_name=$host_hostname
 
-  account_id="" account_email="" account_name="" org_id="" org_name=""
+  account_id="" account_name="" account_email="" organization_id="" organization_name=""
   if [ -f "$CLAUDE_CONFIG" ]; then
     claude=$(cat "$CLAUDE_CONFIG" 2>/dev/null || echo "")
     oauth=$(json::raw_value "$claude" oauthAccount)
@@ -25,8 +24,8 @@ derive_runtime_identity() {
       account_id=$(json::string_field "$oauth" accountUuid)
       account_name=$(json::string_field "$oauth" displayName)
       account_email=$(json::string_field "$oauth" emailAddress)
-      org_id=$(json::string_field "$oauth" organizationUuid)
-      org_name=$(json::string_field "$oauth" organizationName)
+      organization_id=$(json::string_field "$oauth" organizationUuid)
+      organization_name=$(json::string_field "$oauth" organizationName)
     fi
   fi
 }

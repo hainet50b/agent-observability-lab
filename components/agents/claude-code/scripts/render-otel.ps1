@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # render-otel.ps1 — render the Claude Code agent's telemetry `env` block into
 # <TargetDir>/.claude/settings.local.json (PowerShell mirror of render-otel.sh).
 #

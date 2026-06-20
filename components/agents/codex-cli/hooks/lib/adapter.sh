@@ -3,7 +3,6 @@
 
 provider='openai'
 agent_name='codex-cli'
-user_prompt_turn_id_supported=true
 CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
 
 awk_org='function liftstr(str,key,   kk,p,ii,nn,c,out){
@@ -40,7 +39,7 @@ derive_runtime_identity() {
   host_name=$host_hostname
 
   auth_file="$CODEX_HOME/auth.json"
-  account_id="" account_email="" account_name="" org_id="" org_name=""
+  account_id="" account_name="" account_email="" organization_id="" organization_name=""
   if [ -f "$auth_file" ]; then
     auth=$(cat "$auth_file" 2>/dev/null || echo "")
     account_id=$(json::string_field "$auth" account_id)
@@ -54,13 +53,13 @@ derive_runtime_identity() {
       esac
       claims=$(printf '%s' "$padded" | base64 -d 2>/dev/null || echo "")
       if [ -n "$claims" ]; then
-        account_email=$(json::string_field "$claims" email)
         account_name=$(json::string_field "$claims" name)
+        account_email=$(json::string_field "$claims" email)
         orgs=$(json::raw_value "$claims" organizations)
         if [ -n "$orgs" ]; then
           {
-            IFS= read -r org_id
-            IFS= read -r org_name
+            IFS= read -r organization_id
+            IFS= read -r organization_name
           } <<EOF
 $(ORGS="$orgs" awk "$awk_org")
 EOF

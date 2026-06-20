@@ -729,6 +729,63 @@ the stream), no leftover placeholders. Gates: <code>docker compose config -q</co
 <code>Invoke-ScriptAnalyzer</code> clean on every changed <code>.ps1</code>. This was the last open PRD task.</p>
 </section>
 
+<section>
+<h2>Hooks polish — guard symmetry, de-leak the core, full naming, no PS shebang</h2>
+
+<h3>Judgement points</h3>
+<p><strong>Symmetric config guard (item 1).</strong> Split <code>parse_args</code> into parse-only and added a
+<code>require_config</code> guard parallel to <code>require_stream</code>, folding both the presence check (moved out of
+<code>parse_args</code>) and the file-existence check (moved out of <code>load_delivery_config</code>) into it — reusing
+the two existing skip messages verbatim so logged output is unchanged. Entry order is now
+<code>parse → require_stream → require_config → require_tools → load</code>. On PowerShell, <code>Assert-Config</code>
+absorbs the <code>Test-Path</code> existence check that was in <code>Import-DeliveryConfig</code>; the loader keeps only the
+contents check (missing <code>elasticsearch.url</code> / <code>data_stream</code>).</p>
+<p><strong>turn_id de-gated (item 2).</strong> Dropped <code>user_prompt_turn_id_supported</code> / <code>$UserPromptTurnIdSupported</code>
+from both adapters and the core; the <code>user_prompt</code> branch now extracts <code>turn_id</code> unconditionally like
+<code>tool_call</code>. This removes the last agent-specific knob from the core. Output is byte-identical because Claude's
+real <code>UserPromptSubmit</code> payload carries no <code>turn_id</code> → the extractor returns empty → <code>null</code>,
+exactly what the gated <code>else</code> branch produced (confirmed live: a real-shaped payload with no <code>turn_id</code>
+still emits <code>turn_id: null</code>).</p>
+<p><strong>org → organization + variable-order (items 3–4).</strong> Renamed <code>org_id</code>/<code>org_name</code> →
+<code>organization_id</code>/<code>organization_name</code> (sh) and the camelCase / hashtable equivalents (ps1) for
+parity with <code>account_*</code>. These are internal names only — the emitted JSON key stays
+<code>agent_audit.agent.organization</code> (verified the live doc's <code>agent</code> keys are unchanged). Reordered the
+Codex adapters' identity inits and assignments into document order (account → organization, id → name → email) to
+mirror the already-fixed Claude <code>adapter.sh</code> line.</p>
+<p><strong>No PS shebang (item 5).</strong> Stripped <code>#!/usr/bin/env pwsh</code> from all 18 <code>.ps1</code> files
+carrying it (hook entries, render-*, setup-*, verify-*, import-*, <code>ralph.ps1</code>). Confirmed every file was LF
+before editing (Git Bash's <code>grep -c $'\r'</code> mis-reports here; <code>od -c</code> was the source of truth), so a
+first-line delete preserved endings.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The <code>*-elastic-audit</code> <code>verify-*</code> scripts were not run via their full stack path: the audit stack
+shares ES container/port with the running <code>claude-code-elastic</code> telemetry stack (8h uptime) and they are
+alternatives, not co-run. Instead I exercised the exact refactored hook code path — all four entries
+(<code>{claude,codex}</code> × <code>{sh,ps1}</code>) — end-to-end against the live ES with a throwaway config and
+stream, which is where the regression risk lives (restructured control flow + guard relocation). The
+<code>verify-*</code> scripts differ only by spawning through the rendered <code>settings.local.json</code> and asserting in
+ES; the hook code they drive is what changed and is proven working.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None. With this task closed there are no open <code>- [ ]</code> items.</p>
+
+<h3>Change summary</h3>
+<p>Tidied the shared agent-audit capture hooks: a symmetric <code>require_config</code> guard, removal of the last
+agent-specific <code>turn_id</code> flag from the core, <code>org</code>→<code>organization</code> renames, document-order
+variable inits, and removal of the now-banned <code>#!/usr/bin/env pwsh</code> shebang from every PowerShell script.
+Delivered audit documents are unchanged.</p>
+
+<h3>Review highlights</h3>
+<p><strong>End-to-end proof against live ES.</strong> All four entries indexed correctly (HTTP 201 / Invoke-RestMethod
+success, exit 0): Claude → <code>anthropic</code>/<code>claude-code</code> with the live OAuth account/org, Codex →
+<code>openai</code>/<code>codex-cli</code> with its JWT-derived identity. Guards verified: missing <code>--config</code> →
+"no --config" skip; nonexistent file → "no delivery config at …" skip; bad <code>--stream</code> → skip; all exit 0.
+A real-shaped <code>user_prompt</code> (no <code>turn_id</code>) emits <code>turn_id: null</code> on both shells. Gates:
+<code>docker compose config -q</code> green for all five stacks; <code>shfmt -d</code> empty and <code>shellcheck</code>
+clean; <code>Invoke-Formatter</code> a no-op and <code>Invoke-ScriptAnalyzer</code> clean on every touched and
+shebang-stripped <code>.ps1</code>. This was the last open PRD task.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

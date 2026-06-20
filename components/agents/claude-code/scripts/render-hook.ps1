@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # render-hook.ps1 — register the Claude Code audit hooks in
 # <TargetDir>/.claude/settings.local.json (PowerShell mirror of render-hook.sh).
 #

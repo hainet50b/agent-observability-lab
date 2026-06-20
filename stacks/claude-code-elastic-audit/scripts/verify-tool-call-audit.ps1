@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # verify-tool-call-audit.ps1 — claude-code-elastic-audit Agent Audit tool-call verification
 # (PowerShell mirror of verify-tool-call-audit.sh; see that file's header for the full
 # rationale). Verifies the DIRECT Agent Audit tool-call path (PostToolUse hook ->

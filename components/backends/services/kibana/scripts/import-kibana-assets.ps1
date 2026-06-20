@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # Imports the Kibana saved objects for each SOURCE in -Sources (a dir under this
 # component) via the _import?overwrite=true API. Within each dir, files load in
 # dependency order: data-views → saved-searches → dashboard. PowerShell 7+;

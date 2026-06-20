@@ -9,6 +9,7 @@ hook_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 parse_args "$@"
 require_stream "$stream"
+require_config
 require_tools
 load_delivery_config "$stream"
 require_stream_enabled "$stream"

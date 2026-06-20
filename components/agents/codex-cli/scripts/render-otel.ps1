@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # render-otel.ps1 — render the Codex [otel] config.toml block (mirror of render-otel.sh).
 # The caller supplies the three FULL per-signal OTLP endpoints; this script does
 # no path construction (the /v1/<signal> path is the receiver's to choose).

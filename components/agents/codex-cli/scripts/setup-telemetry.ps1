@@ -1,4 +1,3 @@
-#!/usr/bin/env pwsh
 # setup-telemetry.ps1 — configure Codex CLI for the telemetry concern
 # (PowerShell mirror of setup-telemetry.sh).
 #

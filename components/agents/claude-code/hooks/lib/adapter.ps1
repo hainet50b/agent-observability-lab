@@ -1,6 +1,5 @@
 $script:Provider = 'anthropic'
 $script:AgentName = 'claude-code'
-$script:UserPromptTurnIdSupported = $false
 
 function Get-RuntimeIdentity {
     $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
@@ -13,7 +12,7 @@ function Get-RuntimeIdentity {
     $hostName = NullIfEmpty ([System.Net.Dns]::GetHostName())
 
     $claudeConfig = if ($env:CLAUDE_CONFIG) { $env:CLAUDE_CONFIG } else { Join-Path $HOME '.claude.json' }
-    $accountId = $null; $accountName = $null; $accountEmail = $null; $orgId = $null; $orgName = $null
+    $accountId = $null; $accountName = $null; $accountEmail = $null; $organizationId = $null; $organizationName = $null
     if (Test-Path -LiteralPath $claudeConfig -PathType Leaf) {
         try {
             $oauth = (Get-Content -Raw -LiteralPath $claudeConfig | ConvertFrom-Json).oauthAccount
@@ -21,8 +20,8 @@ function Get-RuntimeIdentity {
                 $accountId = NullIfEmpty $oauth.accountUuid
                 $accountName = NullIfEmpty $oauth.displayName
                 $accountEmail = NullIfEmpty $oauth.emailAddress
-                $orgId = NullIfEmpty $oauth.organizationUuid
-                $orgName = NullIfEmpty $oauth.organizationName
+                $organizationId = NullIfEmpty $oauth.organizationUuid
+                $organizationName = NullIfEmpty $oauth.organizationName
             }
         }
         catch { Write-Verbose "fail-open: $_" }
@@ -33,6 +32,6 @@ function Get-RuntimeIdentity {
         user         = [ordered]@{ id = $userId; name = $userName }
         host         = [ordered]@{ name = $hostName; hostname = $hostName }
         account      = [ordered]@{ id = $accountId; name = $accountName; email = $accountEmail }
-        organization = [ordered]@{ id = $orgId; name = $orgName }
+        organization = [ordered]@{ id = $organizationId; name = $organizationName }
     }
 }
