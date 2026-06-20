@@ -595,6 +595,73 @@ stacks; <code>shfmt</code>/<code>shellcheck</code> clean; <code>Invoke-Formatter
 <code>Invoke-ScriptAnalyzer</code> clean on all four <code>.ps1</code>. This was the last open PRD task.</p>
 </section>
 
+<section>
+<h2>hooks commonize 1/2 — POSIX shared core + per-agent adapter + single <code>--stream</code> entry</h2>
+
+<h3>Judgement points</h3>
+<p><strong>Modelled the one payload quirk as an adapter flag, not a code branch.</strong> The SPEC calls out
+"Claude's <code>UserPromptSubmit</code> carries no <code>turn_id</code>, Codex's does" as adapter-supplied
+variation. I added a single adapter global <code>user_prompt_turn_id_supported</code> (Claude <code>false</code>,
+Codex <code>true</code>); the shared core reads <code>turn_id</code> for <code>user_prompt</code> only when set,
+else leaves it empty so <code>jv_esc</code> emits <code>null</code>. This produces byte-identical output to the old
+per-agent libraries (Claude hard-coded <code>"turn_id":null</code>; Codex read+emitted it) while keeping the core
+literal-free of agent names. Both <code>build_*_record</code> printf formats are now one shared shape with
+<code>provider</code>/<code>name</code> as <code>%s</code> fed from the adapter.</p>
+<p><strong>AWK_ORG lives in the Codex adapter only.</strong> It is used solely inside Codex's JWT identity
+extractor, so it belongs to the adapter, not the shared core — the core carries only the agent-agnostic
+<code>json::*</code> helpers.</p>
+<p><strong>Applied all six polish items (a)–(f):</strong> <code>--stream</code> parsed in <code>parse_args</code>
+and passed explicitly to each step; an explicit <code>require_stream</code> validates the value;
+<code>read_hook_payload</code>/<code>build_audit_document</code> use a three-way <code>user_prompt</code>/<code>tool_call</code>/else→logged-skip
+dispatch; full variable names (<code>escaped_prompt</code>, <code>account_id</code>, <code>input_raw</code>…);
+UPPER-case kept only for env-overridable globals (<code>CLAUDE_CONFIG</code>, <code>CODEX_HOME</code>, and the awk
+<code>ENVIRON</code> vars), awk-program holders lowercased; the timeout fallback default is a single named constant
+<code>default_timeout_ms=1000</code> synced to the shipped <code>agent-audit.conf</code> (was a stale 300); removed
+the <code>(run setup.sh)</code> hint, neutralized the "rendered hook command" wording, and the log tag now carries
+the stream (<code>[agent-audit user_prompt]</code>).</p>
+
+<h3>Unresolved / workarounds</h3>
+<p><strong>Verify scripts needed a small, necessary touch.</strong> The four <code>.sh</code> verify scripts
+(both audit stacks) hard-referenced the now-removed <code>capture-*.sh</code> in their <code>HOOK</code> precondition
+(a <code>fail</code>, reached before the docker/config SKIPs), and the Codex ones invoke the hook <em>directly</em>
+without going through the rendered config — so they also needed <code>--stream</code> added to the Act call. I
+updated only those paths/args plus the matching comment names; assertions are untouched, so they remain a true
+regression net. This was not in the task's file list but is an unavoidable consequence of the rename.</p>
+<p><strong>Couldn't run the verify scripts unmodified end-to-end.</strong> The two audit stacks and the running
+telemetry stack all fix the container name <code>aol-elasticsearch</code>, and the telemetry stack is currently up,
+so the audit verify's <code>docker compose up -d</code> hits a name conflict. Rather than tear down the user's
+running stack, I ran the verify's exact Act+Assert (rendered command via <code>sh -c</code> → live ES on :9200,
+then ES assert + cleanup) for both streams. The shared container name across audit/telemetry stacks looks like a
+latent footgun worth a future task.</p>
+<p><strong>PS1 side is intentionally half-migrated until 2/2.</strong> The shared <code>hooks.template.toml</code>
+and <code>render-hooks.sh</code> now point their POSIX <code>command</code> at the single
+<code>agent-audit.sh --stream …</code>; the <code>commandWindows</code> lines still target the existing
+<code>capture-*.ps1</code> (which remain on disk) so the tree stays green between tasks. Task 2/2 migrates them.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The audit and telemetry stacks share fixed container names (<code>aol-elasticsearch</code>/<code>-kibana</code>/<code>-apm-server</code>),
+so they can't run simultaneously and cross-stack verify hits name conflicts — a task to scope container names per
+stack (or document the "only one stack up at a time" constraint) would remove a sharp edge.</p>
+
+<h3>Change summary</h3>
+<p>The Claude and Codex audit capture hooks no longer duplicate a ~260-line library each. There is now one shared
+core (<code>components/agents/shared/agent-audit/lib/agent-audit-core.sh</code>), a thin per-agent adapter, and a
+single <code>agent-audit.sh</code> entry per agent selected by <code>--stream user_prompt|tool_call</code> — eight
+POSIX hook files collapse to four. Delivered documents are byte-for-byte the same.</p>
+
+<h3>Review highlights</h3>
+<p><strong>End-to-end proof against live ES.</strong> Both streams for Claude (via the freshly
+<code>render-hook.sh</code>-rendered command, then restored to the user's <code>.ps1</code> form) and a direct
+Codex run landed correct docs: Claude <code>user_prompt</code> → <code>provider:anthropic</code>,
+<code>turn_id:null</code>, no <code>model</code>, account/org populated from the live OAuth session; Claude
+<code>tool_call</code> → <code>turn_id</code> present, object-input/string-output serialized; Codex
+<code>user_prompt</code> → <code>provider:openai / name:codex-cli</code> with <code>turn_id</code> present (the
+agent-specific quirk) and null account (no <code>auth.json</code>). The first cold POST tripped the 1s timeout but
+fail-open still indexed the doc — the session-safety contract behaving as designed. Gates: <code>docker compose
+config -q</code> green for all five stacks, <code>shfmt</code>/<code>shellcheck</code> clean, and the telemetry
+smoke-test still PASS.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

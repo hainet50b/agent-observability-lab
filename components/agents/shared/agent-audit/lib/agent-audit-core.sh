@@ -3,26 +3,52 @@
 
 set -u
 
-LOG_TAG=$(basename -- "$0" .sh)
-CLAUDE_CONFIG=${CLAUDE_CONFIG:-$HOME/.claude.json}
+default_timeout_ms=1000
 
-log() { echo "[$LOG_TAG] $*" >&2; }
+stream=""
+config_file=""
+
+log() { printf '[agent-audit%s] %s\n' "${stream:+ $stream}" "$*" >&2; }
 done0() { exit 0; }
 
-require_config_arg() {
+parse_args() {
   config_file=""
+  stream=""
   while [ "$#" -gt 0 ]; do
-    if [ "$1" = --config ] && [ "$#" -ge 2 ]; then
-      config_file=$2
-      shift 2
-    else
-      shift
-    fi
+    case $1 in
+    --config)
+      if [ "$#" -ge 2 ]; then
+        config_file=$2
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    --stream)
+      if [ "$#" -ge 2 ]; then
+        stream=$2
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *) shift ;;
+    esac
   done
   [ -n "$config_file" ] || {
-    log "no --config <path> provided — skipping (the rendered hook command injects it)"
+    log "no --config <path> provided — skipping"
     done0
   }
+}
+
+require_stream() {
+  case ${1:-} in
+  user_prompt | tool_call) return 0 ;;
+  *)
+    log "no valid --stream <user_prompt|tool_call> provided — skipping"
+    done0
+    ;;
+  esac
 }
 
 require_tools() {
@@ -37,12 +63,12 @@ require_tools() {
 }
 
 cfg_get() {
-  _key=$1
+  key=$1
   while IFS='=' read -r _k _v || [ -n "$_k" ]; do
     case $_k in
     '#'*) continue ;;
     esac
-    if [ "$_k" = "$_key" ]; then
+    if [ "$_k" = "$key" ]; then
       printf '%s' "${_v%$'\r'}"
       return 0
     fi
@@ -50,7 +76,7 @@ cfg_get() {
   return 0
 }
 
-AWK_GET='BEGIN{
+awk_get='BEGIN{
   s=ENVIRON["JSON"]; k="\"" ENVIRON["KEY"] "\":";
   p=index(s,k); if(p==0) exit 0;
   i=p+length(k); n=length(s);
@@ -63,18 +89,18 @@ AWK_GET='BEGIN{
     i++ }
   printf "%s", substr(s,start,i-start)
 }'
-json::string_field() { JSON=$1 KEY=$2 awk "$AWK_GET"; }
+json::string_field() { JSON=$1 KEY=$2 awk "$awk_get"; }
 
-AWK_STRLEN='BEGIN{
+awk_strlen='BEGIN{
   s=ENVIRON["ESC"]; n=length(s); i=1; c=0;
   while(i<=n){ ch=substr(s,i,1);
     if(ch=="\\"){ nx=substr(s,i+1,1); if(nx=="u"){i+=6}else{i+=2} c++; continue }
     i++; c++ }
   printf "%d", c
 }'
-json::char_count() { ESC=$1 awk "$AWK_STRLEN"; }
+json::char_count() { ESC=$1 awk "$awk_strlen"; }
 
-AWK_GET_RAW='BEGIN{
+awk_get_raw='BEGIN{
   s=ENVIRON["JSON"]; k="\"" ENVIRON["KEY"] "\":";
   p=index(s,k); if(p==0) exit 0;
   i=p+length(k); n=length(s);
@@ -98,20 +124,21 @@ AWK_GET_RAW='BEGIN{
     if(ch==","||ch=="}"||ch=="]"||ch==" "||ch=="\t"||ch=="\n"||ch=="\r") break; i++ }
   printf "%s", substr(s,start,i-start)
 }'
-json::raw_value() { JSON=$1 KEY=$2 awk "$AWK_GET_RAW"; }
+json::raw_value() { JSON=$1 KEY=$2 awk "$awk_get_raw"; }
 
-AWK_ESC='BEGIN{ s=ENVIRON["RAW"];
+awk_esc='BEGIN{ s=ENVIRON["RAW"];
   gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s);
   gsub(/\n/,"\\n",s); gsub(/\t/,"\\t",s); gsub(/\r/,"\\r",s);
   printf "%s", s }'
-json::escape() { RAW=$1 awk "$AWK_ESC"; }
+json::escape() { RAW=$1 awk "$awk_esc"; }
 
 jv_esc() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf 'null'; fi; }
 jv_raw() { if [ -n "$1" ]; then printf '"%s"' "$(json::escape "$1")"; else printf 'null'; fi; }
 
 load_delivery_config() {
+  local stream=$1
   [ -f "$config_file" ] || {
-    log "no delivery config at $config_file — skipping (run setup.sh)"
+    log "no delivery config at $config_file — skipping"
     done0
   }
   enabled=$(cfg_get "capture.$stream.enabled")
@@ -124,11 +151,12 @@ load_delivery_config() {
     log "config missing elasticsearch.url / data_stream.$stream — skipping"
     done0
   fi
-  case "$timeout_ms" in '' | *[!0-9]*) timeout_ms=300 ;; esac
+  case "$timeout_ms" in '' | *[!0-9]*) timeout_ms=$default_timeout_ms ;; esac
   max_time=$(printf '%d.%03d' "$((timeout_ms / 1000))" "$((timeout_ms % 1000))")
 }
 
 require_stream_enabled() {
+  local stream=$1
   [ "$enabled" = false ] && {
     log "capture.$stream.enabled=false — skipping (stream disabled)"
     done0
@@ -137,106 +165,100 @@ require_stream_enabled() {
 }
 
 read_hook_payload() {
+  local stream=$1
   payload=$(cat)
   [ -n "$payload" ] || {
     log "empty stdin — nothing to capture"
     done0
   }
-  if [ "$stream" = user_prompt ]; then
-    prompt_esc=$(json::string_field "$payload" prompt)
-    [ -n "$prompt_esc" ] || {
+  case $stream in
+  user_prompt)
+    escaped_prompt=$(json::string_field "$payload" prompt)
+    [ -n "$escaped_prompt" ] || {
       log "no prompt in payload — nothing to capture"
       done0
     }
-    session_esc=$(json::string_field "$payload" session_id)
-    plen=$(json::char_count "$prompt_esc")
-  else
-    tool_name_esc=$(json::string_field "$payload" tool_name)
-    call_id_esc=$(json::string_field "$payload" tool_use_id)
-    session_esc=$(json::string_field "$payload" session_id)
-    turn_esc=$(json::string_field "$payload" turn_id)
-    in_raw=$(json::raw_value "$payload" tool_input)
-    out_raw=$(json::raw_value "$payload" tool_response)
-    in_len=${#in_raw}
-    out_len=${#out_raw}
-  fi
-}
-
-derive_runtime_identity() {
-  ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
-
-  user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
-  user_id=$(whoami 2>/dev/null || echo "")
-
-  host_hostname=${HOSTNAME:-}
-  [ -n "$host_hostname" ] || host_hostname=$(hostname 2>/dev/null || echo "")
-  [ -n "$host_hostname" ] || host_hostname=${COMPUTERNAME:-}
-  host_name=$host_hostname
-
-  acct_id="" acct_email="" acct_name="" org_id="" org_name=""
-  if [ -f "$CLAUDE_CONFIG" ]; then
-    claude=$(cat "$CLAUDE_CONFIG" 2>/dev/null || echo "")
-    oauth=$(json::raw_value "$claude" oauthAccount)
-    if [ -n "$oauth" ]; then
-      acct_id=$(json::string_field "$oauth" accountUuid)
-      acct_name=$(json::string_field "$oauth" displayName)
-      acct_email=$(json::string_field "$oauth" emailAddress)
-      org_id=$(json::string_field "$oauth" organizationUuid)
-      org_name=$(json::string_field "$oauth" organizationName)
+    session_id=$(json::string_field "$payload" session_id)
+    if [ "$user_prompt_turn_id_supported" = true ]; then
+      turn_id=$(json::string_field "$payload" turn_id)
+    else
+      turn_id=""
     fi
-  fi
+    prompt_length=$(json::char_count "$escaped_prompt")
+    ;;
+  tool_call)
+    tool_name=$(json::string_field "$payload" tool_name)
+    call_id=$(json::string_field "$payload" tool_use_id)
+    session_id=$(json::string_field "$payload" session_id)
+    turn_id=$(json::string_field "$payload" turn_id)
+    input_raw=$(json::raw_value "$payload" tool_input)
+    output_raw=$(json::raw_value "$payload" tool_response)
+    input_length=${#input_raw}
+    output_length=${#output_raw}
+    ;;
+  *)
+    log "unknown stream '$stream' — skipping"
+    done0
+    ;;
+  esac
 }
 
 build_user_prompt_record() {
   case "$content" in
-  plaintext) text_field=$(jv_esc "$prompt_esc") ;;
-  redacted) text_field='"[REDACTED]"' ;;
-  *) text_field=null ;;
+  plaintext) prompt_text=$(jv_esc "$escaped_prompt") ;;
+  redacted) prompt_text='"[REDACTED]"' ;;
+  *) prompt_text=null ;;
   esac
 
-  record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"anthropic","name":"claude-code","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":null,"user_prompt":{"text":%s,"encrypted_text":null,"length":%s}}}' \
+  record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"user_prompt":{"text":%s,"encrypted_text":null,"length":%s}}}' \
     "$ts" "$ts" \
     "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
-    "$(jv_esc "$acct_id")" "$(jv_esc "$acct_name")" "$(jv_esc "$acct_email")" \
+    "$provider" "$agent_name" \
+    "$(jv_esc "$account_id")" "$(jv_esc "$account_name")" "$(jv_esc "$account_email")" \
     "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
-    "$(jv_esc "$session_esc")" \
-    "$text_field" "$plen")
+    "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
+    "$prompt_text" "$prompt_length")
 }
 
 build_tool_call_record() {
-  in_text=null
-  out_text=null
+  input_text=null
+  output_text=null
   case "$content" in
   plaintext)
-    [ -n "$in_raw" ] && in_text=$(printf '"%s"' "$(json::escape "$in_raw")")
-    [ -n "$out_raw" ] && out_text=$(printf '"%s"' "$(json::escape "$out_raw")")
+    [ -n "$input_raw" ] && input_text=$(printf '"%s"' "$(json::escape "$input_raw")")
+    [ -n "$output_raw" ] && output_text=$(printf '"%s"' "$(json::escape "$output_raw")")
     ;;
   redacted)
-    [ -n "$in_raw" ] && in_text='"[REDACTED]"'
-    [ -n "$out_raw" ] && out_text='"[REDACTED]"'
+    [ -n "$input_raw" ] && input_text='"[REDACTED]"'
+    [ -n "$output_raw" ] && output_text='"[REDACTED]"'
     ;;
   esac
 
-  record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"anthropic","name":"claude-code","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":null,"length":%s},"output":{"text":%s,"encrypted_text":null,"length":%s}}}}' \
+  record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":null,"length":%s},"output":{"text":%s,"encrypted_text":null,"length":%s}}}}' \
     "$ts" "$ts" \
     "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
-    "$(jv_esc "$acct_id")" "$(jv_esc "$acct_name")" "$(jv_esc "$acct_email")" \
+    "$provider" "$agent_name" \
+    "$(jv_esc "$account_id")" "$(jv_esc "$account_name")" "$(jv_esc "$account_email")" \
     "$(jv_esc "$org_id")" "$(jv_esc "$org_name")" \
-    "$(jv_esc "$session_esc")" "$(jv_esc "$turn_esc")" \
-    "$(jv_esc "$tool_name_esc")" "$(jv_esc "$call_id_esc")" \
-    "$in_text" "$in_len" \
-    "$out_text" "$out_len")
+    "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
+    "$(jv_esc "$tool_name")" "$(jv_esc "$call_id")" \
+    "$input_text" "$input_length" \
+    "$output_text" "$output_length")
 }
 
 build_audit_document() {
+  local stream=$1
   derive_runtime_identity
-  if [ "$stream" = user_prompt ]; then
-    build_user_prompt_record
-  else
-    build_tool_call_record
-  fi
+  case $stream in
+  user_prompt) build_user_prompt_record ;;
+  tool_call) build_tool_call_record ;;
+  *)
+    log "unknown stream '$stream' — skipping"
+    done0
+    ;;
+  esac
 }
 
 deliver_document() {

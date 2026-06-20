@@ -15,7 +15,7 @@
 #   Act     — feed a synthetic Codex PostToolUse payload (a unique session_id, an
 #             object tool_input and a string tool_response — the heterogeneous shapes
 #             the hook serializes) on stdin to the configured PostToolUse hook
-#             (components/agents/codex-cli/hooks/capture-tool-call.sh), with
+#             (components/agents/codex-cli/hooks/agent-audit.sh --stream tool_call), with
 #             CODEX_HOME=<stack>/.codex so it reads this stack's delivery config,
 #             exactly as a real Codex session invokes it.
 #   Assert  — query logs-agent_audit.tool_call-default for the canonical
@@ -42,7 +42,7 @@ DATA_STREAM=logs-agent_audit.tool_call-default
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd -- "$STACK_DIR/../.." && pwd)
-HOOK="$REPO_ROOT/components/agents/codex-cli/hooks/capture-tool-call.sh"
+HOOK="$REPO_ROOT/components/agents/codex-cli/hooks/agent-audit.sh"
 CODEX_HOME_DIR="$STACK_DIR/.codex"
 cd "$STACK_DIR"
 
@@ -115,7 +115,7 @@ payload=$(jq -nc --arg cid "$cid" '{
 # production contract — the hook does no ambient config discovery). CODEX_HOME is
 # still set so the hook resolves auth.json (provider identity) from this .codex.
 # The hook is fail-open (always exit 0); the assertion below is the real signal.
-printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --config "$CODEX_HOME_DIR/agent-audit.conf" || true
+printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --stream tool_call --config "$CODEX_HOME_DIR/agent-audit.conf" || true
 
 # --- Assert ----------------------------------------------------------------
 es_count_cid() {

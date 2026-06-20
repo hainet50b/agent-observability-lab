@@ -6,9 +6,9 @@
 # Claude Code registers hooks in settings (not a separate hooks file). This merges
 # the `hooks` block from the agent-owned template ../hook.template.json into the
 # target's settings.local.json, substituting @@USER_PROMPT_COMMAND@@ /
-# @@TOOL_CALL_COMMAND@@ with THIS platform's capture-user-prompt.sh /
-# capture-tool-call.sh absolute paths plus `--config <abs>/.claude/agent-audit.conf`.
-# UserPromptSubmit fires capture-user-prompt; PostToolUse fires capture-tool-call.
+# @@TOOL_CALL_COMMAND@@ with the single hooks/agent-audit.sh entry plus its
+# per-event `--stream <user_prompt|tool_call>` and `--config <abs>/.claude/agent-audit.conf`.
+# UserPromptSubmit selects --stream user_prompt; PostToolUse selects --stream tool_call.
 # The config path is INJECTED into each hook command (SPEC/agent-audit.md "Delivery
 # and authorization") — a shipped hook never discovers its own config.
 #
@@ -30,8 +30,7 @@ fi
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/hook.template.json"
-USER_PROMPT_CAPTURE="$COMPONENT_DIR/hooks/capture-user-prompt.sh"
-TOOL_CALL_CAPTURE="$COMPONENT_DIR/hooks/capture-tool-call.sh"
+ENTRY="$COMPONENT_DIR/hooks/agent-audit.sh"
 out="$target/.claude/settings.local.json"
 
 [ -f "$TEMPLATE" ] || {
@@ -48,8 +47,8 @@ fi
 mkdir -p "$target/.claude"
 target_abs=$(cd -- "$target" && pwd)
 conf="$target_abs/.claude/agent-audit.conf"
-user_prompt_cmd="$USER_PROMPT_CAPTURE --config $conf"
-tool_call_cmd="$TOOL_CALL_CAPTURE --config $conf"
+user_prompt_cmd="$ENTRY --stream user_prompt --config $conf"
+tool_call_cmd="$ENTRY --stream tool_call --config $conf"
 
 # Substitute each event's command placeholder, then take the `hooks` block
 # (this also drops the template's _comment).
