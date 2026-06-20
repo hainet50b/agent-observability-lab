@@ -1,0 +1,22 @@
+{
+  "policy": {
+    "_meta": {
+      "description": "Hot → delete at 3 days for Claude Code telemetry (logs + metrics + traces).",
+      "managed_by": "agent-observability-lab"
+    },
+    "phases": {
+      "hot": {
+        "actions": {
+          "rollover": {
+            "max_age": "1d",
+            "max_primary_shard_size": "50gb"
+          }
+        }
+      },
+      "delete": {
+        "min_age": "3d",
+        "actions": { "delete": {} }
+      }
+    }
+  }
+}

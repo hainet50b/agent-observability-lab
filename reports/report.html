@@ -426,6 +426,55 @@ both <code>verify-agent-audit.sh</code> and <code>verify-tool-call-audit.sh</cod
 stacks; <code>shfmt</code>/<code>shellcheck</code> clean; <code>Invoke-ScriptAnalyzer</code> clean.</p>
 </section>
 
+<section>
+<h2>ILM 2/2 — Per-agent telemetry ILM via higher-priority APM-composing index templates</h2>
+
+<h3>Judgement points</h3>
+<p><strong>Preserving APM's inline pipeline settings was load-bearing and not spelled out.</strong>
+The APM shared templates (<code>logs-apm.app@template</code> etc.) carry
+<code>index.default_pipeline</code> / <code>index.final_pipeline</code> as <em>inline</em>
+<code>template.settings</code> — not in any composed component template. A higher-priority overlay that
+omitted them would strip the default pipeline from new agent backing indices and silently bypass our
+ingest redaction/field-drop/reroute. So each overlay copies APM's inline settings verbatim too. I
+generated the six overlay files directly from <code>GET _index_template/&lt;apm&gt;</code> via jq (composed_of
++ inline settings + <code>ignore_missing_component_templates</code>), appending each agent's
+<code>…@lifecycle</code> component template last so its <code>index.lifecycle.name</code> wins.</p>
+<p><code>ignore_missing_component_templates</code> also had to be replicated — APM lists
+<code>logs@custom</code> / <code>logs-apm.app@custom</code> / <code>*-fallback@ilm</code> there because
+they may not physically exist; without copying it the overlay PUT 400s
+(<em>"specifies component templates … that do not exist"</em>).</p>
+<p>New PUT-only importer asset type <code>*.index-template.json</code> (PUT
+<code>_index_template/&lt;name&gt;</code>, no data-stream create, no mapping-sync) added alongside the
+ILM 1/2 handlers; priority 250 (above APM's 210). jq on Windows emits CRLF, so the generated files were
+normalised to LF.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The overlay only governs <em>new/rolled</em> backing indices; the agent streams' current backing
+indices keep APM's default lifecycle until they roll over. Expected, same migration posture as ILM 1/2.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None blocking. A future task could verify ILM end-to-end by forcing a rollover and asserting the new
+backing index reports <code>index.lifecycle.name = telemetry.&lt;agent&gt;</code> (today's proof is via the
+resolved template, not an actually-rolled index).</p>
+
+<h3>Change summary</h3>
+<p>Each agent's telemetry data streams (logs + metrics + traces) now age under their own ILM policy
+(<code>telemetry.claude_code</code> / <code>telemetry.codex_cli_rs</code>, hot → delete@3d) via dedicated
+higher-priority index templates that re-compose APM's own components verbatim and attach the agent's
+lifecycle last. Non-agent services are untouched.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live on the real telemetry stack (claude-code-elastic, which carries 100s of real
+<code>claude-code</code> docs): all three per-agent streams resolve <code>telemetry.claude_code</code>
+lifecycle with APM's <code>default_pipeline</code> preserved, and the resolved mapping/settings are
+<strong>byte-identical to APM's default except the lifecycle</strong>
+(<code>jq -S</code> diff empty). A non-agent service (<code>aol_smoke_test</code>, <code>traces-apm-default</code>)
+still resolves APM's default policy — ILM lands on agent streams only, never all of APM. Gates:
+<code>docker compose config -q</code> green for all five stacks; <code>shfmt</code>/<code>shellcheck</code>
+clean; <code>Invoke-ScriptAnalyzer</code> clean; <code>scripts/smoke-test.sh</code> PASS on
+claude-code-elastic. The audit stack was restored to running afterward.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

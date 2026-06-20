@@ -2,8 +2,10 @@
 # Applies the Elasticsearch assets for each CONCERN arg (a dir under this component).
 # Files are typed by suffix: *.ilm.json → ILM policy, *.component.json → component
 # template, *.pipeline.json → ingest pipeline, *.template.json → index template +
-# <name>-default data stream + mapping sync, *.index.json → index. Within a concern
-# they are applied ilm → component → pipelines → templates → indices, so a referenced
+# <name>-default data stream + mapping sync, *.index-template.json → index template
+# only (PUT, no data stream, no mapping sync — a higher-priority overlay over an
+# APM-managed stream), *.index.json → index. Within a concern they are applied
+# ilm → component → pipelines → templates → index-templates → indices, so a referenced
 # object always exists first. Idempotent: PUTs replace; streams/indices created only
 # if absent; a template's mapping is re-synced each run from the RESOLVED composed
 # mapping (a strict mapping still accepts added fields). Needs curl, jq.
@@ -114,6 +116,19 @@ apply_template() {
   echo "[apply] mapping synced onto '$data_stream' ✓"
 }
 
+apply_index_template() {
+  name=$1 file=$2
+  echo "[apply] index template (overlay) '$name' on $ES_URL…"
+  result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_index_template/$name" \
+    -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
+  code=$(echo "$result" | tail -n1)
+  body=$(echo "$result" | sed '$d')
+  echo "$body" | jq . 2>/dev/null || echo "$body"
+  case "$code" in 2*) : ;; *) fail "PUT _index_template/$name returned HTTP $code (expected 2xx)" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index template PUT not acknowledged"
+  echo "[apply] index template (overlay) '$name' installed ✓"
+}
+
 apply_index() {
   name=$1 file=$2
   existing=$(curl -s -o /dev/null -w '%{http_code}' "$ES_URL/$name") || fail "request to Elasticsearch failed"
@@ -157,6 +172,11 @@ import_concern() {
     [ -e "$f" ] || continue
     base=$(basename "$f")
     apply_template "${base%.template.json}" "$f"
+  done
+  for f in "$concern"/*.index-template.json; do
+    [ -e "$f" ] || continue
+    base=$(basename "$f")
+    apply_index_template "${base%.index-template.json}" "$f"
   done
   for f in "$concern"/*.index.json; do
     [ -e "$f" ] || continue

@@ -1,0 +1,36 @@
+{
+  "index_patterns": [
+    "traces-apm-agents_codex_cli_rs*"
+  ],
+  "priority": 250,
+  "data_stream": {},
+  "composed_of": [
+    "traces@mappings",
+    "apm@mappings",
+    "apm@settings",
+    "apm-10d@lifecycle",
+    "traces-apm@mappings",
+    "traces-apm-fallback@ilm",
+    "traces@custom",
+    "traces-apm@custom",
+    "ecs@mappings",
+    "telemetry.codex_cli_rs@lifecycle"
+  ],
+  "ignore_missing_component_templates": [
+    "traces@custom",
+    "traces-apm@custom",
+    "traces-apm-fallback@ilm"
+  ],
+  "template": {
+    "settings": {
+      "index": {
+        "default_pipeline": "traces-apm@default-pipeline",
+        "final_pipeline": "traces-apm@pipeline"
+      }
+    }
+  },
+  "_meta": {
+    "description": "Per-agent traces index template: APM traces-apm components verbatim + Codex CLI ILM lifecycle.",
+    "managed_by": "agent-observability-lab"
+  }
+}

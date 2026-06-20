@@ -1,0 +1,37 @@
+{
+  "index_patterns": [
+    "metrics-apm.app.claude_code-*"
+  ],
+  "priority": 250,
+  "data_stream": {},
+  "composed_of": [
+    "metrics@mappings",
+    "apm@mappings",
+    "apm@settings",
+    "apm-90d@lifecycle",
+    "metrics-apm@mappings",
+    "metrics-apm@settings",
+    "metrics-apm.app-fallback@ilm",
+    "metrics@custom",
+    "metrics-apm.app@custom",
+    "ecs@mappings",
+    "telemetry.claude_code@lifecycle"
+  ],
+  "ignore_missing_component_templates": [
+    "metrics@custom",
+    "metrics-apm.app@custom",
+    "metrics-apm.app-fallback@ilm"
+  ],
+  "template": {
+    "settings": {
+      "index": {
+        "default_pipeline": "metrics-apm.app@default-pipeline",
+        "final_pipeline": "metrics-apm@pipeline"
+      }
+    }
+  },
+  "_meta": {
+    "description": "Per-agent metrics index template: APM metrics-apm.app components verbatim + Claude Code ILM lifecycle.",
+    "managed_by": "agent-observability-lab"
+  }
+}

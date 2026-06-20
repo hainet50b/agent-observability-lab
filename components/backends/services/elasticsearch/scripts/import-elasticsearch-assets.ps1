@@ -2,9 +2,11 @@
 # Applies the Elasticsearch assets for each CONCERN in -Concerns (a dir under this
 # component). Files are typed by suffix: *.ilm.json → ILM policy, *.component.json →
 # component template, *.pipeline.json → ingest pipeline, *.template.json → index
-# template + <name>-default data stream + mapping sync, *.index.json → index. Within
-# a concern they are applied ilm → component → pipelines → templates → indices, so a
-# referenced object always exists first. Idempotent: PUTs replace; streams/indices
+# template + <name>-default data stream + mapping sync, *.index-template.json → index
+# template only (PUT, no data stream, no mapping sync — a higher-priority overlay over
+# an APM-managed stream), *.index.json → index. Within a concern they are applied
+# ilm → component → pipelines → templates → index-templates → indices, so a referenced
+# object always exists first. Idempotent: PUTs replace; streams/indices
 # created only if absent; a template's mapping is re-synced each run from the RESOLVED
 # composed mapping (a strict mapping still accepts added fields). PowerShell 7+; -EsUrl
 # or ES_URL env overrides the base URL.
@@ -116,6 +118,19 @@ function Invoke-Template($Template, $TemplateFile) {
     Write-Host "[apply] mapping synced onto '$DataStream'"
 }
 
+function Invoke-IndexTemplatePut($Name, $File) {
+    $Body = Get-Content -Raw -LiteralPath $File
+    Write-Host "[apply] index template (overlay) '$Name' on $EsUrl…"
+    try {
+        $result = Invoke-RestMethod -Method Put -Uri "$EsUrl/_index_template/$Name" `
+            -ContentType 'application/json' -Body $Body
+    }
+    catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
+    $result | ConvertTo-Json -Depth 10 | Write-Host
+    if (-not $result.acknowledged) { Write-Error "FAIL: index template PUT not acknowledged"; exit 1 }
+    Write-Host "[apply] index template (overlay) '$Name' installed"
+}
+
 function Invoke-Index($Name, $File) {
     $exists = $false
     try {
@@ -160,8 +175,11 @@ function Import-Concern($Concern) {
     foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.pipeline.json' -File) {
         Invoke-Pipeline ($f.Name -replace '\.pipeline\.json$', '') $f.FullName
     }
-    foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.template.json' -File) {
+    foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.template.json' -File | Where-Object { $_.Name -notlike '*.index-template.json' }) {
         Invoke-Template ($f.Name -replace '\.template\.json$', '') $f.FullName
+    }
+    foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.index-template.json' -File) {
+        Invoke-IndexTemplatePut ($f.Name -replace '\.index-template\.json$', '') $f.FullName
     }
     foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.index.json' -File) {
         Invoke-Index ($f.Name -replace '\.index\.json$', '') $f.FullName
@@ -177,4 +195,5 @@ foreach ($concern in $Concerns) {
 
 Write-Host ''
 Write-Host "PASS: Elasticsearch assets applied on $EsUrl`: $($Concerns -join ', ')."
+
 
