@@ -1,0 +1,11 @@
+{
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "logs-agent_audit.user_prompt"
+    }
+  },
+  "_meta": {
+    "description": "Attaches the logs-agent_audit.user_prompt ILM policy.",
+    "managed_by": "agent-observability-lab"
+  }
+}

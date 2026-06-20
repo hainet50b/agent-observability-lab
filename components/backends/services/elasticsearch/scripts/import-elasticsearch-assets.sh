@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Applies the Elasticsearch assets for each CONCERN arg (a dir under this component).
-# Files are typed by suffix: *.pipeline.json → ingest pipeline, *.template.json →
-# index template + <name>-default data stream + mapping sync, *.index.json → index.
-# Idempotent: PUTs replace; streams/indices created only if absent; a template's
-# mapping is re-synced each run (a strict mapping still accepts added fields). Needs curl, jq.
+# Files are typed by suffix: *.ilm.json → ILM policy, *.component.json → component
+# template, *.pipeline.json → ingest pipeline, *.template.json → index template +
+# <name>-default data stream + mapping sync, *.index.json → index. Within a concern
+# they are applied ilm → component → pipelines → templates → indices, so a referenced
+# object always exists first. Idempotent: PUTs replace; streams/indices created only
+# if absent; a template's mapping is re-synced each run from the RESOLVED composed
+# mapping (a strict mapping still accepts added fields). Needs curl, jq.
 
 set -euo pipefail
 
@@ -26,6 +29,32 @@ command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq >/dev/null 2>&1 || skip "jq not found"
 
 [ "$#" -ge 1 ] || fail "usage: import-elasticsearch-assets.sh <concern>... (e.g. shared codex-cli)"
+
+apply_ilm() {
+  name=$1 file=$2
+  echo "[apply] ILM policy '$name' on $ES_URL…"
+  result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_ilm/policy/$name" \
+    -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
+  code=$(echo "$result" | tail -n1)
+  body=$(echo "$result" | sed '$d')
+  echo "$body" | jq . 2>/dev/null || echo "$body"
+  case "$code" in 2*) : ;; *) fail "PUT _ilm/policy/$name returned HTTP $code (expected 2xx)" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "ILM policy PUT not acknowledged"
+  echo "[apply] ILM policy '$name' installed ✓"
+}
+
+apply_component_template() {
+  name=$1 file=$2
+  echo "[apply] component template '$name' on $ES_URL…"
+  result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_component_template/$name" \
+    -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
+  code=$(echo "$result" | tail -n1)
+  body=$(echo "$result" | sed '$d')
+  echo "$body" | jq . 2>/dev/null || echo "$body"
+  case "$code" in 2*) : ;; *) fail "PUT _component_template/$name returned HTTP $code (expected 2xx)" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "component template PUT not acknowledged"
+  echo "[apply] component template '$name' installed ✓"
+}
 
 apply_pipeline() {
   name=$1 file=$2
@@ -69,8 +98,12 @@ apply_template() {
   fi
 
   echo "[apply] syncing mapping onto data stream '$data_stream'…"
-  mappings=$(jq -c '.template.mappings' "$template_file") || fail "could not read mappings from $template_file"
-  [ "$mappings" != null ] || fail "$template_file has no .template.mappings to sync"
+  simulated=$(curl -s -w '\n%{http_code}' -X POST "$ES_URL/_index_template/_simulate_index/$data_stream") || fail "request to Elasticsearch failed"
+  code=$(echo "$simulated" | tail -n1)
+  sim_body=$(echo "$simulated" | sed '$d')
+  case "$code" in 2*) : ;; *) fail "POST _simulate_index/$data_stream returned HTTP $code (expected 2xx)" ;; esac
+  mappings=$(echo "$sim_body" | jq -c '.template.mappings')
+  [ -n "$mappings" ] && [ "$mappings" != null ] || fail "resolved composed mapping for $template has no .template.mappings"
   result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/$data_stream/_mapping" \
     -H 'Content-Type: application/json' --data "$mappings") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
@@ -99,10 +132,22 @@ apply_index() {
   echo "[apply] index '$name' created ✓"
 }
 
-# pipelines, then templates, then indices; a concern need not ship all three.
+# ilm → component templates → pipelines → index templates → indices; a concern need
+# not ship every type. Lifecycle/mapping objects come first so index templates that
+# compose them resolve.
 import_concern() {
   concern=$1
   [ -d "$concern" ] || fail "concern dir not found: $COMPONENT_DIR/$concern"
+  for f in "$concern"/*.ilm.json; do
+    [ -e "$f" ] || continue
+    base=$(basename "$f")
+    apply_ilm "${base%.ilm.json}" "$f"
+  done
+  for f in "$concern"/*.component.json; do
+    [ -e "$f" ] || continue
+    base=$(basename "$f")
+    apply_component_template "${base%.component.json}" "$f"
+  done
   for f in "$concern"/*.pipeline.json; do
     [ -e "$f" ] || continue
     base=$(basename "$f")

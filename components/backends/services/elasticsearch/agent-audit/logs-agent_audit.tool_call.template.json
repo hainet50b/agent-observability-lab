@@ -2,86 +2,9 @@
   "index_patterns": ["logs-agent_audit.tool_call-*"],
   "data_stream": {},
   "priority": 200,
+  "composed_of": ["logs-agent_audit.tool_call@mappings", "logs-agent_audit.tool_call@lifecycle"],
   "_meta": {
-    "description": "Strict mapping for agent-audit tool-call records.",
+    "description": "Thin composition (mappings + lifecycle) for agent-audit tool-call records.",
     "managed_by": "agent-observability-lab"
-  },
-  "template": {
-    "lifecycle": { "data_retention": "30d" },
-    "mappings": {
-      "dynamic": "strict",
-      "properties": {
-        "@timestamp": { "type": "date" },
-        "event": {
-          "properties": {
-            "action":  { "type": "keyword" },
-            "created": { "type": "date" },
-            "dataset": { "type": "keyword" },
-            "kind":    { "type": "keyword" }
-          }
-        },
-        "user": {
-          "properties": {
-            "id":   { "type": "keyword" },
-            "name": { "type": "keyword" }
-          }
-        },
-        "host": {
-          "properties": {
-            "name":     { "type": "keyword" },
-            "hostname": { "type": "keyword" }
-          }
-        },
-        "agent_audit": {
-          "properties": {
-            "agent": {
-              "properties": {
-                "provider": { "type": "keyword" },
-                "name":     { "type": "keyword" },
-                "account": {
-                  "properties": {
-                    "id":    { "type": "keyword" },
-                    "name":  { "type": "keyword" },
-                    "email": { "type": "keyword" }
-                  }
-                },
-                "organization": {
-                  "properties": {
-                    "id":   { "type": "keyword" },
-                    "name": { "type": "keyword" }
-                  }
-                }
-              }
-            },
-            "conversation_id": { "type": "keyword" },
-            "turn_id":         { "type": "keyword" },
-            "tool_call": {
-              "properties": {
-                "tool": {
-                  "properties": {
-                    "name":    { "type": "keyword" },
-                    "call_id": { "type": "keyword" }
-                  }
-                },
-                "input": {
-                  "properties": {
-                    "text":           { "type": "wildcard" },
-                    "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
-                    "length":         { "type": "long" }
-                  }
-                },
-                "output": {
-                  "properties": {
-                    "text":           { "type": "wildcard" },
-                    "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
-                    "length":         { "type": "long" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
   }
 }

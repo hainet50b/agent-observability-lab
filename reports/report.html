@@ -379,6 +379,53 @@ through (with its <code>tool_input</code> / <code>tool_parameters</code> field-d
 no non-<code>tool.output</code> event type is affected.</p>
 </section>
 
+<section>
+<h2>ILM 1/2 — Agent-audit templates → thin compositions; retention moves DSL → ILM</h2>
+
+<h3>Judgement points</h3>
+<p>The PRD named the resolved-mapping endpoint as <code>_simulate_index_template/&lt;stream&gt;</code> ("e.g."),
+but that route returns <strong>HTTP 400</strong> on this Stack version. The working endpoint for
+"given an index name, return the composite template that would apply" is
+<code>POST _index_template/_simulate_index/&lt;index_name&gt;</code> — verified live (200, returns
+<code>.template.mappings</code> and <code>.template.settings.index.lifecycle.name</code>). I used that.</p>
+<p>The importer applies the new types <strong>ilm → component → pipelines → index templates → indices</strong>,
+exactly the order the PRD/SPEC require, so a composed index template's <code>@mappings</code>/<code>@lifecycle</code>
+component templates always exist before the index template that references them.</p>
+<p>ILM policy shape: minimal valid <code>hot</code> (<code>rollover</code> at
+<code>max_age 1d</code> / <code>max_primary_shard_size 50gb</code>) → <code>delete</code> at
+<code>min_age 3d</code> per stream, with separate policies named after each stream so
+<code>user_prompt</code> and <code>tool_call</code> can diverge later.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The PRD's literal <code>_simulate_index_template</code> endpoint name was wrong for this Stack; corrected to
+<code>_simulate_index</code> (it was hedged with "e.g.", so this is within scope, not a spec deviation).</p>
+<p>Live migration of the <em>existing</em> backing indices is out of scope: the pre-existing
+<code>logs-agent_audit.*-default</code> streams keep their prior DSL lifecycle until they roll over;
+new/rolled backing indices pick up the matching ILM policy via the resolved template. The importer
+leaves existing data streams as-is (idempotent), as designed.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>ILM 2/2 (next) attaches per-agent telemetry ILM via dedicated higher-priority APM-composing index
+templates — it reuses the new <code>*.ilm.json</code> / <code>*.component.json</code> handlers added here,
+and needs a distinct <strong>PUT-only</strong> template handler (no data-stream create, no mapping-sync).</p>
+
+<h3>Change summary</h3>
+<p>Agent-audit index templates are now thin compositions (<code>composed_of: [@mappings, @lifecycle]</code>)
+with no inline mappings and no DSL <code>data_retention</code>; each stream's strict mapping moved to a
+<code>@mappings</code> component template, and retention is now a per-stream ILM policy (hot → delete@3d).
+The ES asset importer learned two new asset types (ILM policies, component templates) and re-syncs the
+<em>resolved</em> composed mapping onto the live stream.</p>
+
+<h3>Review highlights</h3>
+<p>Verified live: both ILM policies exist (200); both index templates resolve to
+<code>composed_of</code> with no inline mappings and no <code>data_retention</code>; the resolved composed
+mapping is <code>dynamic: strict</code> and carries <code>index.lifecycle.name</code>; a stray field is
+still rejected (<code>strict_dynamic_mapping_exception</code>); the importer is idempotent on re-run; and
+both <code>verify-agent-audit.sh</code> and <code>verify-tool-call-audit.sh</code> reach <strong>PASS</strong>
+(real docs land in the strict streams). Gates: <code>docker compose config -q</code> green for all five
+stacks; <code>shfmt</code>/<code>shellcheck</code> clean; <code>Invoke-ScriptAnalyzer</code> clean.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

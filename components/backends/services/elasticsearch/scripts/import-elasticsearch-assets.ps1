@@ -1,10 +1,13 @@
 #!/usr/bin/env pwsh
 # Applies the Elasticsearch assets for each CONCERN in -Concerns (a dir under this
-# component). Files are typed by suffix: *.pipeline.json → ingest pipeline,
-# *.template.json → index template + <name>-default data stream + mapping sync,
-# *.index.json → index. Idempotent: PUTs replace; streams/indices created only if
-# absent; a template's mapping is re-synced each run (a strict mapping still accepts
-# added fields). PowerShell 7+; -EsUrl or ES_URL env overrides the base URL.
+# component). Files are typed by suffix: *.ilm.json → ILM policy, *.component.json →
+# component template, *.pipeline.json → ingest pipeline, *.template.json → index
+# template + <name>-default data stream + mapping sync, *.index.json → index. Within
+# a concern they are applied ilm → component → pipelines → templates → indices, so a
+# referenced object always exists first. Idempotent: PUTs replace; streams/indices
+# created only if absent; a template's mapping is re-synced each run from the RESOLVED
+# composed mapping (a strict mapping still accepts added fields). PowerShell 7+; -EsUrl
+# or ES_URL env overrides the base URL.
 
 [CmdletBinding()]
 param(
@@ -17,6 +20,34 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
+
+function Invoke-Ilm($Name, $File) {
+    $Body = Get-Content -Raw -LiteralPath $File
+    Write-Host "[apply] ILM policy '$Name' on $EsUrl…"
+    try {
+        $result = Invoke-RestMethod -Method Put `
+            -Uri "$EsUrl/_ilm/policy/$([uri]::EscapeDataString($Name))" `
+            -ContentType 'application/json' -Body $Body
+    }
+    catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
+    $result | ConvertTo-Json -Depth 10 | Write-Host
+    if (-not $result.acknowledged) { Write-Error "FAIL: ILM policy PUT not acknowledged"; exit 1 }
+    Write-Host "[apply] ILM policy '$Name' installed"
+}
+
+function Invoke-ComponentTemplate($Name, $File) {
+    $Body = Get-Content -Raw -LiteralPath $File
+    Write-Host "[apply] component template '$Name' on $EsUrl…"
+    try {
+        $result = Invoke-RestMethod -Method Put `
+            -Uri "$EsUrl/_component_template/$([uri]::EscapeDataString($Name))" `
+            -ContentType 'application/json' -Body $Body
+    }
+    catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
+    $result | ConvertTo-Json -Depth 10 | Write-Host
+    if (-not $result.acknowledged) { Write-Error "FAIL: component template PUT not acknowledged"; exit 1 }
+    Write-Host "[apply] component template '$Name' installed"
+}
 
 function Invoke-Pipeline($Name, $File) {
     $Body = Get-Content -Raw -LiteralPath $File
@@ -69,7 +100,12 @@ function Invoke-Template($Template, $TemplateFile) {
     }
 
     Write-Host "[apply] syncing mapping onto data stream '$DataStream'…"
-    $mappings = ((Get-Content -Raw -LiteralPath $TemplateFile | ConvertFrom-Json).template.mappings | ConvertTo-Json -Depth 20)
+    try {
+        $simulated = Invoke-RestMethod -Method Post -Uri "$EsUrl/_index_template/_simulate_index/$DataStream"
+    }
+    catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
+    if (-not $simulated.template.mappings) { Write-Error "FAIL: resolved composed mapping for $Template has no template.mappings"; exit 1 }
+    $mappings = ($simulated.template.mappings | ConvertTo-Json -Depth 20)
     try {
         $result = Invoke-RestMethod -Method Put -Uri "$EsUrl/$DataStream/_mapping" `
             -ContentType 'application/json' -Body $mappings
@@ -107,11 +143,19 @@ function Invoke-Index($Name, $File) {
     Write-Host "[apply] index '$Name' created"
 }
 
-# pipelines, then templates, then indices; a concern need not ship all three.
+# ilm → component templates → pipelines → index templates → indices; a concern need
+# not ship every type. Lifecycle/mapping objects come first so index templates that
+# compose them resolve.
 function Import-Concern($Concern) {
     $dir = Join-Path $ComponentDir $Concern
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
         Write-Error "FAIL: concern dir not found: $dir"; exit 1
+    }
+    foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.ilm.json' -File) {
+        Invoke-Ilm ($f.Name -replace '\.ilm\.json$', '') $f.FullName
+    }
+    foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.component.json' -File) {
+        Invoke-ComponentTemplate ($f.Name -replace '\.component\.json$', '') $f.FullName
     }
     foreach ($f in Get-ChildItem -LiteralPath $dir -Filter '*.pipeline.json' -File) {
         Invoke-Pipeline ($f.Name -replace '\.pipeline\.json$', '') $f.FullName
@@ -133,3 +177,4 @@ foreach ($concern in $Concerns) {
 
 Write-Host ''
 Write-Host "PASS: Elasticsearch assets applied on $EsUrl`: $($Concerns -join ', ')."
+

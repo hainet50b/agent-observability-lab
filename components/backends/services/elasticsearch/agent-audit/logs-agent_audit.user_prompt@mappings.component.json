@@ -1,0 +1,66 @@
+{
+  "template": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "event": {
+          "properties": {
+            "action":  { "type": "keyword" },
+            "created": { "type": "date" },
+            "dataset": { "type": "keyword" },
+            "kind":    { "type": "keyword" }
+          }
+        },
+        "user": {
+          "properties": {
+            "id":   { "type": "keyword" },
+            "name": { "type": "keyword" }
+          }
+        },
+        "host": {
+          "properties": {
+            "name":     { "type": "keyword" },
+            "hostname": { "type": "keyword" }
+          }
+        },
+        "agent_audit": {
+          "properties": {
+            "agent": {
+              "properties": {
+                "provider": { "type": "keyword" },
+                "name":     { "type": "keyword" },
+                "account": {
+                  "properties": {
+                    "id":    { "type": "keyword" },
+                    "name":  { "type": "keyword" },
+                    "email": { "type": "keyword" }
+                  }
+                },
+                "organization": {
+                  "properties": {
+                    "id":   { "type": "keyword" },
+                    "name": { "type": "keyword" }
+                  }
+                }
+              }
+            },
+            "conversation_id": { "type": "keyword" },
+            "turn_id":         { "type": "keyword" },
+            "user_prompt": {
+              "properties": {
+                "text":           { "type": "text" },
+                "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
+                "length":         { "type": "long" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "_meta": {
+    "description": "Strict mapping for agent-audit user-prompt records.",
+    "managed_by": "agent-observability-lab"
+  }
+}
