@@ -54,7 +54,7 @@ name. The streams are provisioned by `scripts/setup.sh`:
   (the `PostToolUse` hook).
 
 Both use **strict** mappings (an unexpected field fails the index rather than
-silently growing the audit schema) and a 30-day retention default.
+silently growing the audit schema) and a 3-day ILM retention default.
 
 ## Prerequisites
 

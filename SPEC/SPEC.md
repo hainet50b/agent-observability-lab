@@ -43,6 +43,28 @@ Each stack's own `README.md` is the **operational Quick Tour** — bring it up, 
 - **Service fragments are shared verbatim, not parameterized.** Compose `include:` cannot pass variables into an included fragment, so a shared `elasticsearch.yml` / `kibana.yml` holds only while every consuming backend wants **byte-identical** config. A backend needing divergent service config must express it as a per-stack/per-backend compose override layered on top, never by forking the fragment.
 - **Stacks share definitions, never runtime state.** Component volumes stay Compose-project-scoped — never give a volume a fixed `name:` or mark it `external:` to share data across stacks. Comparing multiple agents in one backend is done by composing those agents into **one** stack.
 
+## Lifecycle (ILM)
+
+Every data stream the lab owns or routes is retained by an **ILM policy**, not data-stream lifecycle (DSL). ILM is chosen over DSL because production deployments want warm/cold/**frozen** phases and **searchable snapshots**, which DSL cannot express; the lab itself runs only a trivial **hot → delete at 3 days** policy on each, but keeps the ILM seam so those phases drop in without re-plumbing.
+
+Retention is split per concern so each can age independently — the lab gives each its own policy even though all four currently share the hot→delete@3d shape:
+
+| Policy | Scope | Component template | Attached to |
+|---|---|---|---|
+| `logs-agent_audit.user_prompt` | audit user-prompt stream | `logs-agent_audit.user_prompt@lifecycle` | `logs-agent_audit.user_prompt` template |
+| `logs-agent_audit.tool_call` | audit tool-call stream | `logs-agent_audit.tool_call@lifecycle` | `logs-agent_audit.tool_call` template |
+| `telemetry.claude_code` | Claude Code telemetry (logs+metrics+traces) | `telemetry.claude_code@lifecycle` | the 3 per-agent claude-code templates |
+| `telemetry.codex_cli_rs` | Codex telemetry (logs+metrics+traces) | `telemetry.codex_cli_rs@lifecycle` | the 3 per-agent codex templates |
+
+Telemetry is split **per agent**, not per signal — one policy covers an agent's logs/metrics/traces. A per-signal split is deferred: it would only add policies, not restructure anything.
+
+Each policy ships as a pair of Elasticsearch text assets **co-located in the concern that consumes it** (audit assets under `elasticsearch/agent-audit/`, telemetry assets under `elasticsearch/claude-code/` and `elasticsearch/codex-cli/`): a `*.ilm.json` (→ `_ilm/policy/<name>`) and a `*.component.json` (→ `_component_template/<name>`) that sets only `index.lifecycle.name`. The importer applies them **before** index templates within a concern (ilm → component template → pipelines → index templates), so referenced objects always exist first. There is **no** separate shared lifecycle concern and **no** backend façade change — each concern is self-contained and applied by whoever already applies it.
+
+Index templates attach their policy by **composition**, two ways depending on who owns the template:
+
+- **Audit streams (owned).** Each `logs-agent_audit.*` index template is a **thin composition** — `composed_of: [<stream>@mappings, <stream>@lifecycle]`, with no inline mappings and no `data_retention` block. The stream's strict mappings move to a per-stream `@mappings` component template, and ILM is the single retention authority. (Because mappings are no longer inline, the importer re-syncs the **resolved** composed mapping onto the live stream via `_simulate_index_template`.) So *every* index template in the lab is a composition, never an inline blob.
+- **Telemetry streams (APM-owned).** APM ships one shared index template per signal (`logs-apm.app-*`, `metrics-apm.app-*`, `traces-apm-*`), so the `@custom` hook can only attach lifecycle to **every** service, not per-agent. Instead each agent gets **dedicated, higher-priority index templates** matching its per-agent patterns (`logs-apm.app.<service>-*`, `metrics-apm.app.<service>-*`, `traces-apm-agents_<service>*`) that re-compose APM's own managed component templates (inheriting its mappings verbatim) **plus** that agent's lifecycle component template last. Other services keep APM's default lifecycle untouched.
+
 ## Audit-coverage scope
 
 Telemetry-as-audit in this lab targets the **non-adversarial / network-reliability** threat model only; the adversarial / audit-evasion model is explicitly out of scope and belongs to endpoint-security tooling outside the lab. This framing is what motivates the planned `*-otelcol-*` sidecar variants of every direct stack. The full rationale, the (A)/(B) distinction, the sidecar + `file_storage` solution, and the real cost of fleet rollout are in [`threat-model.md`](threat-model.md).

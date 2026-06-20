@@ -140,6 +140,7 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 ## Mapping and lifecycle
 
 - Audit data stream mappings are strict by default. Unexpected fields should fail indexing rather than silently expanding the audit schema.
+- Mappings are **not** inlined in the index template: each stream's strict mappings live in a dedicated `@mappings` **component template**, and the `logs-agent_audit.*` index template is a thin `composed_of: [<stream>@mappings, <stream>@lifecycle]`. This mirrors the telemetry side (per-agent templates compose APM's managed component templates) so *every* index template in the lab is a composition, never an inline blob.
 - `user.id`, `user.name`, `host.name`, `host.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id`, and `agent_audit.turn_id` are mapped as `keyword` where applicable.
 - `agent_audit.user_prompt.text` is mapped as searchable `text` in the lab.
 - `agent_audit.user_prompt.encrypted_text` is mapped as `keyword` with `index: false`; encrypted prompt bodies are stored but not searchable.
@@ -149,7 +150,7 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 - `agent_audit.tool_call.input.encrypted_text` and `.output.encrypted_text` are mapped as `keyword` with `index: false`.
 - `agent_audit.tool_call.input.length` and `.output.length` are mapped as `long`.
 - Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is later sealed or capped.
-- Audit data streams should have configurable retention. The lab default retention is one month, after which documents may be deleted.
+- Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
 
 ## Delivery and authorization
 
