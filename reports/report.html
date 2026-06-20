@@ -540,6 +540,61 @@ stray field crept in). Gates: <code>docker compose config -q</code> green for al
 <code>Invoke-ScriptAnalyzer</code> clean on all four <code>.ps1</code>.</p>
 </section>
 
+<section>
+<h2>Humble hooks 2/2 — Codex CLI capture hooks mirror the Claude humble-entry shape</h2>
+
+<h3>Judgement points</h3>
+<p><strong>Independent library, not a shared one.</strong> Per the SPEC contract, the Codex
+<code>hooks/lib/agent-audit.{sh,ps1}</code> is a <em>separate</em> file from Claude's with the same verb-named
+shape (<code>require_config_arg</code> → <code>deliver_document</code> / <code>Assert-…</code> →
+<code>Send-…</code>) — the duplicated core is accepted for now. The agent-specific differences I carried over
+verbatim: provider constants <code>openai</code>/<code>codex-cli</code>; <code>user_prompt</code> carries a
+<code>turn_id</code> (Claude's is always null); identity from <code>$CODEX_HOME/auth.json</code> — top-level
+<code>account_id</code> plus the <code>id_token</code> <strong>JWT</strong> base64url-decoded for
+email/name and the <code>organizations</code> claim (the <code>AWK_ORG</code> is_default-or-first picker in
+bash, <code>Get-CodexProviderIdentity</code> + <code>ConvertFrom-Base64Url</code> in PowerShell).</p>
+<p><strong>Preserved two real Codex/Claude asymmetries rather than "fixing" them to match Claude.</strong>
+(1) Codex's <code>.ps1</code> matches only <code>-Config</code> (not <code>--config</code>); (2) Codex's
+<code>.ps1</code> assigns <code>conversation_id</code>/<code>turn_id</code>/<code>user.*</code>/<code>host.*</code>
+with its own inline null-coercion (<code>if (-not $x) { $x = $null }</code>, with a <code>COMPUTERNAME</code>
+host fallback) and has no <code>NullIfEmpty</code> helper. Adopting Claude's <code>NullIfEmpty</code> (which also
+trims whitespace-only values and string-casts) would have changed bytes on edge inputs, so the Codex library keeps
+Codex's exact coercion. Byte-identity confirmed this was the right call.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>Same as 1/2: the canonical Codex <code>verify-*.sh</code> were not run via their own
+<code>docker compose up -d</code> (the user's <code>claude-code-elastic</code> stack holds the shared
+<code>aol-elasticsearch</code> container / <code>localhost:9200</code>). I installed the strict agent-audit ES
+assets on the running cluster, drove the rendered <code>.ps1</code> (<code>-Config</code>) and <code>.sh</code>
+(<code>--config</code>) entries for both streams, and removed every asset and test doc afterward — the
+<code>claude-code-elastic</code> cluster is byte-for-byte back to its pre-task state (no
+<code>logs-agent_audit*</code> templates or data streams remain).</p>
+
+<h3>Next PRD suggestions</h3>
+<p>Both agents now carry a near-identical <code>hooks/lib/agent-audit.{sh,ps1}</code> (the JSON helpers, config
+read, delivery, and fail-open harness are the same; only the identity extractor and a couple of field paths
+differ). The SPEC already flags promoting this to a shared, render-copied library "only if a third agent makes
+the duplication a real cost" — worth a task the moment a third agent lands.</p>
+
+<h3>Change summary</h3>
+<p>Refactored Codex CLI's four audit capture hooks into the same humble-entry shape just applied to Claude: each
+<code>capture-&lt;stream&gt;.{sh,ps1}</code> is a shebang, a sourced sibling library, a single <code>stream=</code>
+line, and a top-to-bottom list of verb-named steps; all logic lives in a new per-agent
+<code>hooks/lib/agent-audit.{sh,ps1}</code>. No behaviour change — delivered documents are byte-identical to
+before. No <code>render-hooks</code> change.</p>
+
+<h3>Review highlights</h3>
+<p><strong>Behaviour-preservation proved the same way as 1/2.</strong> For each (shell × stream) —
+<code>sh</code>/<code>ps1</code> × <code>user_prompt</code>/<code>tool_call</code> — the pre-refactor Codex
+script (<code>git HEAD</code>) and the new script ran on an identical payload and landed in the strict-mapped
+streams; the stored <code>_source</code> diff (normalizing only <code>@timestamp</code>/<code>event.created</code>
+and the by-design-distinct <code>conversation_id</code>) was <strong>IDENTICAL in all four</strong>. A sampled new
+doc shows <code>provider:openai / name:codex-cli</code>, a populated <code>turn_id</code>, and the tool
+name/call_id — the Codex-specific shape intact. Gates: <code>docker compose config -q</code> green for all five
+stacks; <code>shfmt</code>/<code>shellcheck</code> clean; <code>Invoke-Formatter</code> applied and
+<code>Invoke-ScriptAnalyzer</code> clean on all four <code>.ps1</code>. This was the last open PRD task.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
