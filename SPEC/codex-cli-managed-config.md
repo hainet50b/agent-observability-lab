@@ -123,41 +123,34 @@ survives `CODEX_HOME` changes and local-file tampering, since it is not a file.
 Out of scope for the lab's local-layer validation; documented here for
 completeness.
 
-## Validation design in this lab
+## Placement in this lab (deploy-only, human-gated)
 
-Managed config is **machine-global and admin-owned** — it cannot be isolated
-per-stack with `CODEX_HOME` the way the existing stacks isolate user config. It
-also splits across the two backends the way telemetry and audit already do, so
-it is validated as **two backend-transparent stacks** rather than one (and not
-by copying managed config into every existing stack — they would collide on the
-single machine-global managed layer and need admin to write it):
+Managed config is **machine-global, admin-owned, highest-precedence** — it cannot be isolated per-stack with `CODEX_HOME` the way the existing stacks isolate user config. But it does not need a stack of its own: it is an **agent-scoped capability** — templates plus an OS-path-aware placement primitive under `components/agents/<agent>/` — that **any** stack can opt into at setup, regardless of backend (managed config is agent-side; the backend is irrelevant). This placement model is itself agent-agnostic; only the file format, paths, and what is enforceable differ per agent.
 
-| Stack | Backend | Validates | Proof of effect |
-| --- | --- | --- | --- |
-| `codex-cli-requirements` | `elastic-audit` (hook → ES) | `requirements.toml`: managed-hook enforcement, `allow_managed_hooks_only`, `[features].hooks` pin, conflict fallback+notify | audit hooks land in `logs-agent_audit.*` while a competing user `hooks.json` does **not** fire |
-| `codex-cli-managed-config` | `elastic` (APM `:8200`) | `managed_config.toml`: `[otel]` defaults applied, and user `config.toml` overriding them | telemetry lands via the already-proven OTLP path; user override changes the effective endpoint |
+It is deliberately a **guarded manual deploy, not part of the automated suite.** Exercising managed config means writing host-global, admin-owned, highest-precedence files that affect **every** agent on the machine and cannot be overridden by a user — too dangerous to drive mechanically. So the lab **does not mechanically verify it**: no verify script, no containerized harness, and **no auto-confirm.** Placement is the deliverable; that enforcement takes effect is confirmed by observation and documented, never by an automated assertion.
 
-`[otel]` cannot be validated on `elastic-audit` (no APM/OTLP receiver), so the
-managed-defaults/OTel concern sits on the `elastic` backend where the OTLP path
-already exists and is smoke-tested; the requirements/hook concern stays on
-`elastic-audit`. The OTLP pipeline itself is already proven by
-`codex-cli-elastic` — the managed-config stack only adds proof that the **managed
-default** is the effective value and that a user override wins where allowed
-(ideally read from Codex's effective-config output; confirm such output exists as
-the first implementation step, else fall back to observing emission/landing).
+Placement is **always interactive:**
 
-Each stack is validated in two phases, since no env var isolates the managed
-layer:
+- An opt-in (`--managed` / a `setup.conf` key) selects the *attempt*; the **confirm itself cannot be bypassed** — there is no `--yes`.
+- **Non-TTY / EOF aborts** (never default-yes), so automation (Ralph, CI) can never place managed config even if it reaches the step.
+- A permission error **fails loud** — print the path and the privileged/manual command — rather than fail-open (unlike the audit hook: the operator asked for this write, so a failure must be seen).
 
-- **Phase A — semantics (containerized).** Run Codex inside an ephemeral
-  container so `/etc/codex/{managed_config,requirements}.toml` and `managed_dir`
-  are container-scoped — no host pollution, real per-stack isolation. Seed a
-  deliberately-conflicting user layer to observe fallback+notify and the
-  `allow_managed_hooks_only` skip.
-- **Phase B — real-OS deployment.** Render to the actual system paths
-  (Windows `%ProgramData%`, Linux `/etc/codex`). Admin-only, machine-global,
-  not isolated — run deliberately with a documented cleanup; re-run the same
-  assertions to confirm real-deployment behavior.
+### Never overwrite; track provenance; provide teardown
 
-A `claude-code` counterpart is expected later via `managed-settings.json` (a
-different mechanism — see the intro).
+Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** Placement records a **sidecar provenance marker** beside the managed file (which agent / stack / endpoint / when the lab placed it); the decision is by the existing file's provenance:
+
+| Existing file | Verdict |
+| --- | --- |
+| none | place after confirm, write the marker |
+| lab-placed, same stack, same content | no-op (already placed) |
+| lab-placed, same stack, changed content | update after explicit confirm |
+| lab-placed, **different stack** | refuse — "held by stack X; run teardown first" |
+| present with **no lab marker** (foreign / real org config) | **hard refuse — never touch it** |
+
+A **teardown script is mandatory** — the counterpart to placement, since a host-global change otherwise persists after the experiment (the machine stays enforced). Teardown removes **only** files the marker confirms the lab placed (restoring the host), **refuses to remove a foreign file**, and is itself interactive + fail-loud (no `--yes`).
+
+### What can actually be enforced (state it honestly)
+
+What a deployed managed layer enforces is **agent-specific and must be stated in the templates and the prompt**: Codex enforces via `requirements.toml` (managed hooks, `allow_managed_hooks_only`, `[features].hooks`, sandbox/approval policies), but **`[otel]`/telemetry is only a managed *default*** (`managed_config.toml`), never enforceable — and on Windows `managed_config.toml` is a weak boundary, so real enforcement lives in `requirements.toml` at `%ProgramData%`.
+
+A **claude-code counterpart** uses `managed-settings.json` — a different mechanism that, unlike Codex's `[otel]`, **can** enforce telemetry; it is documented separately (see the intro) and shares this same deploy-only, human-gated, never-overwrite placement model.
