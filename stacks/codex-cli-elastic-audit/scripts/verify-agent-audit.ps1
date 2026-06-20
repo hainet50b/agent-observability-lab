@@ -6,7 +6,7 @@
 #   Arrange — stack up + wait for Elasticsearch healthy; require setup.ps1 to have
 #             rendered .codex/config.toml (inline [[hooks.*]]) and .codex/agent-audit.conf.
 #   Act     — feed a synthetic UserPromptSubmit payload (unique session_id) on
-#             stdin to the configured hook (capture-user-prompt.ps1), with
+#             stdin to the configured hook (agent-audit.ps1 -Stream user_prompt), with
 #             CODEX_HOME=<stack>/.codex so it reads this stack's delivery config.
 #   Assert  — poll logs-agent_audit.user_prompt-default for the document.
 #   Cleanup — delete the synthetic document, then print PASS.
@@ -39,7 +39,7 @@ $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir  = Split-Path -Parent $ScriptDir
 $RepoRoot  = Split-Path -Parent (Split-Path -Parent $StackDir)
-$HookPs1   = Join-Path $RepoRoot 'components/agents/codex-cli/hooks/capture-user-prompt.ps1'
+$HookPs1   = Join-Path $RepoRoot 'components/agents/codex-cli/hooks/agent-audit.ps1'
 $CodexHome = Join-Path $StackDir '.codex'
 
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
@@ -95,7 +95,7 @@ try {
     # Fail-open: it always exits 0; the assertion below is the signal.
     $env:CODEX_HOME = $CodexHome
     $conf = Join-Path $CodexHome 'agent-audit.conf'
-    try { $payload | & pwsh -NoProfile -File $HookPs1 -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
+    try { $payload | & pwsh -NoProfile -File $HookPs1 -Stream user_prompt -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
     # --- Assert ----------------------------------------------------------------
     Write-Host "[assert] querying $DataStream for the audit document…"

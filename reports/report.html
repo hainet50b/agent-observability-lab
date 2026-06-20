@@ -662,6 +662,73 @@ config -q</code> green for all five stacks, <code>shfmt</code>/<code>shellcheck<
 smoke-test still PASS.</p>
 </section>
 
+<section>
+<h2>hooks commonize 2/2 — PowerShell shared core + per-agent adapter + single <code>-Stream</code> entry</h2>
+
+<h3>Judgement points</h3>
+<p><strong>Mirrored the 1/2 split exactly:</strong> one shared
+<code>agent-audit-core.ps1</code> (config read, <code>ConvertFrom-Json</code>/<code>ConvertTo-Json</code>
+assembly, delivery, the fail-open harness) + a thin <code>adapter.ps1</code> per agent supplying
+<code>$script:Provider</code>/<code>$script:AgentName</code>, a <code>Get-RuntimeIdentity</code> function, and the
+<code>$script:UserPromptTurnIdSupported</code> flag for the turn_id quirk. One <code>agent-audit.ps1</code> entry per
+agent takes <code>-Stream</code>/<code>-Config</code> via <code>param()</code> and dot-sources core + adapter.</p>
+<p><strong>Kept each agent's <em>exact</em> PowerShell identity logic.</strong> The two old <code>.ps1</code>
+libraries diverged in ways the <code>.sh</code> ones did not — Codex reads <code>auth.tokens.account_id</code>/<code>id_token</code>
+and the nested <code>https://api.openai.com/auth.organizations</code> JWT claim, Claude reads <code>oauthAccount</code>;
+Claude wraps fields in <code>NullIfEmpty</code> and has no <code>COMPUTERNAME</code> host fallback, Codex uses
+<code>if (-not x)</code> and does fall back. I preserved each verbatim inside its adapter's
+<code>Get-RuntimeIdentity</code> rather than reconciling them (out of scope; would change behaviour). The core's
+assembly uses <code>NullIfEmpty</code> on <code>conversation_id</code>/<code>turn_id</code>, which is identical to
+both for the always-present, non-empty real values.</p>
+<p><strong>Fail-open over <code>[ValidateSet]</code>.</strong> I deliberately did <em>not</em> put a
+<code>[ValidateSet]</code> on <code>-Stream</code>: an invalid value must be a logged exit-0 skip (the
+session-safety contract), not a param-binding throw. <code>Assert-Stream</code> validates and skips, matching the sh
+<code>require_stream</code>. Polish (e): the timeout default is now <code>$DefaultTimeoutMs = 1000</code> (was a stale
+0.3 s); (f): log tag is <code>[agent-audit $Stream]</code>, and the "(run setup.ps1)" / "rendered hook command"
+wording is gone.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p><strong>This task also repaired the <code>.ps1</code>-render breakage 1/2 left behind.</strong> 1/2 renamed the
+shared <code>hooks.template.toml</code> <code>command</code> placeholder to <code>@@AGENT_AUDIT_SH@@</code>, which left
+<code>render-hooks.ps1</code> (still substituting <code>@@USER_PROMPT_SH@@</code> etc.) unable to fill it. 2/2 points
+both renderers at <code>@@AGENT_AUDIT_SH@@</code>/<code>@@AGENT_AUDIT_PS1@@</code> and the <code>commandWindows</code>
+lines at the single <code>agent-audit.ps1 -Stream …</code>, so the template + both renderers are now consistent.</p>
+<p><strong>Verify scripts touched minimally (as in 1/2).</strong> The four <code>.ps1</code> verify scripts had their
+<code>$HookPs1</code> precondition path updated to <code>agent-audit.ps1</code>; the Codex ones (which invoke the hook
+directly) had <code>-Stream user_prompt</code>/<code>-Stream tool_call</code> added to the <code>& pwsh -File</code>
+call. Assertions untouched.</p>
+<p><strong>Line-ending gotcha.</strong> Both <code>Write</code> and <code>Invoke-Formatter</code>+<code>Set-Content</code>
+emit CRLF on this Windows host, and plain <code>git add</code> with <code>core.autocrlf=true</code> staged the CRLF
+verbatim despite <code>.gitattributes eol=lf</code>; <code>git add --renormalize</code> plus
+<code>[IO.File]::WriteAllText</code> with an LF replace fixed it. Confirmed LF in both the working tree and the
+staged blobs via <code>od -c</code> (the Git Bash <code>grep -c $'\r'</code> counts are a known artifact and were
+misleading here).</p>
+
+<h3>Next PRD suggestions</h3>
+<p>None beyond 1/2's note (shared container names across audit/telemetry stacks). The capture-hook commonization is
+now complete across both shells — the shared core is the single place a future agent's adapter plugs into.</p>
+
+<h3>Change summary</h3>
+<p>The PowerShell side of the audit hooks now matches the POSIX side: one shared
+<code>agent-audit-core.ps1</code>, a thin per-agent <code>adapter.ps1</code>, and a single
+<code>agent-audit.ps1</code> entry selected by <code>-Stream user_prompt|tool_call</code>. The four old
+<code>capture-*.ps1</code> files are gone; both renderers and the shared TOML template drive the single entry.
+Delivered documents are unchanged.</p>
+
+<h3>Review highlights</h3>
+<p><strong>End-to-end proof against live ES.</strong> After re-rendering the Claude stack with
+<code>render-hook.ps1</code> (exec form → <code>agent-audit.ps1 -Stream … -Config …</code>), driving the entry as a
+real child <code>pwsh</code> landed correct docs: Claude <code>user_prompt</code> → <code>anthropic</code>/<code>claude-code</code>,
+<code>turn_id</code> null, no <code>model</code>, account/org from the live OAuth session; Claude <code>tool_call</code>
+→ <code>turn_id</code> present, object-input/string-output serialized (<code>inLen 47</code>/<code>outLen 9</code>);
+Codex <code>user_prompt</code> (temp <code>CODEX_HOME</code>, no <code>auth.json</code>) → <code>openai</code>/<code>codex-cli</code>,
+<code>turn_id</code> present, null account. <code>render-hooks.ps1</code> and <code>render-hooks.sh</code> both emit a
+fully-substituted <code>config.toml</code> (sh <code>command</code> + ps1 <code>commandWindows</code>, both carrying
+the stream), no leftover placeholders. Gates: <code>docker compose config -q</code> green for all five stacks;
+<code>shfmt</code>/<code>shellcheck</code> clean; <code>Invoke-Formatter</code> applied and
+<code>Invoke-ScriptAnalyzer</code> clean on every changed <code>.ps1</code>. This was the last open PRD task.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

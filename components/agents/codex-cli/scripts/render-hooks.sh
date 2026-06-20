@@ -20,11 +20,10 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
 hooks_dir="$component_dir/hooks"
 agent_audit_sh="$hooks_dir/agent-audit.sh"
-user_prompt_ps1="$hooks_dir/capture-user-prompt.ps1"
-tool_call_ps1="$hooks_dir/capture-tool-call.ps1"
+agent_audit_ps1="$hooks_dir/agent-audit.ps1"
 template="$component_dir/templates/hooks.template.toml"
 
-for hook in "$agent_audit_sh" "$user_prompt_ps1" "$tool_call_ps1"; do
+for hook in "$agent_audit_sh" "$agent_audit_ps1"; do
   [ -f "$hook" ] || {
     echo "FAIL: hook not found: $hook" >&2
     exit 1
@@ -37,8 +36,7 @@ done
 
 block=$(sed \
   -e "s#@@AGENT_AUDIT_SH@@#$agent_audit_sh#" \
-  -e "s#@@USER_PROMPT_PS1@@#$user_prompt_ps1#" \
-  -e "s#@@TOOL_CALL_PS1@@#$tool_call_ps1#" \
+  -e "s#@@AGENT_AUDIT_PS1@@#$agent_audit_ps1#" \
   -e "s#@@AGENT_AUDIT_CONF@@#$agent_audit_conf#" \
   "$template")
 

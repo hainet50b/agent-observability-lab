@@ -16,13 +16,11 @@ if ((Test-Path -LiteralPath $config) -and (Select-String -LiteralPath $config -S
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $HooksDir = Join-Path $ComponentDir 'hooks'
-$UserPromptSh = Join-Path $HooksDir 'capture-user-prompt.sh'
-$UserPromptPs1 = Join-Path $HooksDir 'capture-user-prompt.ps1'
-$ToolCallSh = Join-Path $HooksDir 'capture-tool-call.sh'
-$ToolCallPs1 = Join-Path $HooksDir 'capture-tool-call.ps1'
+$AgentAuditSh = Join-Path $HooksDir 'agent-audit.sh'
+$AgentAuditPs1 = Join-Path $HooksDir 'agent-audit.ps1'
 $Template = Join-Path (Join-Path $ComponentDir 'templates') 'hooks.template.toml'
 
-foreach ($h in @($UserPromptSh, $UserPromptPs1, $ToolCallSh, $ToolCallPs1)) {
+foreach ($h in @($AgentAuditSh, $AgentAuditPs1)) {
     if (-not (Test-Path -LiteralPath $h -PathType Leaf)) {
         Write-Error "FAIL: hook not found: $h"
         exit 1
@@ -34,10 +32,8 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
 }
 
 $block = ((Get-Content -Raw -LiteralPath $Template) -replace "`r`n", "`n").
-Replace('@@USER_PROMPT_SH@@', $UserPromptSh).
-Replace('@@USER_PROMPT_PS1@@', $UserPromptPs1).
-Replace('@@TOOL_CALL_SH@@', $ToolCallSh).
-Replace('@@TOOL_CALL_PS1@@', $ToolCallPs1).
+Replace('@@AGENT_AUDIT_SH@@', $AgentAuditSh).
+Replace('@@AGENT_AUDIT_PS1@@', $AgentAuditPs1).
 Replace('@@AGENT_AUDIT_CONF@@', $AgentAuditConf)
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null

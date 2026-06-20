@@ -7,7 +7,7 @@
 #             rendered .codex/config.toml (inline [[hooks.*]]) and .codex/agent-audit.conf.
 #   Act     — feed a synthetic PostToolUse payload (unique session_id, an object
 #             tool_input + string tool_response) on stdin to the configured hook
-#             (capture-tool-call.ps1), with CODEX_HOME=<stack>/.codex.
+#             (agent-audit.ps1 -Stream tool_call), with CODEX_HOME=<stack>/.codex.
 #   Assert  — poll logs-agent_audit.tool_call-default for the document, then check
 #             the tool identity, serialized I/O bodies, and identity envelope.
 #   Cleanup — delete the synthetic document, then print PASS.
@@ -39,7 +39,7 @@ $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir  = Split-Path -Parent $ScriptDir
 $RepoRoot  = Split-Path -Parent (Split-Path -Parent $StackDir)
-$HookPs1   = Join-Path $RepoRoot 'components/agents/codex-cli/hooks/capture-tool-call.ps1'
+$HookPs1   = Join-Path $RepoRoot 'components/agents/codex-cli/hooks/agent-audit.ps1'
 $CodexHome = Join-Path $StackDir '.codex'
 
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
@@ -95,7 +95,7 @@ try {
 
     $env:CODEX_HOME = $CodexHome
     $conf = Join-Path $CodexHome 'agent-audit.conf'
-    try { $payload | & pwsh -NoProfile -File $HookPs1 -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
+    try { $payload | & pwsh -NoProfile -File $HookPs1 -Stream tool_call -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
     # --- Assert ----------------------------------------------------------------
     Write-Host "[assert] querying $DataStream for the audit document…"
