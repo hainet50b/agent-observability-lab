@@ -475,6 +475,71 @@ clean; <code>Invoke-ScriptAnalyzer</code> clean; <code>scripts/smoke-test.sh</co
 claude-code-elastic. The audit stack was restored to running afterward.</p>
 </section>
 
+<section>
+<h2>Humble hooks 1/2 — Claude Code capture hooks as humble entries over an extracted library</h2>
+
+<h3>Judgement points</h3>
+<p><strong>Where the per-stream split lives.</strong> The SPEC names seven verb steps
+(<code>require_config_arg</code> → <code>deliver_document</code>) but doesn't say where the
+<code>user_prompt</code>/<code>tool_call</code> branch belongs. I kept the two entries
+<em>identical except the <code>stream=</code> line</em> by dispatching on <code>$stream</code>
+<em>inside</em> the library: <code>read_hook_payload</code> and <code>build_audit_document</code>
+each branch internally (the latter via private <code>build_user_prompt_record</code> /
+<code>build_tool_call_record</code> helpers, plus a shared <code>derive_runtime_identity</code>).
+So the entry reads as the same procedure for both streams.</p>
+<p><strong>Step ordering follows the SPEC, not the old code.</strong> The monolith checked
+<code>capture.&lt;stream&gt;.enabled</code> before reading the other config keys; the SPEC step list puts
+<code>load_delivery_config</code> before <code>require_stream_enabled</code>. I followed the SPEC order
+(load everything, then assert enabled). Behaviour is unchanged — both paths exit-0 skip when disabled and
+neither emits a document — only the skip <em>reason</em> can differ in a disabled+misconfigured edge case.</p>
+<p><strong>Lib coupling vs the linters.</strong> A sourced library that relies on a caller-set
+<code>$stream</code> trips both linters. For bash I added a one-line
+<code>shellcheck disable=SC2034</code> on the entry's <code>stream=</code> line (consumed by the lib,
+invisible to shellcheck under <code>source=/dev/null</code>); for PowerShell I wrote
+<code>$script:stream = …</code> so <code>PSUseDeclaredVarsMoreThanAssignments</code> (which exempts
+scope-qualified vars) stays quiet while the lib's unqualified <code>$stream</code> reads still resolve up
+to script scope. The PowerShell fail-open harness is now per-function (each <code>Verb-Noun</code> wraps
+its body in <code>try/catch { Log; exit 0 }</code>) rather than one outer <code>try</code>, which keeps the
+entry a clean top-to-bottom call list with no scaffolding.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The canonical <code>verify-agent-audit.{sh}</code> / <code>verify-tool-call-audit.{sh}</code> could not be
+run end-to-end as written: their Arrange step does <code>docker compose up -d</code>, which conflicts on the
+shared fixed container names (<code>aol-elasticsearch</code> …) because the user's
+<code>claude-code-elastic</code> stack has been running for hours on the same ES (<code>localhost:9200</code>).
+Rather than tear down a live stack, I reproduced the verifies' Act+Assert exactly: installed the strict
+agent-audit ES templates onto the running cluster, then drove the <strong>rendered exec-form hook</strong>
+(the same <code>powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &lt;capture&gt;.ps1
+--config &lt;conf&gt;</code> that <code>settings.local.json</code> registers) plus the <code>.sh</code> entries,
+for both streams. All test docs and the agent-audit templates/streams/ILM I installed were removed afterward,
+restoring the <code>claude-code-elastic</code> cluster to its exact pre-task state.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The bash JSON-helper asymmetry persists across agents: <code>tool_call</code> input/output
+<em>length</em> differs between the <code>.sh</code> path (char-count of the raw payload substring) and the
+<code>.ps1</code> path (length of a re-serialized compact JSON). It is pre-existing and identical old-vs-new,
+so out of scope here, but a future task could reconcile the two serializations so a fleet's Windows and
+POSIX workstations report the same <code>length</code> for the same tool call.</p>
+
+<h3>Change summary</h3>
+<p>Refactored Claude Code's four audit capture hooks into <em>humble entry scripts</em>: each
+<code>capture-&lt;stream&gt;.{sh,ps1}</code> is now a shebang, a sourced sibling library, a single
+<code>stream=</code> line, and a readable top-to-bottom list of verb-named steps. All logic moved into a new
+per-agent <code>hooks/lib/agent-audit.{sh,ps1}</code>. No behaviour change — the delivered audit documents are
+byte-identical to before. No <code>render-hook</code> change (the lib ships beside the entry that runs in place).</p>
+
+<h3>Review highlights</h3>
+<p><strong>Behaviour-preservation was proved, not assumed.</strong> For every (shell × stream) combination —
+<code>sh</code>/<code>ps1</code> × <code>user_prompt</code>/<code>tool_call</code> — I ran the
+<em>pre-refactor</em> script (from <code>git HEAD</code>) and the new script on an identical synthetic payload,
+let both land in the strict-mapped data streams, and diffed the stored <code>_source</code> (normalizing only
+<code>@timestamp</code> / <code>event.created</code> and the by-design-distinct <code>conversation_id</code>):
+<strong>all four IDENTICAL</strong>. That the docs landed at all confirms the strict mappings accepted them (no
+stray field crept in). Gates: <code>docker compose config -q</code> green for all five stacks;
+<code>shfmt</code>/<code>shellcheck</code> clean; <code>Invoke-Formatter</code> applied and
+<code>Invoke-ScriptAnalyzer</code> clean on all four <code>.ps1</code>.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
