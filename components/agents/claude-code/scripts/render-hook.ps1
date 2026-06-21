@@ -47,9 +47,19 @@ foreach ($h in @(
 }
 $hooks = $tpl.hooks
 
+# Merge our .hooks into the existing settings.local.json, preserving any other
+# top-level keys (e.g. .env placed by the telemetry concern sharing this home).
+$merged = if (Test-Path -LiteralPath $out -PathType Leaf) {
+    Get-Content -Raw -LiteralPath $out | ConvertFrom-Json
+}
+else {
+    [pscustomobject]@{}
+}
+$merged | Add-Member -NotePropertyName 'hooks' -NotePropertyValue $hooks -Force
+
 $tmp = New-TemporaryFile
 try {
-    ([pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10) |
+    ($merged | ConvertTo-Json -Depth 12) |
         Set-Content -LiteralPath $tmp -Encoding utf8
     Set-CpFile 'hook' 'claude-code' $Endpoint $tmp $out
     Set-CpSelfIgnore 'claude-code' $Endpoint (Join-Path $targetAbs '.claude')

@@ -32,17 +32,17 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 
 ## Placement is marker-aware and fail-if-foreign — across all scopes
 
-Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url. It is what teardown matches on to recognize its own work.
+Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url. It is what teardown matches on to recognize its own work. A render script writes only its **own** concern's key and takes an optional **marker-endpoint override**, so a deploy that materializes both concerns into one agent home can key every file on a single deployment endpoint and let telemetry + audit **co-own** the shared `settings.local.json` / `config.toml`.
 
 `managed` placement is **interactive** (confirm each file, non-TTY aborts) via `components/agents/shared/managed-config/`. `local` and `project` are **non-interactive** via the shared helper `components/agents/shared/config-place/`, reused by every render script and by local/project teardown. Both share the marker format and the fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
 
 | Target state | Action |
 |---|---|
 | **absent** | write rendered content, then write the sidecar marker |
-| **lab marker, `endpoint` matches** | ours — overwrite (Codex's single `config.toml`: append the lab section, skipping one already present). Idempotent, updatable |
+| **lab marker, `endpoint` matches** | ours — write, **merging only this concern's own key** (Claude `settings.local.json`: set `.env` or `.hooks`, preserving sibling lab keys so the two concerns co-own one home; Codex `config.toml`: append the section, skipping one already present). Idempotent, updatable |
 | **no lab marker, or `endpoint` differs** | **fail loud** (non-zero, clear message); never merge/append/overwrite |
 
-Nothing is written on the fail path, so there is nothing to roll back; a file that copies bundle assets next to a marked file (the hook scripts beside `settings.local.json` / `config.toml`) performs the foreign check **before** copying anything. This replaces older permissive behaviour (env-merge into an existing `settings.local.json`, create-if-absent skips, blind `[hooks]`/`[mcp_servers]` appends), which could silently corrupt a user's pre-existing assets.
+Nothing is written on the fail path, so there is nothing to roll back; a file that copies bundle assets next to a marked file (the hook scripts beside `settings.local.json` / `config.toml`) performs the foreign check **before** copying anything. The merge/append is strictly **marker-gated** — it only ever edits a file this tool already owns (matching marker) and fails loud on a foreign one. That is unlike the older permissive behaviour, which merged/skipped/appended into a target **regardless of ownership** (env-merge into any existing `settings.local.json`, create-if-absent skips, blind `[hooks]`/`[mcp_servers]` appends) and could silently corrupt a user's pre-existing assets.
 
 **Codex's single `config.toml`.** Codex keeps `[otel]`, `[[hooks.*]]`, and `[mcp_servers.*]` in one file. The first lab section written in a run (otel for telemetry, hooks for audit) **creates and marks** the file (or fails if a pre-existing file is unmarked); later sections in the same run **append** onto the now-marked file. A re-run is idempotent: each section is skipped if its sentinel table header is already present.
 

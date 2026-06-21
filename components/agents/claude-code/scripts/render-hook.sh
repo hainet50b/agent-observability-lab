@@ -40,14 +40,21 @@ conf="$target_abs/.claude/agent-audit.conf"
 user_prompt_cmd="$ENTRY --stream user_prompt --config $conf"
 tool_call_cmd="$ENTRY --stream tool_call --config $conf"
 
+hooks_block=$(mktemp)
 tmp=$(mktemp)
-trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "$hooks_block" "$tmp"' EXIT
 jq \
   --arg up "$user_prompt_cmd" \
   --arg tc "$tool_call_cmd" \
   '.hooks.UserPromptSubmit[0].hooks[0].command = $up
    | .hooks.PostToolUse[0].hooks[0].command = $tc
-   | {hooks: .hooks}' "$TEMPLATE" >"$tmp"
+   | .hooks' "$TEMPLATE" >"$hooks_block"
+
+# Merge our .hooks into the existing settings.local.json, preserving any other
+# top-level keys (e.g. .env placed by the telemetry concern sharing this home).
+base='{}'
+[ -f "$out" ] && base=$(cat "$out")
+printf '%s' "$base" | jq --slurpfile h "$hooks_block" '.hooks = $h[0]' >"$tmp"
 
 config_place::place_file 'hook' 'claude-code' "$endpoint" "$tmp" "$out"
 config_place::place_self_ignore 'claude-code' "$endpoint" "$target_abs/.claude"

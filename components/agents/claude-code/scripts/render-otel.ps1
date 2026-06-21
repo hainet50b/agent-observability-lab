@@ -28,9 +28,19 @@ $rendered = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@OTLP_HEADERS@@', $OtlpHeaders
 $envBlock = ($rendered | ConvertFrom-Json).env
 
+# Merge our .env into the existing settings.local.json, preserving any other
+# top-level keys (e.g. .hooks placed by the audit concern sharing this home).
+$merged = if (Test-Path -LiteralPath $out -PathType Leaf) {
+    Get-Content -Raw -LiteralPath $out | ConvertFrom-Json
+}
+else {
+    [pscustomobject]@{}
+}
+$merged | Add-Member -NotePropertyName 'env' -NotePropertyValue $envBlock -Force
+
 $tmp = New-TemporaryFile
 try {
-    ([pscustomobject]@{ env = $envBlock } | ConvertTo-Json -Depth 8) |
+    ($merged | ConvertTo-Json -Depth 10) |
         Set-Content -LiteralPath $tmp -Encoding utf8
     Set-CpFile 'otel' 'claude-code' $Endpoint $tmp $out
     Set-CpSelfIgnore 'claude-code' $Endpoint (Join-Path $TargetDir '.claude')

@@ -10,11 +10,15 @@ user_prompt_enabled=${5:-}
 user_prompt_content=${6:-}
 tool_call_enabled=${7:-}
 tool_call_content=${8:-}
+# Ownership marker endpoint. Defaults to the audit ES URL (the conf's data value
+# stays the ES URL regardless); a caller sharing one home across concerns passes
+# a unified value so every bundle file carries the same marker.
+marker_endpoint=${9:-$es_url}
 
 if [ -z "$es_url" ] || [ -z "$target_dir" ] || [ -z "$timeout_ms" ] ||
   [ -z "$user_prompt_enabled" ] || [ -z "$user_prompt_content" ] ||
   [ -z "$tool_call_enabled" ] || [ -z "$tool_call_content" ]; then
-  echo "usage: render-agent-audit.sh <es-url> <target-dir> <api-key> <timeout-ms> <up-enabled> <up-content> <tc-enabled> <tc-content>" >&2
+  echo "usage: render-agent-audit.sh <es-url> <target-dir> <api-key> <timeout-ms> <up-enabled> <up-content> <tc-enabled> <tc-content> [marker-endpoint]" >&2
   exit 2
 fi
 
@@ -42,5 +46,5 @@ sed \
   -e "s#@@CAPTURE_TOOL_CALL_CONTENT@@#$tool_call_content#" \
   "$TEMPLATE" >"$tmp"
 
-config_place::place_file 'agent-audit' 'claude-code' "$es_url" "$tmp" "$config"
-config_place::place_self_ignore 'claude-code' "$es_url" "$target_dir/.claude"
+config_place::place_file 'agent-audit' 'claude-code' "$marker_endpoint" "$tmp" "$config"
+config_place::place_self_ignore 'claude-code' "$marker_endpoint" "$target_dir/.claude"

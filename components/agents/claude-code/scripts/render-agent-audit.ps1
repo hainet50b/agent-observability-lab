@@ -7,7 +7,8 @@ param(
     [Parameter(Mandatory = $true)][string]$UserPromptEnabled,
     [Parameter(Mandatory = $true)][string]$UserPromptContent,
     [Parameter(Mandatory = $true)][string]$ToolCallEnabled,
-    [Parameter(Mandatory = $true)][string]$ToolCallContent
+    [Parameter(Mandatory = $true)][string]$ToolCallContent,
+    [string]$MarkerEndpoint = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +21,11 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
     exit 1
 }
+
+# Ownership marker endpoint. Defaults to the audit ES URL (the conf's data value
+# stays the ES URL regardless); a caller sharing one home across concerns passes
+# a unified value so every bundle file carries the same marker.
+$Marker = if ($MarkerEndpoint) { $MarkerEndpoint } else { $EsUrl }
 
 $config = Join-Path $TargetDir '.claude/agent-audit.conf'
 
@@ -35,8 +41,8 @@ $content = (Get-Content -Raw -LiteralPath $Template) `
 $tmp = New-TemporaryFile
 try {
     [System.IO.File]::WriteAllText($tmp, $content, [System.Text.UTF8Encoding]::new($false))
-    Set-CpFile 'agent-audit' 'claude-code' $EsUrl $tmp $config
-    Set-CpSelfIgnore 'claude-code' $EsUrl (Join-Path $TargetDir '.claude')
+    Set-CpFile 'agent-audit' 'claude-code' $Marker $tmp $config
+    Set-CpSelfIgnore 'claude-code' $Marker (Join-Path $TargetDir '.claude')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
