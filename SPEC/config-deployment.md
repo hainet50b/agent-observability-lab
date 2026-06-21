@@ -22,6 +22,27 @@ Three scopes, selected by `--scope` (default **`local`**):
 - **`project`** — a user-scope deployment into an arbitrary directory; **requires `--target <dir>`** — e.g. a user's real project, to see what telemetry/audit their everyday work would emit. Materializes the full bundle **except** the Elasticsearch MCP: the MCP is a local-only lab-exploration convenience and is not injected into foreign projects, keeping their footprint minimal. Safe, scriptable, no confirmation.
 - **`managed`** — org-enforced placement at the machine-global system paths, highest precedence. `--target` is not applicable. This is the **deploy-only, human-gated, never-overwrite** model in `SPEC/claude-code-managed-config.md` and `SPEC/codex-cli-managed-config.md` "Placement in this lab" (interactive, no `--yes`, non-TTY aborts, fail-loud, sidecar provenance marker, mandatory teardown). Dangerous and manual by design.
 
+## Placement is marker-aware and fail-if-foreign — across all scopes
+
+Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.lab-managed`, in one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url. It is what teardown matches on to recognize its own work.
+
+`managed` placement is **interactive** (confirm each file, non-TTY aborts) via `components/agents/shared/managed-config/`. `local` and `project` are **non-interactive** (safe, scriptable, no prompt, no `--yes`) via a shared, non-interactive helper `components/agents/shared/config-place/` reused by every render script and by local/project teardown. Both share the same marker format and the same fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
+
+- **target absent** → write the rendered content, then write the sidecar marker.
+- **target exists with a lab marker whose `endpoint` matches this deploy** → it is ours: overwrite (for Codex's single `config.toml`, append the lab section, skipping a section already present). Idempotent and updatable.
+- **target exists with no lab marker, or a marker whose `endpoint` differs** → **fail loud** (non-zero, clear message). Never merge, append, or overwrite. Nothing is written, so there is nothing to roll back; a file that copies bundle assets next to a marked file (the hook scripts beside `settings.local.json` / `config.toml`) performs the foreign check **before** copying anything.
+
+This replaces the older permissive behaviour (env-merge into an existing `settings.local.json`, create-if-absent skips, and blind `[hooks]`/`[mcp_servers]` appends), which could silently corrupt a user's pre-existing assets.
+
+**Codex's single `config.toml`.** Codex keeps `[otel]`, `[[hooks.*]]`, and `[mcp_servers.*]` in one file. The first lab section written in a run (otel for telemetry, hooks for audit) **creates and marks** the file (or fails if a pre-existing file is unmarked); later sections in the same run **append** onto the now-marked file. A re-run is idempotent: each section is skipped if its sentinel table header is already present.
+
+## Teardown — all scopes
+
+`setup-config --teardown` is valid for every scope (`local` resolves the target to the stack dir; `project` requires `--target`, like `project` deploy; `managed` takes neither).
+
+- **`managed`** → the existing **interactive** teardown (`teardown-managed`), unchanged.
+- **`local` / `project`** → **non-interactive**: remove each bundle file that carries a lab marker whose `endpoint` matches this deploy, plus its marker (and the copied `hooks/` tree when the hook-bearing file was lab-owned). Any target **lacking a lab marker, or carrying a different endpoint, is refused** and left untouched, and the run ends non-zero. Only ever removes lab-marked files.
+
 ## Backend vs config
 
 Two concerns, kept separate:

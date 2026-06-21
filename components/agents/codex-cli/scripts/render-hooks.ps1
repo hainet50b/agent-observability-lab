@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$TargetDir
+    [Parameter(Mandatory = $true)][string]$TargetDir,
+    [Parameter(Mandatory = $true)][string]$Endpoint
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,16 +9,12 @@ $ErrorActionPreference = 'Stop'
 $config = Join-Path $TargetDir '.codex/config.toml'
 $AgentAuditConf = Join-Path (Join-Path $TargetDir '.codex') 'agent-audit.conf'
 
-if ((Test-Path -LiteralPath $config) -and (Select-String -LiteralPath $config -SimpleMatch '[[hooks.UserPromptSubmit]]' -Quiet)) {
-    Write-Host "Skipped: $config already has [[hooks.UserPromptSubmit]]"
-    exit 0
-}
-
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $HooksSrc = Join-Path $ComponentDir 'hooks'
 $CoreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
 $Template = Join-Path (Join-Path $ComponentDir 'templates') 'hooks.template.toml'
+. (Join-Path $ComponentDir '../shared/config-place/lib/config-place-core.ps1')
 
 foreach ($h in @((Join-Path $HooksSrc 'agent-audit.sh'), (Join-Path $HooksSrc 'agent-audit.ps1'))) {
     if (-not (Test-Path -LiteralPath $h -PathType Leaf)) {
@@ -30,6 +27,8 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     exit 1
 }
 
+Test-CpOursOrAbsent 'hook' $Endpoint $config | Out-Null
+
 New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.codex') | Out-Null
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
 $hooksDst = Join-Path $targetAbs '.codex/hooks'
@@ -40,16 +39,9 @@ Copy-Item -LiteralPath (Join-Path $CoreSrc 'agent-audit-core.sh'), (Join-Path $C
 $AgentAuditSh = Join-Path $hooksDst 'agent-audit.sh'
 $AgentAuditPs1 = Join-Path $hooksDst 'agent-audit.ps1'
 
-$block = ((Get-Content -Raw -LiteralPath $Template) -replace "`r`n", "`n").
+$block = (Get-Content -Raw -LiteralPath $Template).
 Replace('@@AGENT_AUDIT_SH@@', $AgentAuditSh).
 Replace('@@AGENT_AUDIT_PS1@@', $AgentAuditPs1).
 Replace('@@AGENT_AUDIT_CONF@@', $AgentAuditConf)
 
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
-if (Test-Path -LiteralPath $config) {
-    $existing = ((Get-Content -Raw -LiteralPath $config) -replace "`r`n", "`n").TrimEnd("`n")
-    $combined = $existing + "`n`n" + $block
-} else {
-    $combined = $block
-}
-[System.IO.File]::WriteAllText($config, $combined, [System.Text.UTF8Encoding]::new($false))
+Add-CpSection 'hook' 'codex-cli' $Endpoint $block $config '[[hooks.UserPromptSubmit]]'

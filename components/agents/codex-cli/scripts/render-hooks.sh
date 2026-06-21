@@ -2,25 +2,23 @@
 set -euo pipefail
 
 target_dir=${1:-}
+endpoint=${2:-}
 
-[ -n "$target_dir" ] || {
-  echo "Usage: render-hooks.sh <target-dir>" >&2
+if [ -z "$target_dir" ] || [ -z "$endpoint" ]; then
+  echo "Usage: render-hooks.sh <target-dir> <endpoint>" >&2
   exit 2
-}
+fi
 
 config="$target_dir/.codex/config.toml"
 agent_audit_conf="$target_dir/.codex/agent-audit.conf"
-
-if [ -e "$config" ] && grep -qF '[[hooks.UserPromptSubmit]]' "$config"; then
-  echo "Skipped: $config already has [[hooks.UserPromptSubmit]]"
-  exit 0
-fi
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
 hooks_src="$component_dir/hooks"
 core_src="$component_dir/../shared/agent-audit/lib"
 template="$component_dir/templates/hooks.template.toml"
+# shellcheck source=/dev/null
+. "$component_dir/../shared/config-place/lib/config-place-core.sh"
 
 for hook in "$hooks_src/agent-audit.sh" "$hooks_src/agent-audit.ps1"; do
   [ -f "$hook" ] || {
@@ -32,6 +30,8 @@ done
   echo "FAIL: template not found: $template" >&2
   exit 1
 }
+
+config_place::assert_ours_or_absent 'hook' "$endpoint" "$config" || true
 
 mkdir -p "$target_dir/.codex"
 target_abs=$(cd -- "$target_dir" && pwd)
@@ -50,5 +50,8 @@ block=$(sed \
   -e "s#@@AGENT_AUDIT_CONF@@#$agent_audit_conf#" \
   "$template")
 
-[ -e "$config" ] && printf '\n' >>"$config"
-printf '%s\n' "$block" >>"$config"
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+printf '%s\n' "$block" >"$tmp"
+
+config_place::append_section 'hook' 'codex-cli' "$endpoint" "$tmp" "$config" '[[hooks.UserPromptSubmit]]'

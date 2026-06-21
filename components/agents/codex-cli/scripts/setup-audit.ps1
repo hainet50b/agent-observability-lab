@@ -18,4 +18,4 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
     -ApiKey $ApiKey -TimeoutMs $TimeoutMs `
     -UserPromptEnabled $UserPromptEnabled -UserPromptContent $UserPromptContent `
     -ToolCallEnabled $ToolCallEnabled -ToolCallContent $ToolCallContent
-& (Join-Path $ScriptDir 'render-hooks.ps1') -TargetDir $TargetDir
+& (Join-Path $ScriptDir 'render-hooks.ps1') -TargetDir $TargetDir -Endpoint $EsUrl

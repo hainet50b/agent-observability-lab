@@ -21,4 +21,4 @@ fi
 
 "$SCRIPT_DIR/render-otel.sh" "$agent_home" \
   "$otlp_base/v1/logs" "$otlp_base/v1/traces" "$otlp_base/v1/metrics" \
-  "$otlp_headers"
+  "$otlp_headers" "$otlp_base"

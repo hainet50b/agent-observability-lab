@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 
-& (Join-Path $ScriptDir 'render-hook.ps1') -TargetDir $TargetDir
+& (Join-Path $ScriptDir 'render-hook.ps1') -TargetDir $TargetDir -Endpoint $EsUrl
 & (Join-Path $ScriptDir 'render-agent-audit.ps1') -EsUrl $EsUrl -TargetDir $TargetDir `
     -ApiKey $ApiKey -TimeoutMs $TimeoutMs `
     -UserPromptEnabled $UserPromptEnabled -UserPromptContent $UserPromptContent `

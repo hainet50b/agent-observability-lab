@@ -34,10 +34,6 @@ while [ "$#" -gt 0 ]; do
     ;;
   esac
 done
-if [ "$teardown" -eq 1 ] && [ "$scope" != managed ]; then
-  echo "FAIL: --teardown is only valid with --scope managed" >&2
-  exit 2
-fi
 config=${config:-$stack_dir/setup.conf}
 [ -f "$config" ] || {
   echo "FAIL: config file not found: $config" >&2
@@ -73,15 +69,23 @@ local)
     exit 2
   }
   target=$stack_dir
-  "$components_dir/agents/claude-code/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint" "$OTLP_API_KEY"
-  "$components_dir/agents/claude-code/scripts/render-mcp.sh" "$target"
+  if [ "$teardown" -eq 1 ]; then
+    "$components_dir/agents/claude-code/scripts/teardown-local.sh" "$target" "$otlp_endpoint"
+  else
+    "$components_dir/agents/claude-code/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint" "$OTLP_API_KEY"
+    "$components_dir/agents/claude-code/scripts/render-mcp.sh" "$target" "$otlp_endpoint"
+  fi
   ;;
 project)
   [ -n "$target" ] || {
     echo "FAIL: --scope project requires --target <dir>" >&2
     exit 2
   }
-  "$components_dir/agents/claude-code/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint" "$OTLP_API_KEY"
+  if [ "$teardown" -eq 1 ]; then
+    "$components_dir/agents/claude-code/scripts/teardown-local.sh" "$target" "$otlp_endpoint"
+  else
+    "$components_dir/agents/claude-code/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint" "$OTLP_API_KEY"
+  fi
   ;;
 managed)
   if [ "$teardown" -eq 1 ]; then

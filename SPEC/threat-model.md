@@ -74,8 +74,9 @@ The hook-audit's specific bypass / failure surface:
   `auth.json` JWT **without signature verification**; the account / email / org
   claims are self-asserted and forgeable locally.
 - **Non-adversarial gaps too.** Hook timeouts drop late deliveries, only events
-  the agent emits with a registered hook are captured, and create-if-absent
-  config means a stale or edited local file silently changes behaviour.
+  the agent emits with a registered hook are captured, and a hand-edited
+  lab-placed config still feeds the agent at runtime — placement is marker-aware
+  and fail-if-foreign on *writes*, but it does not police later local edits.
 
 The correct control for (B) / compliance evidence is **capture above the user's
 machine**, at a trust boundary they do not own: provider-side enterprise audit

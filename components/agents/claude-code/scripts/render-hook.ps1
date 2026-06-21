@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$TargetDir
+    [Parameter(Mandatory = $true)][string]$TargetDir,
+    [Parameter(Mandatory = $true)][string]$Endpoint
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,6 +10,7 @@ $ComponentDir = Split-Path -Parent $ScriptDir
 $Template = Join-Path (Join-Path $ComponentDir 'templates') 'hook.template.json'
 $HooksSrc = Join-Path $ComponentDir 'hooks'
 $CoreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
+. (Join-Path $ComponentDir '../shared/config-place/lib/config-place-core.ps1')
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -17,13 +19,7 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
 
 $out = Join-Path $TargetDir '.claude/settings.local.json'
 
-if (Test-Path -LiteralPath $out) {
-    $existing = Get-Content -Raw -LiteralPath $out | ConvertFrom-Json
-    if ($existing.PSObject.Properties.Name -contains 'hooks') {
-        Write-Host "kept existing hooks in $out (delete to regenerate)"
-        exit 0
-    }
-}
+Test-CpOursOrAbsent 'hook' $Endpoint $out | Out-Null
 
 New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.claude') | Out-Null
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
@@ -51,13 +47,12 @@ foreach ($h in @(
 }
 $hooks = $tpl.hooks
 
-if (Test-Path -LiteralPath $out) {
-    $cfg = Get-Content -Raw -LiteralPath $out | ConvertFrom-Json
-    $cfg | Add-Member -NotePropertyName 'hooks' -NotePropertyValue $hooks -Force
-    $cfg | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $out -Encoding utf8
-    Write-Host "added hooks to $out"
+$tmp = New-TemporaryFile
+try {
+    ([pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10) |
+        Set-Content -LiteralPath $tmp -Encoding utf8
+    Set-CpFile 'hook' 'claude-code' $Endpoint $tmp $out
 }
-else {
-    [pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $out -Encoding utf8
-    Write-Host "wrote $out"
+finally {
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
 }

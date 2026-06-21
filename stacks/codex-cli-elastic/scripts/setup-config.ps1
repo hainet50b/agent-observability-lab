@@ -12,11 +12,6 @@ $ErrorActionPreference = 'Stop'
 $StackDir = Split-Path -Parent $PSScriptRoot
 $ComponentsDir = Join-Path $PSScriptRoot '../../../components'
 
-if ($Teardown -and $Scope -ne 'managed') {
-    [Console]::Error.WriteLine('FAIL: -Teardown is only valid with -Scope managed')
-    exit 1
-}
-
 if (-not $Config) {
     $Config = Join-Path $StackDir 'setup.conf'
 }
@@ -64,15 +59,25 @@ switch ($Scope) {
             exit 2
         }
         $Target = $StackDir
-        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
-        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target
+        if ($Teardown) {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/teardown-local.ps1') -TargetDir $Target -Endpoint $OtlpEndpoint
+        }
+        else {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target -Endpoint $OtlpEndpoint
+        }
     }
     'project' {
         if (-not $Target) {
             [Console]::Error.WriteLine('FAIL: -Scope project requires -Target <dir>')
             exit 2
         }
-        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
+        if ($Teardown) {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/teardown-local.ps1') -TargetDir $Target -Endpoint $OtlpEndpoint
+        }
+        else {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
+        }
     }
     'managed' {
         if ($Teardown) {

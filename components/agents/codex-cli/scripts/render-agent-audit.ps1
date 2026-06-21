@@ -14,14 +14,10 @@ $ErrorActionPreference = 'Stop'
 
 $config = Join-Path $TargetDir '.codex/agent-audit.conf'
 
-if (Test-Path -LiteralPath $config) {
-    Write-Host "Skipped: $config already exists (delete to regenerate)"
-    exit 0
-}
-
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $Template = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
+. (Join-Path $ComponentDir '../shared/config-place/lib/config-place-core.ps1')
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -36,5 +32,12 @@ $content = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@CAPTURE_USER_PROMPT_CONTENT@@', $UserPromptContent `
     -replace '@@CAPTURE_TOOL_CALL_ENABLED@@', $ToolCallEnabled `
     -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
-[System.IO.File]::WriteAllText($config, $content, [System.Text.UTF8Encoding]::new($false))
+
+$tmp = New-TemporaryFile
+try {
+    [System.IO.File]::WriteAllText($tmp, $content, [System.Text.UTF8Encoding]::new($false))
+    Set-CpFile 'agent-audit' 'codex-cli' $EsUrl $tmp $config
+}
+finally {
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+}

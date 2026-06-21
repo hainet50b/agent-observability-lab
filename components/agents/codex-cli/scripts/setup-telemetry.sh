@@ -14,4 +14,4 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 "$SCRIPT_DIR/render-otel.sh" "$agent_home" \
   "$otlp_endpoint/v1/logs" "$otlp_endpoint/v1/traces" "$otlp_endpoint/v1/metrics" \
-  "$otlp_api_key"
+  "$otlp_api_key" "$otlp_endpoint"

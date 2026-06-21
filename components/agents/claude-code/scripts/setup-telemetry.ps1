@@ -16,4 +16,4 @@ if ($ApiKey) {
     $OtlpHeaders = "Authorization=ApiKey $ApiKey"
 }
 
-& (Join-Path $ScriptDir 'render-otel.ps1') -TargetDir $TargetDir -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics" -OtlpHeaders $OtlpHeaders
+& (Join-Path $ScriptDir 'render-otel.ps1') -TargetDir $TargetDir -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics" -OtlpHeaders $OtlpHeaders -Endpoint $OtlpEndpoint

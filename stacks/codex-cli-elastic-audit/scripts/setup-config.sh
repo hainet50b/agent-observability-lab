@@ -8,6 +8,7 @@ components_dir="$script_dir/../../../components"
 scope=local
 target=""
 config=""
+teardown=0
 while [ "$#" -gt 0 ]; do
   case $1 in
   --scope)
@@ -17,6 +18,10 @@ while [ "$#" -gt 0 ]; do
   --target)
     target=${2:-}
     shift 2
+    ;;
+  --teardown)
+    teardown=1
+    shift
     ;;
   *)
     config=$1
@@ -72,17 +77,25 @@ local)
     exit 2
   }
   target=$stack_dir
-  "$components_dir/agents/codex-cli/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
-    "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
-  "$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$target"
+  if [ "$teardown" -eq 1 ]; then
+    "$components_dir/agents/codex-cli/scripts/teardown-local.sh" "$target" "$AUDIT_ES_URL"
+  else
+    "$components_dir/agents/codex-cli/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
+      "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
+    "$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$target" "$AUDIT_ES_URL"
+  fi
   ;;
 project)
   [ -n "$target" ] || {
     echo "FAIL: --scope project requires --target <dir>" >&2
     exit 2
   }
-  "$components_dir/agents/codex-cli/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
-    "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
+  if [ "$teardown" -eq 1 ]; then
+    "$components_dir/agents/codex-cli/scripts/teardown-local.sh" "$target" "$AUDIT_ES_URL"
+  else
+    "$components_dir/agents/codex-cli/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
+      "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
+  fi
   ;;
 managed)
   echo "FAIL: managed scope (audit hooks) is not wired yet — see PRD deploy 4/4." >&2

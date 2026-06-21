@@ -19,21 +19,19 @@ fi
 
 config="$target_dir/.codex/agent-audit.conf"
 
-if [ -e "$config" ]; then
-  echo "Skipped: $config already exists (delete to regenerate)"
-  exit 0
-fi
-
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
 template="$component_dir/templates/agent-audit.template.conf"
+# shellcheck source=/dev/null
+. "$component_dir/../shared/config-place/lib/config-place-core.sh"
 
 [ -f "$template" ] || {
   echo "FAIL: template not found: $template" >&2
   exit 1
 }
 
-mkdir -p "$target_dir/.codex"
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
 sed \
   -e "s#@@ES_URL@@#$es_url#" \
   -e "s#@@ES_API_KEY@@#$api_key#" \
@@ -42,4 +40,6 @@ sed \
   -e "s#@@CAPTURE_USER_PROMPT_CONTENT@@#$user_prompt_content#" \
   -e "s#@@CAPTURE_TOOL_CALL_ENABLED@@#$tool_call_enabled#" \
   -e "s#@@CAPTURE_TOOL_CALL_CONTENT@@#$tool_call_content#" \
-  "$template" >"$config"
+  "$template" >"$tmp"
+
+config_place::place_file 'agent-audit' 'codex-cli' "$es_url" "$tmp" "$config"
