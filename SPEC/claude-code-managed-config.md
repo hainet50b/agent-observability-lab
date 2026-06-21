@@ -19,7 +19,7 @@ Codex separates *defaults* (`managed_config.toml`, user-overridable) from *requi
 | Linux / WSL | `/etc/claude-code/managed-settings.json` |
 | Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
 
-All are machine-global, admin-owned, fixed system paths — there is no env var that relocates the managed-settings search path (unlike `CODEX_HOME` for Codex's *user* layer, which never reaches managed anyway). Two deployment gotchas: the Windows path is under **`Program Files`** (per the docs — not `ProgramData`; writing there needs installer/admin rights), and the macOS path contains a **space** (`Application Support`), so any tool that places the file or points a hook `command` at a script beside it must quote paths.
+All are machine-global, admin-owned, fixed system paths — there is no env var that relocates the managed-settings search path (unlike `CODEX_HOME` for Codex's *user* layer, which never reaches managed anyway). Two deployment gotchas: the Windows path is under **`Program Files`** (writing there needs admin rights) — the legacy **`C:\ProgramData\ClaudeCode\managed-settings.json` is no longer read as of Claude Code v2.1.75**, so a file placed there is silently ignored; and the macOS path contains a **space** (`Application Support`), so any tool that places the file or points a hook `command` at a script beside it must quote paths.
 
 ## Precedence
 

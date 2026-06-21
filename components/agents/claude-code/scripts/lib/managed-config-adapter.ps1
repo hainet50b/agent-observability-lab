@@ -2,7 +2,7 @@ $script:McAgent = 'claude-code'
 
 function Get-McManagedRoot($Os) {
     switch ($Os) {
-        'windows' { 'C:\ProgramData\ClaudeCode' }
+        'windows' { 'C:\Program Files\ClaudeCode' }
         'macos' { '/Library/Application Support/ClaudeCode' }
         'linux' { '/etc/claude-code' }
         default { Write-McFatal "no Claude managed-settings path for os '$Os'" }
