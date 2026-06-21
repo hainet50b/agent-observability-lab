@@ -7,31 +7,15 @@
 allowed_approval_policies = ["on-request", "on-failure"]
 allowed_sandbox_modes = ["read-only", "workspace-write"]
 
-# allow_managed_hooks_only makes managed hooks exclusive (skips user/project/session/plugin
-# hooks); it is honored only in requirements.toml. managed_dir holds the hook scripts — Codex
+# allow_managed_hooks_only = false: the lab keeps the user's own hooks alongside the managed
+# ones (enforce hook *presence*, not exclusivity). managed_dir holds the hook scripts — Codex
 # validates it is absolute and exists but does NOT distribute them; the operator delivers the
 # scripts (and agent-audit.conf) there. [features].hooks = true stops a user disabling hooks.
-allow_managed_hooks_only = true
+# The [[hooks.*]] tables are single-sourced in hooks.template.toml and concatenated onto this
+# file at render time (top-level fields + [features] first, the hook arrays last, so it parses).
+allow_managed_hooks_only = false
 managed_dir = "@@MANAGED_DIR@@"
 windows_managed_dir = "@@WINDOWS_MANAGED_DIR@@"
 
 [features]
 hooks = true
-
-[[hooks.UserPromptSubmit]]
-
-[[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = '@@AGENT_AUDIT_SH@@ --stream user_prompt --config @@AGENT_AUDIT_CONF@@'
-commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File @@AGENT_AUDIT_PS1@@ -Stream user_prompt -Config @@AGENT_AUDIT_CONF@@'
-timeout = 3
-statusMessage = "Delivering UserPromptSubmit audit document"
-
-[[hooks.PostToolUse]]
-
-[[hooks.PostToolUse.hooks]]
-type = "command"
-command = '@@AGENT_AUDIT_SH@@ --stream tool_call --config @@AGENT_AUDIT_CONF@@'
-commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File @@AGENT_AUDIT_PS1@@ -Stream tool_call -Config @@AGENT_AUDIT_CONF@@'
-timeout = 3
-statusMessage = "Delivering PostToolUse audit document"

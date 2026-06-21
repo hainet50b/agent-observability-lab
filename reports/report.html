@@ -1254,6 +1254,36 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>Codex managed hook posture: <code>allow_managed_hooks_only = false</code> + single-sourced hook tables</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Concatenation order.</strong> TOML requires bare key/values and the <code>[features]</code> table to precede the <code>[[hooks.*]]</code> array-of-tables (once an array-of-tables opens, later bare keys would bind to it). So the renderer emits <code>requirements.template.toml</code> (top-level fields + <code>[features]</code>) first, then appends the rendered <code>hooks.template.toml</code> — a plain file append, no merge logic. I added a single blank line between the two halves for readability; verified the assembled document round-trips through Python <code>tomllib</code> (top keys, both hook events, <code>allow_managed_hooks_only = False</code>, <code>features.hooks = True</code>).</li>
+    <li><strong>Placeholder split follows ownership.</strong> After removing the inline hooks, <code>requirements.template.toml</code> only carries <code>@@MANAGED_DIR@@</code> / <code>@@WINDOWS_MANAGED_DIR@@</code>, and the three <code>@@AGENT_AUDIT_*@@</code> placeholders live solely in <code>hooks.template.toml</code>. I moved those three <code>sed</code>/<code>-replace</code> substitutions to the hooks-render step accordingly, so each template is substituted only for the placeholders it actually contains.</li>
+    <li><strong>Reused the existing single source.</strong> <code>hooks.template.toml</code> already existed (it is what <code>render-hooks.{sh,ps1}</code> renders for the user-scope hooks), and it carries the identical placeholder names <code>setup-managed</code> was already substituting. So "single-source" needed no new file — managed and user scopes now render the same hook tables, which is the drift the task targets.</li>
+    <li><strong>Comment rewrite, not deletion.</strong> The old <code>allow_managed_hooks_only</code> comment described the <em>exclusive</em> (<code>true</code>) posture, which is now wrong. I rewrote it to state the <code>false</code> rationale (coexist with user hooks; enforce presence not exclusivity) and to note the hooks are concatenated from <code>hooks.template.toml</code> — load-bearing <em>why</em>, matching the SPEC's stated posture.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>None. Per the task this is a static-gate-only change with no host execution; placement against the host was not run (the non-TTY abort guarantees nothing is placed).</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>None specific. The next open work is the <code>config-deployment</code> model series (deploy 1/4 …), where <code>setup-config</code> will materialize hook scripts into the deployment — at which point the managed path's <code>managed_dir</code> (currently the in-repo <code>hooks/</code> dir) will want repointing at the materialized location.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>Codex's managed <code>requirements.toml</code> now sets <code>allow_managed_hooks_only = false</code> (the lab's managed hooks coexist with the user's own), and the hook tables are no longer duplicated inline — <code>setup-managed.{sh,ps1}</code> render the shared <code>hooks.template.toml</code> and concatenate it onto the requirements, so managed- and user-scope hook definitions can't drift.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>Confirm the concatenation-order reasoning matches your intent: requirements fields + <code>[features]</code> first, hook arrays last. The rendered output is verified to parse, but any new top-level requirement key must stay in <code>requirements.template.toml</code> (above the appended hooks block), never after it.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

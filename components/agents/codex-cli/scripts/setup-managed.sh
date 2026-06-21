@@ -16,7 +16,8 @@ managed_config::parse_args "$@"
 templates="$component_dir/templates"
 managed_template="$templates/managed_config.template.toml"
 requirements_template="$templates/requirements.template.toml"
-for t in "$managed_template" "$requirements_template"; do
+hooks_template="$templates/hooks.template.toml"
+for t in "$managed_template" "$requirements_template" "$hooks_template"; do
   [ -f "$t" ] || managed_config::die "template not found: $t"
 done
 
@@ -35,9 +36,14 @@ sed \
 sed \
   -e "s#@@MANAGED_DIR@@#$hooks_dir#" \
   -e "s#@@WINDOWS_MANAGED_DIR@@#$hooks_dir#" \
+  "$requirements_template" >"$requirements_source" || managed_config::die "failed to render $requirements_template"
+
+printf '\n' >>"$requirements_source"
+
+sed \
   -e "s#@@AGENT_AUDIT_SH@@#$hooks_dir/agent-audit.sh#" \
   -e "s#@@AGENT_AUDIT_PS1@@#$hooks_dir/agent-audit.ps1#" \
   -e "s#@@AGENT_AUDIT_CONF@@#$hooks_dir/agent-audit.conf#" \
-  "$requirements_template" >"$requirements_source" || managed_config::die "failed to render $requirements_template"
+  "$hooks_template" >>"$requirements_source" || managed_config::die "failed to render $hooks_template"
 
 managed_config::place "$requirements_source" "$managed_config_source"
