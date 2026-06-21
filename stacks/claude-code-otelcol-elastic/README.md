@@ -2,8 +2,8 @@
 
 > Claude Code → **local OpenTelemetry Collector** → APM Server (Elastic-native
 > OTLP) → Elasticsearch → Kibana. Same backend and Kibana views as
-> `claude-code-elastic`, but the agent talks to a same-host Collector instead of
-> the APM Server directly.
+> [`claude-code-elastic`](../claude-code-elastic/), but the agent talks to a
+> same-host Collector instead of the APM Server directly.
 
 ```
 Claude Code  ──OTLP──▶  otel-collector  ──OTLP──▶  APM Server  ──▶  Elasticsearch  ──▶  Kibana
@@ -11,85 +11,56 @@ Claude Code  ──OTLP──▶  otel-collector  ──OTLP──▶  APM Serve
 ```
 
 This stack inserts a **local OpenTelemetry Collector** between the agent and the
-backend. The agent exports to `localhost:4318` — always reachable on the same
-host — and the Collector relays the telemetry on to the APM Server. Everything
-downstream of the Collector (APM Server, Elasticsearch, Kibana, the Kibana saved
-objects, the trace-isolation pipelines) is the **same Elastic backend** as
-`claude-code-elastic`; only the transport path differs.
+backend. The agent exports to `localhost:4318` — always reachable on the same host —
+and the Collector relays the telemetry on to the APM Server. Everything downstream of
+the Collector (APM Server, Elasticsearch, Kibana, saved objects, trace-isolation
+pipelines) is the **same Elastic backend** as `claude-code-elastic`; only the
+transport path differs. The Collector adds three behaviours:
 
-The Collector buffers telemetry to a **durable on-disk queue**: if the central
-backend (APM Server) is unreachable, the agent's exports are still accepted by
-the always-up local Collector and persisted to disk, then drained automatically
-when the link recovers — no loss during a backend outage. The queue is a named
-Docker volume, so it survives a Collector restart too.
+| Behaviour | What it does | Caveat |
+| --- | --- | --- |
+| **Durable on-disk queue** | If APM Server is unreachable, exports are still accepted by the always-up local Collector and persisted to a named-volume `file_storage` queue, then drained when the link recovers — no loss during a backend outage; survives a Collector restart. | — |
+| **Self-telemetry** | The Collector's own internal metrics (`otelcol_*`, esp. `otelcol_exporter_queue_size`) export under `service.name: otelcol-sidecar` — a silently-dead sidecar would be an audit hole. Travels a path separate from the data pipelines, so it does **not** ride the on-disk queue. Query `metrics-apm*` for `service.name: otelcol-sidecar`. | — |
+| **Host identity** | A `resourcedetection` processor adds `host.name` (only where absent — never overwrites the agent's attributes), so every metric/event/span gains device attribution. Claude Code's native telemetry carries OS/arch but **no `host.name`**. | In a *container* the `system` detector reports the **container's** hostname — set deterministically to `otelcol-sidecar-demo` — **not** your laptop's. A real fleet runs the Collector as a host service (systemd/launchd), where the detector picks up the true machine name. Don't mistake the demo value for real attribution. |
 
-The Collector also reports its **own** health. A silently-dead sidecar would be
-an audit hole, so its internal metrics (`otelcol_*` — most usefully
-`otelcol_exporter_queue_size`, which grows when the central link is failing)
-are exported to the same backend under the `service.name` **`otelcol-sidecar`**,
-distinct from `claude-code`. This self-telemetry travels a path separate from the
-data pipelines, so it does **not** ride the on-disk queue above — query
-`metrics-apm*` for `service.name: otelcol-sidecar` to see it.
-
-The Collector also **stamps host identity** onto every signal it relays. Claude
-Code's native telemetry carries OS/architecture resource attributes but **no
-`host.name`** — a document can be attributed to a person (`labels.user_email`)
-and a session (`session.id`) but not to a *device*. A `resourcedetection`
-processor adds `host.name` (only where absent — it never overwrites the agent's
-own attributes), so every metric, event, and span gains device attribution. The
-local Collector is the natural place to do this: it sees every signal on the way
-out, and host identity is a property of where the agent runs, not of the agent.
-
-> ⚠️ **Container caveat — the demo `host.name` is the Collector's, not your
-> laptop's.** Because the Collector runs in a *container*, its `system` hostname
-> detector reports the **container's** hostname — set deterministically to
-> `otelcol-sidecar-demo` on the service — **not** the host machine's. This
-> dockerized stack demonstrates the *mechanism*; a real fleet runs the Collector
-> as a host service (systemd / launchd), where the same detector picks up the
-> true machine name. Don't mistake the demo value for real device attribution.
-
-Alongside the *detected* `host.name`, the Collector also **injects an
-organization-assigned asset ID** as a top-level `host.id`. Where `host.name` is
-the machine's *own* name (detected from the OS), `host.id` is the
-*organization's* identity — the asset-management number used to join a document
-back to an asset inventory. That is injected, not detected, so it is fed from the
-Collector's environment in `docker-compose.yml`:
+**Organization asset ID (`host.id`).** Alongside the *detected* `host.name`, the
+Collector **injects** an organization-assigned asset ID as a top-level `host.id` —
+where `host.name` is the machine's *own* name (detected from the OS), `host.id` is the
+*organization's* identity, the asset-management number used to join a document back to
+an asset inventory. It is injected, not detected, fed from the Collector's environment:
 
 ```yaml
 environment:
   - OTEL_RESOURCE_ATTRIBUTES=host.id=${AOL_ASSET_ID:-aol-demo-asset-0001}
 ```
 
-Compose interpolates `AOL_ASSET_ID` from your shell at `up` time, falling back to
-the demo default `aol-demo-asset-0001` — the lab analogue of an MDM writing the
-per-device asset number into the Collector service definition at install time;
-the agent is untouched. Set your own before bringing the stack up (recreate the
-Collector so the new env applies):
+Compose interpolates `AOL_ASSET_ID` from your shell at `up` time, falling back to the
+demo default `aol-demo-asset-0001` — the lab analogue of an MDM writing the per-device
+asset number into the Collector service at install time; the agent is untouched. Set
+your own before bringing the stack up (recreate the Collector so the new env applies):
 
 ```sh
 AOL_ASSET_ID=asset-12345 docker compose up -d
 ```
 
-The attribute key is **`host.id`** deliberately: it is an ECS/APM-modeled field,
-so it lands as a **top-level, aggregatable `host.id`** (the join axis to the asset
-inventory) rather than flattening into `labels.*` the way a custom attribute key
-would. The Collector's `resourcedetection` runs `detectors: [env, system]`, and
-first-listed wins on conflict — so the injected organizational `host.id` beats the
-`system` detector's *intrinsic* `host.id` (the machine-id, which is **default-off**
-here). A real fleet that wanted the intrinsic machine identity instead would
-enable that `system` `host.id`; with `[env, system]`, the organizational ID wins
+The key is **`host.id`** deliberately: it is an ECS/APM-modeled field, so it lands as a
+**top-level, aggregatable `host.id`** (the join axis to the asset inventory) rather than
+flattening into `labels.*` the way a custom key would. `resourcedetection` runs
+`detectors: [env, system]`, and first-listed wins on conflict — so the injected
+organizational `host.id` beats the `system` detector's *intrinsic* `host.id` (the
+machine-id, **default-off** here). A fleet wanting the intrinsic machine identity would
+enable that `system` `host.id`; with `[env, system]` the organizational ID wins
 whenever both exist.
 
-> ⚠️ **Cannot run alongside `claude-code-elastic`.** This stack reuses the Elastic
-> backend's fixed `aol-*` container names and host ports (`9200` / `5601` /
-> `8200`). Run only one of the two at a time — `docker compose down` the other
-> stack first. (The Collector adds `:4317` / `:4318`.)
+> ⚠️ **Cannot run alongside the other Elastic stacks.** Reuses the fixed `aol-*`
+> container names and host ports (`9200` / `5601` / `8200`; the Collector adds
+> `:4317` / `:4318`). `docker compose down` the other stack first.
 
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
-> `127.0.0.1`. Never expose this publicly. The events/traces channels can capture
-> your prompt text and tool I/O — don't run a telemetry-enabled session containing
-> secrets or confidential material against this stack, and never commit captured
-> telemetry into the repo.
+> `127.0.0.1`. Never expose this publicly. The events/traces channels can capture your
+> prompt text and tool I/O — don't run a telemetry-enabled session containing secrets
+> or confidential material against this stack, and never commit captured telemetry into
+> the repo.
 
 ## Prerequisites
 
@@ -99,8 +70,8 @@ whenever both exist.
 
 ## Quick Tour
 
-The shortest path from clone to "I see Claude Code telemetry — sent through a
-local Collector — in Kibana."
+The shortest path from clone to "I see Claude Code telemetry — sent through a local
+Collector — in Kibana."
 
 ### 1. Bring the stack up and bootstrap it
 
@@ -112,27 +83,24 @@ docker compose ps        # wait until elasticsearch, kibana, apm-server report h
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
-The Collector (`otel-collector`) carries no healthcheck — its image is
-distroless — so it shows no health column; it accepts OTLP within a second or two
-of starting. Kibana is at <http://localhost:5601>. `scripts/setup.sh` runs every
-post-up bootstrap step in one shot — it loads the Elasticsearch assets (the APM
-`@custom` routers, Claude Code's ingest pipelines that isolate its spans into
-`traces-apm-agents_claude_code`, and the per-agent ILM/templates) and imports the
-Kibana saved objects (including the sidecar's own health view) — and is
-idempotent, so re-run it any time. Both scripts read their target endpoints —
-Elasticsearch, the Collector OTLP endpoint, and Kibana — from `setup.conf` at the
-stack root, or another file you pass (`setup.sh <config>` /
-`setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
-empty rather than assuming localhost.
+The Collector (`otel-collector`) carries no healthcheck — its image is distroless — so
+it shows no health column; it accepts OTLP within a second or two of starting. Kibana is
+at <http://localhost:5601>. `scripts/setup.sh` runs every post-up bootstrap step in one
+shot — loads the Elasticsearch assets (the APM `@custom` routers, the ingest pipelines
+that isolate Claude Code spans into `traces-apm-agents_claude_code`, the per-agent
+ILM/templates) and imports the Kibana saved objects (including the sidecar's own health
+view) — and is idempotent, so re-run it any time. Both scripts read their target
+endpoints (Elasticsearch, the Collector OTLP endpoint, Kibana) from `setup.conf` at the
+stack root, or another file you pass (`setup.sh <config>` / `setup.ps1 -Config <config>`);
+they fail fast if the file is missing or a key is empty rather than assuming localhost.
 
-The demo Collector's OTLP receiver has auth disabled, so no credential is needed.
-To point a session at a **secured** endpoint, copy `setup.local.conf.example` to the
-gitignored `setup.local.conf` and set `telemetry.otel_collector.api_key=<key>` — `setup.sh`
-then adds `Authorization: ApiKey <key>` to the agent's OTLP exports. Leaving it
-empty (or skipping the file) ships no credential.
+The demo Collector's OTLP receiver has auth disabled, so no credential is needed. For a
+**secured** endpoint, copy `setup.local.conf.example` to the gitignored
+`setup.local.conf` and set `telemetry.otel_collector.api_key=<key>` — `setup.sh` then
+adds `Authorization: ApiKey <key>` to the agent's OTLP exports. Absent/empty ships no
+credential.
 
-Optionally prove the whole path end to end with the smoke test (see
-[Verify the pipeline](#verify-the-pipeline)):
+Optionally prove the whole path with the smoke test ([Verify the pipeline](#verify-the-pipeline)):
 
 ```sh
 scripts/smoke-test.sh
@@ -140,18 +108,18 @@ scripts/smoke-test.sh
 
 ### 2. Point a Claude Code session at the Collector
 
-**Simplest path:** `scripts/setup.sh` (step 1) already generated
-`.claude/settings.local.json` in this stack directory with the telemetry `env`
-(pointed at the **Collector** on `:4318`) **and** the prompt-audit hook — so just
-run **`claude` from `stacks/claude-code-otelcol-elastic/`** and both telemetry
-and prompt auditing are on, no manual setup. (Project settings load only from the
-launch directory.) The options below are alternatives.
+**Simplest path:** step 1 already generated `.claude/settings.local.json` in this stack
+directory with the telemetry `env` (pointed at the **Collector** on `:4318`) **and** the
+prompt-audit hook — so just run **`claude` from `stacks/claude-code-otelcol-elastic/`**
+and both telemetry and prompt auditing are on, no manual setup. (Project settings load
+only from the launch directory.) The options below are alternatives.
 
-The telemetry vars configure **`claude`** itself, not the stack. The only
-difference from `claude-code-elastic` is the endpoint: point
-`OTEL_EXPORTER_OTLP_ENDPOINT` at the **Collector** on `:4318`, not the APM Server
-on `:8200`. Paste into the shell that runs `claude`, then launch it from *any*
-directory (ephemeral and side-effect-free — creates no files).
+The telemetry vars configure **`claude`** itself, not the stack. The only difference from
+`claude-code-elastic` is the endpoint: point `OTEL_EXPORTER_OTLP_ENDPOINT` at the
+**Collector** on `:4318`, not the APM Server on `:8200`. Supply them one of three ways —
+shell env (below; ephemeral, recommended), a `settings.json` `env` block, or
+`managed-settings.json` (org enforcement) — exactly as in
+[`claude-code-elastic`](../claude-code-elastic/#2-point-a-claude-code-session-at-the-stack).
 
 ```sh
 # bash / zsh
@@ -216,56 +184,52 @@ $env:OTEL_LOG_RAW_API_BODIES = "0"   # full Messages API request/response bodies
 # $env:OTEL_LOG_RAW_API_BODIES = "file:<dir>"   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
 ```
 
-Persistent (`settings.json` `env` block) and org-enforced (`managed-settings.json`)
-configurations work the same way as in `claude-code-elastic` — just with the
-`:4318` Collector endpoint. The same staged `--with-hooks` opt-in (off by default,
-gated on a one-time host check) also applies here for managed audit-hook enforcement.
-Remove the managed config with `setup-config.sh --scope managed --teardown` (`-Teardown`
-on `.ps1`); add `--with-hooks` / `-WithHooks` to also remove a materialized hook bundle.
-Then run `claude` from a configured shell and do a
-little work; telemetry flushes on the export interval, so data lands within
-~10–30s (the Collector adds only a brief batching delay).
+The persistent (`settings.json` `env`) and org-enforced (`managed-settings.json`)
+configurations, including the four `OTEL_LOG_*` content-exposure gates and the host-path
+caveats, work the same as in `claude-code-elastic` — just with the `:4318` Collector
+endpoint. The same staged `--with-hooks` opt-in (off by default, gated on a one-time host
+check) also applies here for managed audit-hook enforcement. Remove the managed config
+with `setup-config.sh --scope managed --teardown` (`-Teardown` on `.ps1`); add
+`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle. Then run `claude`
+from a configured shell and do a little work; telemetry flushes on the export interval, so
+data lands within ~10–30s (the Collector adds only a brief batching delay).
 
-#### Deploy this config into your own project (`--target`)
+**Deploy this config into another scope.** `setup-config` deploys the same self-contained
+bundle (pointing at this stack's **Collector**) to a `(target, scope)`; details in
+[`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
 
-The bundle generated above is self-contained, so you can deploy the same telemetry
-config (pointing at this stack's **Collector**) into **any** directory — e.g. a real
-project — to see what your everyday work emits:
+| Scope | `--target` | MCP | Codex auth-link | Interactive | Teardown |
+| --- | --- | --- | --- | --- | --- |
+| `local` (default) | rejected (stack dir) | yes | n/a (Claude) | no | `--scope local --teardown` |
+| `project` | required | no | n/a | no | `--scope project --target <dir> --teardown` |
+| `managed` | n/a | no | n/a | yes | `--scope managed --teardown [--with-hooks]` |
 
 ```sh
 scripts/setup-config.sh --scope project --target /path/to/your/project
 # PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
 ```
 
-It writes a self-contained `.claude/` into that directory, with nothing pointing back
-into this repo. `project` scope deploys the telemetry config only and does **not**
-register the Elasticsearch MCP, keeping the foreign project's footprint minimal (the
-MCP is a `local`-scope convenience). **Caveat:** this flows that project's prompts and
-tool I/O into the lab's Elasticsearch — don't point secret-bearing work at it.
+`project` scope writes a self-contained `.claude/` into that directory (nothing pointing
+back into this repo), deploying the telemetry config **only** — it does **not** register
+the Elasticsearch MCP, keeping the foreign project's footprint minimal (the MCP is a
+`local`-scope convenience). **Caveat:** this flows that project's prompts and tool I/O
+into the lab's Elasticsearch — don't point secret-bearing work at it.
 
-### 3. Import the Kibana saved objects
+### 3. Verify the pipeline
 
-The backend and agent saved objects are the same as `claude-code-elastic` (this
-stack reuses both components unchanged); this stack adds **one** more — a data
-view for the sidecar's own metrics. These are **imported by `scripts/setup.sh`**
-(Quick Tour step 1), which runs the backend import, the agent import, then the
-sidecar (path) import, each in dependency order (data views first). To re-import
-after editing the NDJSON, just re-run `scripts/setup.sh` (idempotent). You can
-also import from the Kibana UI (Stack Management → Saved Objects → **Import**,
-data views first).
-
-This brings in the **Metrics**, **Events**, **Traces**, and **OTel Collector
-Sidecar — Metrics** data views, the curated **saved searches** (Event Overview,
-API Requests, Tool Results, …, Interactions, Traces), and the **OTel Collector
-Sidecar — Health** dashboard.
+See [Verify the pipeline](#verify-the-pipeline) and [Durable queue](#durable-queue-backend-outage-resilience)
+below. The Kibana saved objects are imported by step 1: the backend import, the agent
+import, then the sidecar (path) import, each in dependency order (data views first). To
+re-import after editing the NDJSON, re-run `scripts/setup.sh` (idempotent), or import from
+the Kibana UI (Stack Management → Saved Objects → **Import**, data views first).
 
 ### 4. See the telemetry in Kibana
 
-- **Discover** — pick the **Claude Code — Metrics** or **Events** data view, or
-  open one of the saved searches from the **Open** menu.
-- **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM
-  **service** (`claude-code`). Telemetry routed through the Collector lands here
-  exactly as the direct path does.
+- **Discover** — pick the **Claude Code — Metrics** or **Events** data view, or open one of
+  the saved searches from the **Open** menu.
+- **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM **service**
+  (`claude-code`). Telemetry routed through the Collector lands here exactly as the direct
+  path does.
 
 ### 5. Tear down
 
@@ -277,36 +241,49 @@ docker compose down -v     # also wipe ingested telemetry
 ## Verify the pipeline
 
 `scripts/smoke-test.sh` checks the full **Claude Code → Collector → APM Server →
-Elasticsearch** path end to end, following the 3A pattern: **Arrange** brings the
-stack up, waits for the backend services to report healthy, then waits for the
-Collector to accept OTLP on `:4318`; **Act** POSTs a synthetic OTLP/protobuf
-metrics + logs + traces probe (tagged `service.name = aol-smoke-test`) to the
-**Collector**, which forwards it to the APM Server; **Assert** confirms the docs
-landed in the APM data streams in Elasticsearch — proving the telemetry traversed
-the Collector. A synthetic probe is used (not a real `claude` session) so the
-check is deterministic and runnable as a gate; real telemetry travels the
-identical path under its own name.
+Elasticsearch** path end to end, following the 3A pattern: **Arrange** brings the stack up,
+waits for the backend services to report healthy, then waits for the Collector to accept
+OTLP on `:4318`; **Act** POSTs a synthetic OTLP/protobuf metrics + logs + traces probe
+(tagged `service.name = aol-smoke-test`) to the **Collector**, which forwards it to the APM
+Server; **Assert** confirms the docs landed in the APM data streams in Elasticsearch —
+proving the telemetry traversed the Collector. A synthetic probe is used (not a real
+`claude` session) so the check is deterministic and runnable as a gate; real telemetry
+travels the identical path under its own name.
 
 ```sh
 scripts/smoke-test.sh    # from anywhere — it locates its own stack directory
 ```
 
-Needs `docker` (running daemon), `curl`, `jq`, `base64`; it **SKIPs** (exit 0)
-when the daemon is unreachable. Override endpoints with `ES_URL` /
-`OTEL_COLLECTOR_URL`.
+Needs `docker` (running daemon), `curl`, `jq`, `base64`; it **SKIPs** (exit 0) when the
+daemon is unreachable. Override endpoints with `ES_URL` / `OTEL_COLLECTOR_URL`.
 
 ### Durable queue (backend-outage resilience)
 
-`scripts/resilience-test.sh` proves the on-disk queue end to end: it stops
-`apm-server` to simulate the central backend going dark, POSTs a uniquely-tagged
-probe to the Collector (which accepts and queues it), **restarts the Collector**
-(a pure in-memory queue would lose the probe here — only the file_storage queue
-survives), then starts `apm-server` again and asserts the probe drains into
-Elasticsearch. Same prerequisites and SKIP behaviour as the smoke test.
+`scripts/resilience-test.sh` proves the on-disk queue end to end: it stops `apm-server` to
+simulate the central backend going dark, POSTs a uniquely-tagged probe to the Collector
+(which accepts and queues it), **restarts the Collector** (a pure in-memory queue would
+lose the probe here — only the file_storage queue survives), then starts `apm-server` again
+and asserts the probe drains into Elasticsearch. Same prerequisites and SKIP behaviour as the
+smoke test.
 
 ```sh
 scripts/resilience-test.sh    # from anywhere — it locates its own stack directory
 ```
+
+## Data streams & assets
+
+Same backend and agent assets as [`claude-code-elastic`](../claude-code-elastic/#data-streams--assets),
+plus the sidecar's own:
+
+| Asset | Where | Notes |
+| --- | --- | --- |
+| `metrics-apm.app.*` / `logs-apm.app.*` | per-service data streams | metrics + events under `service.name: claude-code` |
+| `traces-apm-agents_claude_code` | per-agent trace data stream | spans isolated by the ingest pipelines |
+| `metrics-apm*` | sidecar self-telemetry | `otelcol_*` under `service.name: otelcol-sidecar` |
+| Data views | Metrics / Events / Traces + **OTel Collector Sidecar — Metrics** | imported by `setup.sh` |
+| Saved searches | Event Overview, API Requests, Tool Results, …, Interactions, Traces | curated |
+| Dashboard | **OTel Collector Sidecar — Health** | the sidecar's own health |
+| APM service | `claude-code` | first-class entity in the APM UI |
 
 ## Layout
 
@@ -323,17 +300,16 @@ claude-code-otelcol-elastic/
    └─ resilience-test.sh                  # durable-queue / backend-outage check (stack property)
 ```
 
-`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`),
-each calling the component façade scripts directly. The Collector
-service and its config live in `../../components/paths/otelcol-sidecar/`. The
-`elastic` backend (`../../components/backends/elastic/`) is a thin `include:` of
-the `elasticsearch` / `kibana` / `apm-server` service fragments plus a
-composition script that selects its assets — it owns no asset files. The service
-fragments under `../../components/backends/services/` own the service definitions
-and config, the asset libraries (the `traces-apm@custom` / `logs-apm.app@custom`
-ingest pipelines under `elasticsearch/`; the
-Claude Code saved-object bundle under `kibana/claude-code/` and the sidecar's
-self-telemetry data view + dashboard under `kibana/otelcol-sidecar/`), and the
-generic appliers that load them. The Claude Code agent component
-(`../../components/agents/claude-code/`) owns only agent-runtime config — the **settings template + render scripts** (the
-`.claude/settings.local.json` content), no Kibana assets.
+`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`), each
+calling the component façade scripts directly. The Collector service and its config live in
+`../../components/paths/otelcol-sidecar/`. The `elastic` backend
+(`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` /
+`kibana` / `apm-server` service fragments plus a composition script that selects its assets
+— it owns no asset files. The service fragments under `../../components/backends/services/`
+own the service definitions and config, the asset libraries (the `traces-apm@custom` /
+`logs-apm.app@custom` ingest pipelines under `elasticsearch/`; the Claude Code saved-object
+bundle under `kibana/claude-code/` and the sidecar's self-telemetry data view + dashboard
+under `kibana/otelcol-sidecar/`), and the generic appliers that load them. The Claude Code
+agent component (`../../components/agents/claude-code/`) owns only agent-runtime config —
+the settings template + render scripts (the `.claude/settings.local.json` content), no
+Kibana assets.

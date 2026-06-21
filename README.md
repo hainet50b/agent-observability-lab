@@ -12,19 +12,21 @@ A runnable lab for seeing exactly what telemetry an AI coding agent emits, and h
 
 Each stack exercises one of two concerns, and the backend it composes follows from that:
 
-- **Telemetry** — the agent's OpenTelemetry **metrics / events / traces** over OTLP, ingested by an Elastic backend that includes **APM Server**. This is the analytics view: sessions, tokens, cost, code edits, prompts, tool results, API requests.
-- **Audit** — a record of **what a session did** (each prompt, each tool call), written **directly to Elasticsearch** by fail-open agent hooks. No APM Server, no OTLP — a separate `*-elastic-audit` backend (Elasticsearch + Kibana only).
+- **Telemetry** — the agent's OpenTelemetry **metrics / events / traces** over OTLP, ingested by an Elastic backend that includes **APM Server**. The analytics view: sessions, tokens, cost, code edits, prompts, tool results, API requests.
+- **Audit** — a record of **what a session did** (each prompt, each tool call), written **directly to Elasticsearch** by fail-open agent hooks. No APM Server, no OTLP — a separate `*-elastic-audit` backend (Elasticsearch + Kibana only). See [`SPEC/agent-audit.md`](SPEC/agent-audit.md).
 
 Telemetry and audit are **alternatives, not co-run**: each owns its own agent home and Docker volumes, and all stacks share the same `aol-*` container names and host ports — so run **one stack at a time**.
 
 ## Stacks
 
-Every stack is self-contained — pick one below and follow its README: bring it up with `docker compose up -d`, run its `setup.sh`, point the agent at it, and inspect what lands in the backend.
+Five stacks — three telemetry, two audit. Pick one, follow its README: `docker compose up -d`, run its `scripts/setup.sh`, point the agent at it, inspect the backend.
 
-| Stack | Agent | Concern | Transport | Backend |
-| --- | --- | --- | --- | --- |
-| [`claude-code-elastic`](stacks/claude-code-elastic/) | Claude Code | telemetry | direct OTLP → APM Server | Elasticsearch + Kibana + APM Server |
-| [`claude-code-otelcol-elastic`](stacks/claude-code-otelcol-elastic/) | Claude Code | telemetry | via local OpenTelemetry Collector | Elasticsearch + Kibana + APM Server |
-| [`codex-cli-elastic`](stacks/codex-cli-elastic/) | Codex CLI | telemetry | direct OTLP → APM Server | Elasticsearch + Kibana + APM Server |
-| [`claude-code-elastic-audit`](stacks/claude-code-elastic-audit/) | Claude Code | audit | direct hook → Elasticsearch | Elasticsearch + Kibana |
-| [`codex-cli-elastic-audit`](stacks/codex-cli-elastic-audit/) | Codex CLI | audit | direct hook → Elasticsearch | Elasticsearch + Kibana |
+| Stack | Agent | Concern | Backend | Data-plane key (`setup.conf`) | Ports |
+| --- | --- | --- | --- | --- | --- |
+| [`claude-code-elastic`](stacks/claude-code-elastic/) | Claude Code | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |
+| [`claude-code-otelcol-elastic`](stacks/claude-code-otelcol-elastic/) | Claude Code | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.otel_collector.endpoint` (via local Collector) | 9200 / 5601 / 8200 / 4317 / 4318 |
+| [`codex-cli-elastic`](stacks/codex-cli-elastic/) | Codex CLI | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |
+| [`claude-code-elastic-audit`](stacks/claude-code-elastic-audit/) | Claude Code | audit | Elasticsearch + Kibana | `agent_audit.*` (direct hook → ES) | 9200 / 5601 |
+| [`codex-cli-elastic-audit`](stacks/codex-cli-elastic-audit/) | Codex CLI | audit | Elasticsearch + Kibana | `agent_audit.*` (direct hook → ES) | 9200 / 5601 |
+
+All five reuse the same fixed `aol-*` container names and host ports — run only one at a time. How config is deployed across the `local` / `project` / `managed` scopes is shared: see [`SPEC/config-deployment.md`](SPEC/config-deployment.md).

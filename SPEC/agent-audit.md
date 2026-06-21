@@ -28,6 +28,19 @@ logs-agent_audit.tool_call-default
 
 The audit data streams are provisioned (strict templates + data streams) and viewed (cross-agent Kibana data views / saved searches) by the **`elastic-audit`** backend — Elasticsearch + Kibana, **no APM Server**, since audit is a direct hook → Elasticsearch write that never uses the OTLP / APM path. It is composed by `<agent>-elastic-audit` stacks (e.g. `codex-cli-elastic-audit`), separate from the telemetry backend (`elastic` / `codex-cli-elastic`): same local Elasticsearch technology, but a separate compose project, separate volumes, and a separate agent home (whose `.codex` carries `config.toml` — the inline `[hooks]` registrations plus the Elasticsearch MCP — and `agent-audit.conf`, but no `[otel]` config). The split keeps each stack's load-bearing set legible; the two stacks are alternatives, not run simultaneously.
 
+**Asset inventory** (cross-agent, per stream `<s>` ∈ {`user_prompt`, `tool_call`}). ES assets live in `backends/services/elasticsearch/agent-audit/`, Kibana assets in `backends/services/kibana/agent-audit/` — the service component of the runtime that consumes each (see `SPEC.md` "Placement rule"):
+
+| Asset | File | Loaded into |
+|---|---|---|
+| ILM policy | `logs-agent_audit.<s>.ilm.json` | `_ilm/policy/logs-agent_audit.<s>` |
+| lifecycle component template | `logs-agent_audit.<s>@lifecycle.component.json` | `_component_template/…@lifecycle` (sets `index.lifecycle.name` only) |
+| mappings component template | `logs-agent_audit.<s>@mappings.component.json` | `_component_template/…@mappings` (strict mappings) |
+| index template | `logs-agent_audit.<s>.template.json` | `_index_template/…` — thin `composed_of: [@mappings, @lifecycle]` |
+| data views | `data-views.ndjson` | Kibana saved objects |
+| saved searches | `saved-searches.ndjson` | Kibana saved objects |
+
+The ES importer applies by kind — **ilm → component templates → pipelines → index templates** — so composed/referenced objects exist first, then re-syncs the resolved composed mapping onto the live stream via `_simulate_index`. (Audit has no pipelines.) See `SPEC.md` "Lifecycle (ILM)".
+
 ## User prompt documents
 
 User prompt audit documents in `logs-agent_audit.user_prompt-default` use this canonical shape:
@@ -139,18 +152,22 @@ Identity fields are populated best-effort by the hook sender, **locally and with
 
 ## Mapping and lifecycle
 
-- Audit data stream mappings are strict by default. Unexpected fields should fail indexing rather than silently expanding the audit schema.
-- Mappings are **not** inlined in the index template: each stream's strict mappings live in a dedicated `@mappings` **component template**, and the `logs-agent_audit.*` index template is a thin `composed_of: [<stream>@mappings, <stream>@lifecycle]`. This mirrors the telemetry side (per-agent templates compose APM's managed component templates) so *every* index template in the lab is a composition, never an inline blob.
-- `user.id`, `user.name`, `host.name`, `host.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id`, and `agent_audit.turn_id` are mapped as `keyword` where applicable.
-- `agent_audit.user_prompt.text` is mapped as searchable `text` in the lab.
-- `agent_audit.user_prompt.encrypted_text` is mapped as `keyword` with `index: false`; encrypted prompt bodies are stored but not searchable.
-- `agent_audit.user_prompt.length` is mapped as `long`.
-- `agent_audit.tool_call.tool.name` and `.tool.call_id` are mapped as `keyword`.
-- `agent_audit.tool_call.input.text` and `.output.text` are mapped as **`wildcard`**, not `keyword` (a tool output over Lucene's ~32 KB term limit would reject the whole document) and not `text` (the audit need is substring / regexp over machine-generated JSON, not word relevance). The prompt body stays `text` because it is natural language — mapping follows data nature, so the two streams differ deliberately.
-- `agent_audit.tool_call.input.encrypted_text` and `.output.encrypted_text` are mapped as `keyword` with `index: false`.
-- `agent_audit.tool_call.input.length` and `.output.length` are mapped as `long`.
-- Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is later sealed or capped.
-- Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
+Mappings are **strict** by default — an unexpected field fails indexing rather than silently expanding the audit schema. They are **not** inlined in the index template: each stream's strict mappings live in a dedicated `@mappings` **component template**, and the `logs-agent_audit.*` index template is a thin `composed_of: [<stream>@mappings, <stream>@lifecycle]`. This mirrors the telemetry side (per-agent templates compose APM's managed component templates) so *every* index template in the lab is a composition, never an inline blob.
+
+| Field(s) | Type | Note |
+|---|---|---|
+| `user.id` / `.name`, `host.name` / `.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id` / `.turn_id` | `keyword` | where applicable |
+| `agent_audit.user_prompt.text` | `text` | searchable; natural-language prompt body |
+| `agent_audit.user_prompt.encrypted_text` | `keyword`, `index: false` | stored, not searchable |
+| `agent_audit.user_prompt.length` | `long` | |
+| `agent_audit.tool_call.tool.name` / `.call_id` | `keyword` | |
+| `agent_audit.tool_call.input.text` / `.output.text` | **`wildcard`** | not `keyword` (a tool output over Lucene's ~32 KB term limit rejects the whole doc) and not `text` (the need is substring/regexp over machine-generated JSON, not word relevance) |
+| `agent_audit.tool_call.input.encrypted_text` / `.output.encrypted_text` | `keyword`, `index: false` | |
+| `agent_audit.tool_call.input.length` / `.output.length` | `long` | |
+
+Mapping follows data nature, so the two body fields differ deliberately: the prompt stays `text` (natural language), tool I/O is `wildcard` (machine JSON). Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is later sealed or capped.
+
+Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
 
 ## Delivery and authorization
 
