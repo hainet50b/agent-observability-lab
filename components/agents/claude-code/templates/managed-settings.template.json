@@ -1,5 +1,7 @@
 {
   "_comment": {
-    "docs": "https://code.claude.com/docs/en/settings#managed-settings"
+    "docs": [
+      "https://code.claude.com/docs/en/settings#managed-settings"
+    ]
   }
 }

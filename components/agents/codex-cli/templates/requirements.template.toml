@@ -1,5 +1,6 @@
 # docs:   https://developers.openai.com/codex/enterprise/managed-configuration
 # schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs
+
 allow_managed_hooks_only = false
 managed_dir = '@@MANAGED_DIR@@'
 windows_managed_dir = '@@WINDOWS_MANAGED_DIR@@'
