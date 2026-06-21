@@ -75,9 +75,8 @@ in one shot — it installs the trace-routing ingest pipeline (isolates Codex's
 spans into a dedicated per-agent trace stream), installs the logs-drop pipeline,
 renders a Codex `[otel]` config to `.codex/config.toml` in this directory
 (pointed at the APM Server OTLP endpoint on `:8200`), and imports the Codex Kibana
-**data views** (Metrics / Events / Traces) and **saved searches**, plus the
-shared cross-agent **AI Agents — Traces** view. Steps are idempotent /
-create-if-absent, so re-run it any time.
+**data views** (Metrics / Events / Traces) and **saved searches**. Steps are
+idempotent / create-if-absent, so re-run it any time.
 Both scripts read their target endpoints — Elasticsearch, the APM OTLP endpoint,
 and Kibana — from `setup.conf` at the stack root, or another file you pass
 (`setup.sh <config>` / `setup.ps1 -Config <config>`); they fail fast if the file
@@ -247,9 +246,9 @@ Codex session. It needs `docker` (running daemon), `curl`, `jq`, `base64`; it
 
 ### 4. See the telemetry
 
-The Codex **data views** — **Codex CLI — Metrics**, **Codex CLI — Events**,
-**Codex CLI — Traces**, and the shared **AI Agents — Traces** view — plus the
-curated saved searches are imported by `scripts/setup.sh` (Quick Tour step 1).
+The Codex **data views** — **Codex CLI — Metrics**, **Codex CLI — Events**, and
+**Codex CLI — Traces** — plus the curated saved searches are imported by
+`scripts/setup.sh` (Quick Tour step 1).
 Open Discover, pick a data view from the selector or open a saved search from the
 Open menu. (A dashboard is still deferred — see
 [What's deferred](#whats-deferred); the Traces view and the traces-based searches
@@ -278,8 +277,7 @@ docker compose down -v     # also wipe ingested telemetry
 
 Wired now: the composition, the OTLP-path smoke test, trace isolation, a real
 Codex session's `[otel]` telemetry config, the three Codex **data views**
-(Metrics / Events / Traces), the shared cross-agent **AI Agents — Traces** view,
-and the curated Codex saved searches, all loaded by the shared Kibana importer —
+(Metrics / Events / Traces), and the curated Codex saved searches, all loaded by the shared Kibana importer —
 modelled on `components/backends/services/kibana/claude-code/`. (Prompt / tool-call **audit** is the
 sibling [`codex-cli-elastic-audit`](../codex-cli-elastic-audit/) stack.) Authored
 later, with the human:
