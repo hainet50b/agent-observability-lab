@@ -1,69 +1,31 @@
 [CmdletBinding()]
 param(
-    [string]$Config,
-    [switch]$Managed
+    [string]$Scope = 'local',
+    [string]$Target,
+    [switch]$Managed,
+    [string]$Config
 )
 
 $ErrorActionPreference = 'Stop'
 
-$StackDir = Split-Path -Parent $PSScriptRoot
-$ComponentsDir = Join-Path $PSScriptRoot '../../../components'
-
-if (-not $Config) {
-    $Config = Join-Path $StackDir 'setup.conf'
-}
-if (-not (Test-Path -LiteralPath $Config -PathType Leaf)) {
-    [Console]::Error.WriteLine("FAIL: config file not found: $Config")
-    exit 2
-}
-
-foreach ($line in Get-Content -LiteralPath $Config) {
-    if ($line -match '^\s*#' -or $line -notmatch '=') {
-        continue
-    }
-    $k, $v = $line -split '=', 2
-    switch ($k.Trim()) {
-        'elasticsearch.url' {
-            $EsUrl = $v.Trim()
-        }
-        'kibana.url' {
-            $KibanaUrl = $v.Trim()
-        }
-        'apm_server.otlp_endpoint' {
-            $OtlpEndpoint = $v.Trim()
-        }
-    }
-}
-foreach ($req in @{ 'elasticsearch.url' = $EsUrl; 'kibana.url' = $KibanaUrl; 'apm_server.otlp_endpoint' = $OtlpEndpoint }.GetEnumerator()) {
-    if (-not $req.Value) {
-        [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key '$($req.Key)'.")
-        exit 2
-    }
-}
-
-$env:ES_URL = $EsUrl
-$env:KIBANA_URL = $KibanaUrl
-
-filter Indent { "  $_" }
-
-Write-Host '[setup] 1/3 - Elasticsearch backend assets'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -Sources 'codex-cli' 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 2/3 - Codex session config'
-& (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $StackDir -OtlpEndpoint $OtlpEndpoint 6>&1 | Indent
-
-Write-Host ''
-Write-Host '[setup] 3/3 - Kibana saved objects'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex-cli' 6>&1 | Indent
-
 if ($Managed) {
-    Write-Host ''
-    Write-Host '[setup] managed-config placement (interactive, opt-in)'
-    & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') `
-        -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
+    $Scope = 'managed'
 }
 
+$backendArgs = @{}
+if ($Config) {
+    $backendArgs['Config'] = $Config
+}
+& (Join-Path $PSScriptRoot 'setup-backend.ps1') @backendArgs
 
+Write-Host ''
 
+$configArgs = @{ Scope = $Scope }
+if ($Target) {
+    $configArgs['Target'] = $Target
+}
+if ($Config) {
+    $configArgs['Config'] = $Config
+}
+& (Join-Path $PSScriptRoot 'setup-config.ps1') @configArgs
 

@@ -1284,6 +1284,39 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>Config-deployment 1/4: split <code>setup-backend</code> / <code>setup-config</code>, add <code>--scope</code> / <code>--target</code></h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Where compose-up landed.</strong> No stack's <code>setup.sh</code> previously ran <code>docker compose up</code> — it was a manual Quick-Tour step (or done by the smoke test). <code>SPEC/config-deployment.md</code> defines <code>setup-backend</code> as "bring the backend up (docker compose up) and load its assets," so I put compose-up into <code>setup-backend</code>. This makes <code>setup.sh</code> self-sufficient (up → import → deploy config) and is additive/idempotent — the README's separate <code>docker compose up -d</code> step is now redundant but harmless, and the smoke tests (which do their own up) stay green. I used <code>docker compose up -d --wait</code> rather than hand-rolling a health loop: <code>--wait</code> blocks until healthy (and treats the healthcheck-less otel collector as ready when running), so the asset imports never race ES/Kibana startup.</li>
+    <li><strong>Each sub-script reads its own config.</strong> The SPEC requires <code>setup-config</code> to be independently runnable with no backend ("managed-only without a backend is <code>setup-config --scope managed</code>"). So <code>setup-backend</code> and <code>setup-config</code> each discover/parse <code>setup.conf</code> (or take a positional/<code>-Config</code> override) and validate only the keys they use; <code>setup.sh</code> is a thin composition that parses <code>--scope</code>/<code>--target</code>/config and forwards them. This mirrors the existing per-stack inline-parse pattern rather than introducing a shared lib.</li>
+    <li><strong><code>--target</code> = the agent façade's existing <code>&lt;agent_home&gt;</code> arg.</strong> The agent <code>setup-telemetry</code>/<code>setup-audit</code> façades already take a target directory, so <code>--target</code> wiring is just "default to the stack dir, else the passed dir." Per the task, no materialize change yet (that is 2/4) — local-scope with no target reproduces today's stack-local deployment exactly (verified: render scripts are create-if-absent and reported "kept existing").</li>
+    <li><strong><code>--scope managed</code> coverage.</strong> Routed to the agent's <code>setup-managed</code> on the three telemetry stacks (claude-code-elastic, claude-code-otelcol-elastic — using its collector endpoint, codex-cli-elastic). The two audit stacks have no managed telemetry surface — managed audit hooks are deploy 4/4 — so their <code>setup-config</code> rejects <code>--scope managed</code> with a clear "not wired yet — see PRD deploy 4/4" message rather than silently no-op. Kept the legacy <code>--managed</code> flag as an alias for <code>--scope managed</code> so the stack READMEs' documented <code>setup.sh --managed</code> invocation keeps working.</li>
+    <li><strong>PowerShell composition via splatting.</strong> <code>setup.ps1</code> builds a hashtable of only the set parameters and splats it into the sub-scripts, so an unset <code>-Target</code>/<code>-Config</code> isn't forwarded as empty. <code>setup-backend.ps1</code> wraps the compose-up in <code>Push-Location</code>/<code>try…finally Pop-Location</code> so <code>$PWD</code> is restored on every exit path (consistent with the earlier Set-Location-leak fix).</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>Line-ending tooling on this Git-Bash host is genuinely unreliable: both <code>grep -c $'\r'</code> and <code>od -c | grep '\r'</code> reported phantom CRs on files that were clean LF. Python reading raw bytes was the only authoritative measure (all 15 new <code>.sh</code> confirmed LF, 0 CRLF). Worth remembering for future line-ending checks here.</li>
+    <li>The otelcol stack's <code>resilience-test.sh</code> was not re-run (it stops/starts apm-server and is not a <code>smoke-test</code>/<code>verify-*</code> per the gate); the setup split does not touch the collector config or that script, so it is unaffected. Its <code>smoke-test.sh</code> passed.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>deploy 3/4 (arbitrary <code>--target</code>) should update the stack READMEs' Quick Tour — at that point the now-redundant manual <code>docker compose up -d</code> step can be dropped (since <code>setup-backend</code> covers it) and the <code>--scope</code>/<code>--target</code> usage documented.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>Each stack's <code>setup.sh</code>/<code>setup.ps1</code> is now a thin composition over two new scripts: <code>setup-backend</code> (compose up <code>--wait</code> + ES/Kibana asset imports) and <code>setup-config</code> (deploy the agent bundle to a <code>--target</code>, <code>--scope local|managed</code>). Running <code>setup.sh</code> with no flags behaves as before. Verified end-to-end on all five stacks (setup + smoke/verify all PASS), the live backend was cycled per stack and restored to claude-code-elastic afterward.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>Decision to fold <code>docker compose up --wait</code> into <code>setup-backend</code> (per the SPEC). It changes the documented two-step flow into a one-command setup; the manual <code>docker compose up</code> in each README is now redundant (harmless). If you'd prefer <code>setup-backend</code> to assume the stack is already up (no compose-up), say so and I'll drop it.</li>
+    <li>Audit stacks reject <code>--scope managed</code> for now (deploy 4/4 territory). Telemetry stacks route it to the interactive <code>setup-managed</code> (which still aborts non-TTY, places nothing under Ralph).</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
