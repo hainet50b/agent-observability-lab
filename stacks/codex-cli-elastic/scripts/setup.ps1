@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$Config
+    [string]$Config,
+    [switch]$Managed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,4 +56,11 @@ Write-Host '[setup] 2/3 - Codex session config'
 Write-Host ''
 Write-Host '[setup] 3/3 - Kibana saved objects'
 & (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex-cli' 6>&1 | Indent
+
+if ($Managed) {
+    Write-Host ''
+    Write-Host '[setup] managed-config placement (interactive, opt-in)'
+    & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') -Stack 'codex-cli-elastic' -Endpoint $OtlpEndpoint
+}
+
 

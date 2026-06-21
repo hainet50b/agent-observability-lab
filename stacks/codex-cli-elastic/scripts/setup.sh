@@ -5,7 +5,15 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 stack_dir=$(cd -- "$script_dir/.." && pwd)
 components_dir="$script_dir/../../../components"
 
-config=${1:-$stack_dir/setup.conf}
+managed=0
+config=""
+for arg in "$@"; do
+  case $arg in
+  --managed) managed=1 ;;
+  *) config=$arg ;;
+  esac
+done
+config=${config:-$stack_dir/setup.conf}
 [ -f "$config" ] || {
   echo "FAIL: config file not found: $config" >&2
   exit 2
@@ -39,3 +47,9 @@ echo "[setup] 2/3 — Codex session config"
 echo
 echo "[setup] 3/3 — Kibana saved objects"
 "$components_dir/backends/elastic/scripts/setup-kibana.sh" codex-cli | indent
+
+if [ "$managed" -eq 1 ]; then
+  echo
+  echo "[setup] managed-config placement (interactive, opt-in)"
+  "$components_dir/agents/codex-cli/scripts/setup-managed.sh" --stack codex-cli-elastic --endpoint "$otlp_endpoint"
+fi

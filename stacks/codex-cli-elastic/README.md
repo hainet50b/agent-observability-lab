@@ -125,6 +125,59 @@ register telemetry **globally** instead, copy the `[otel]` block from
 `.codex/config.toml` into your own `~/.codex/config.toml`. Then do a little work
 in the session; telemetry lands in Elasticsearch under `service.name: codex-cli`.
 
+#### Org enforcement via managed config (opt-in)
+
+`CODEX_HOME` and a user `config.toml` are **user-level** — the way an
+administrator pushes config onto a fleet is Codex's machine-global, highest-precedence
+managed layer. This stack can place those files for you — **opt-in, always
+interactive, never destructive**. Two files, with **different power** (be honest
+about which actually enforces):
+
+- **`requirements.toml`** — **ENFORCED.** A conflicting user value is dropped to
+  a compatible one and the user is told. This stack's template pins managed audit
+  hooks (`allow_managed_hooks_only`, `[features].hooks = true`) and the
+  allowed sandbox / approval policies. Lives at `/etc/codex/requirements.toml`
+  (Linux/macOS) or `%ProgramData%\OpenAI\Codex\requirements.toml` (Windows — a
+  fixed system path, the only enforceable local layer).
+- **`managed_config.toml`** — a managed **default**, *not* enforced: the `[otel]`
+  telemetry block is applied at launch but a user can change it in-session (it
+  reverts next start). **Codex cannot enforce `[otel]`** — unlike Claude Code's
+  `managed-settings.json`, which can. On Windows this file sits under
+  `~/.codex` (user-writable), so it is a weak boundary. Lives at
+  `/etc/codex/managed_config.toml` (Linux/macOS) or `~/.codex/managed_config.toml`
+  (Windows).
+
+Placement **refuses to overwrite any file the lab did not place** (tracked by a
+sidecar `.lab-managed` marker — the path may already hold your real
+organization's MDM-pushed config) and prompts before writing. There is **no
+`--yes`**; a non-interactive shell aborts having changed nothing, and permission
+errors fail loud with the privileged command to run by hand. The managed audit
+hooks reference scripts in `managed_dir` (set to the lab's
+`components/agents/codex-cli/hooks/`); a real deploy also delivers the rendered
+`agent-audit.conf` there.
+
+Place it via `setup.sh --managed` (runs after the normal setup steps) or directly:
+
+```sh
+../../components/agents/codex-cli/scripts/setup-managed.sh \
+  --stack codex-cli-elastic --endpoint http://localhost:8200
+```
+
+```powershell
+..\..\components\agents\codex-cli\scripts\setup-managed.ps1 `
+  -Stack codex-cli-elastic -Endpoint http://localhost:8200
+```
+
+Remove it (restores the host, removes only the lab-placed files + their markers):
+
+```sh
+../../components/agents/codex-cli/scripts/teardown-managed.sh --stack codex-cli-elastic
+```
+
+```powershell
+..\..\components\agents\codex-cli\scripts\teardown-managed.ps1 -Stack codex-cli-elastic
+```
+
 > **Prompt / tool-call audit is a separate stack.** Capturing what a session did
 > (each prompt, each tool call) via fail-open hooks that write straight to
 > Elasticsearch is the **audit** concern — it lives in the sibling

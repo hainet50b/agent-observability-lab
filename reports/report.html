@@ -981,6 +981,69 @@ constraint); (2) the <code>--managed</code> wiring in <code>setup.{sh,ps1}</code
 on the explicit flag and only after the automated steps, so the normal setup flow is untouched.</p>
 </section>
 
+<section>
+<h2>(managed 3/3) Codex CLI <code>requirements.toml</code> + <code>managed_config.toml</code></h2>
+
+<h3>Judgement points</h3>
+<p>This mirrors the Claude managed 2/3 work on the shared placement primitive, with three
+Codex-specific calls. (1) <strong>Two files in one manifest.</strong> Codex's managed surface is
+split across <code>requirements.toml</code> (enforced) and <code>managed_config.toml</code> (soft
+default), so the adapter's <code>mc_manifest</code> emits <em>two</em> rows and the setup façade
+renders <em>two</em> temp sources (<code>mc_source_requirements</code> /
+<code>mc_source_managed_config</code>) — the shared core already loops a multi-line manifest, so no
+core change was needed. (2) <strong>Per-file platform paths.</strong> Unlike Claude's single path,
+the two Codex files diverge on Windows — <code>requirements.toml</code> at
+<code>%ProgramData%\OpenAI\Codex\</code> (the enforceable system path) but
+<code>managed_config.toml</code> at <code>~/.codex\</code> (the weak, user-writable boundary). The
+<code>.ps1</code> adapter resolves these via <code>$env:ProgramData</code> / <code>$HOME</code>; the
+<code>.sh</code> adapter handles only Linux/macOS (both under <code>/etc/codex/</code>) and defers
+Windows to the <code>.ps1</code>, exactly as the Claude adapter does. (3) <strong>requirements.toml
+content.</strong> It demonstrates the enforceable set the SPEC lists — managed audit hooks
+(reusing the same hook command shape as <code>hooks.template.toml</code>),
+<code>allow_managed_hooks_only</code>, <code>[features].hooks = true</code>, and allowed
+sandbox/approval policies — with <code>managed_dir</code> pointed at the lab's
+<code>components/agents/codex-cli/hooks/</code>. <code>[otel]</code> is deliberately kept out of
+requirements and placed only in <code>managed_config.toml</code>, with both templates carrying an
+honest header comment that telemetry is a default, not enforceable (the asymmetry with Claude).
+Stack opt-in went into <code>codex-cli-elastic</code> (the telemetry stack), paralleling Claude's
+choice. Per the task, nothing was executed against the host — verification is static gates plus the
+template render checked by inspection.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>The managed audit hooks reference <code>agent-audit.conf</code> inside <code>managed_dir</code>,
+but this placement script does not render/deliver that conf (the audit stack renders it into an
+agent home). A real managed deploy must also drop <code>agent-audit.conf</code> into
+<code>managed_dir</code> — noted in the README, but not automated here. The repo-wide
+<code>Invoke-Formatter</code> "mixed line endings" error persists on Windows CRLF inputs (it returns
+null instead of reformatting); confirmed harmless — the new <code>.ps1</code> files are
+formatter-idempotent on LF-normalized content and <code>Invoke-ScriptAnalyzer</code> is clean.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>(1) A follow-up could let <code>setup-managed</code> also stage <code>agent-audit.conf</code> into
+the managed-hooks directory so the requirements.toml managed hooks are runnable end-to-end, closing
+the gap noted above. (2) The Codex <code>requirements.toml</code> sandbox/approval policy values are
+placeholders chosen for illustration; a future task with the human could pin the exact org posture
+the lab wants to demonstrate.</p>
+
+<h3>Change summary</h3>
+<p>The Codex CLI stack can now place (and tear down) its admin-managed config — two files via one
+opt-in, always-interactive step (<code>setup.sh --managed</code> on <code>codex-cli-elastic</code>,
+or the <code>setup-managed</code>/<code>teardown-managed</code> scripts directly):
+<code>requirements.toml</code> (enforced managed hooks + sandbox/approval) and
+<code>managed_config.toml</code> (the soft <code>[otel]</code> telemetry default). It reuses the
+shared never-overwrite/provenance-marker primitive, and the templates state honestly that Codex
+cannot enforce telemetry the way Claude's <code>managed-settings.json</code> can.</p>
+
+<h3>Review highlights</h3>
+<p>Two things worth a glance: (1) the <code>requirements.toml</code> template content — confirm the
+demonstrated enforced set (managed hooks, <code>allow_managed_hooks_only</code>,
+<code>[features].hooks</code>, allowed sandbox/approval policies) is the posture you want to show,
+and that pointing <code>managed_dir</code> at the in-repo hooks dir reads correctly for the lab; (2)
+the honesty framing across the two templates and the README's "Org enforcement via managed config"
+subsection — that the <code>[otel]</code>/telemetry asymmetry (default-only on Codex vs enforceable
+on Claude) and the Windows weak-boundary note land the way you intend.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
