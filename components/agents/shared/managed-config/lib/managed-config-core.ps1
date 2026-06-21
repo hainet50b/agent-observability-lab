@@ -230,4 +230,18 @@ function Invoke-McTeardown {
     if ($items.Count -eq 0) { Write-McFatal "manifest empty for os '$os' — nothing to remove" }
     foreach ($item in $items) { Remove-McManagedFile $item }
     if ($script:McFailed) { Write-McFatal 'one or more managed files were refused (see above)' }
+
+    try {
+        $root = Get-McManagedRoot $os
+        if (Test-Path -LiteralPath $root) {
+            Get-ChildItem -LiteralPath $root -Recurse -Directory -Force |
+                Sort-Object { $_.FullName.Length } -Descending |
+                ForEach-Object { if (-not (Get-ChildItem -LiteralPath $_.FullName -Force)) { Remove-Item -LiteralPath $_.FullName -Force } }
+            if (-not (Get-ChildItem -LiteralPath $root -Force)) {
+                Remove-Item -LiteralPath $root -Force
+                Write-McLog "removed empty managed root $root"
+            }
+        }
+    }
+    catch { Write-McLog "could not remove empty managed root (left in place): $_" }
 }

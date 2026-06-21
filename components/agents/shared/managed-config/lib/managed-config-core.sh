@@ -299,4 +299,11 @@ managed_config::teardown() {
 $manifest_lines
 EOF
   [ "$failed" -eq 0 ] || managed_config::die "one or more managed files were refused (see above)"
+
+  local root
+  root=$(managed_config::managed_root "$os")
+  if [ -d "$root" ]; then
+    find "$root" -depth -type d -empty -delete 2>/dev/null || true
+    [ -d "$root" ] || managed_config::log "removed empty managed root $root"
+  fi
 }
