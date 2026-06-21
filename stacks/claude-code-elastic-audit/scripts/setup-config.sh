@@ -32,18 +32,44 @@ config=${config:-$stack_dir/setup.conf}
 
 while IFS='=' read -r key val; do
   case $key in
-  elasticsearch.url) ES_URL=$val ;;
+  agent_audit.elasticsearch.url) AUDIT_ES_URL=$val ;;
+  agent_audit.elasticsearch.timeout_ms) AUDIT_TIMEOUT_MS=$val ;;
+  agent_audit.capture.user_prompt.enabled) AUDIT_UP_ENABLED=$val ;;
+  agent_audit.capture.user_prompt.content) AUDIT_UP_CONTENT=$val ;;
+  agent_audit.capture.tool_call.enabled) AUDIT_TC_ENABLED=$val ;;
+  agent_audit.capture.tool_call.content) AUDIT_TC_CONTENT=$val ;;
   esac
 done <"$config"
-[ -n "${ES_URL:-}" ] || {
-  echo "FAIL: $config: missing or empty key 'elasticsearch.url'." >&2
-  exit 2
-}
+for kv in \
+  "agent_audit.elasticsearch.url=${AUDIT_ES_URL:-}" \
+  "agent_audit.elasticsearch.timeout_ms=${AUDIT_TIMEOUT_MS:-}" \
+  "agent_audit.capture.user_prompt.enabled=${AUDIT_UP_ENABLED:-}" \
+  "agent_audit.capture.user_prompt.content=${AUDIT_UP_CONTENT:-}" \
+  "agent_audit.capture.tool_call.enabled=${AUDIT_TC_ENABLED:-}" \
+  "agent_audit.capture.tool_call.content=${AUDIT_TC_CONTENT:-}"; do
+  [ -n "${kv#*=}" ] || {
+    echo "FAIL: $config: missing or empty key '${kv%%=*}'." >&2
+    exit 2
+  }
+done
+
+# Optional secret overlay (gitignored): agent_audit.elasticsearch.api_key.
+# Absent file or key -> empty, no error.
+AUDIT_API_KEY=""
+local_config="$stack_dir/setup.local.conf"
+if [ -f "$local_config" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in
+    agent_audit.elasticsearch.api_key=*) AUDIT_API_KEY=${line#agent_audit.elasticsearch.api_key=} ;;
+    esac
+  done <"$local_config"
+fi
 
 case $scope in
 local)
   target=${target:-$stack_dir}
-  "$components_dir/agents/claude-code/scripts/setup-audit.sh" "$target" "$ES_URL"
+  "$components_dir/agents/claude-code/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
+    "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
   ;;
 managed)
   echo "FAIL: managed scope (audit hooks) is not wired yet — see PRD deploy 4/4." >&2

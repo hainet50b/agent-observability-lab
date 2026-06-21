@@ -298,7 +298,7 @@ later, with the human:
 ```
 codex-cli-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
-├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / APM OTLP / Kibana)
+├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (APM OTLP)
 └─ scripts/
    ├─ setup.sh                            # bootstrap: trace routing + logs-drop + Codex config + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh

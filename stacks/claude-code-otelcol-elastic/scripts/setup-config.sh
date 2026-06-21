@@ -46,11 +46,11 @@ config=${config:-$stack_dir/setup.conf}
 
 while IFS='=' read -r key val; do
   case $key in
-  collector.otlp_endpoint) otlp_endpoint=$val ;;
+  telemetry.otlp_endpoint) otlp_endpoint=$val ;;
   esac
 done <"$config"
 [ -n "${otlp_endpoint:-}" ] || {
-  echo "FAIL: $config: missing or empty key 'collector.otlp_endpoint'." >&2
+  echo "FAIL: $config: missing or empty key 'telemetry.otlp_endpoint'." >&2
   exit 2
 }
 

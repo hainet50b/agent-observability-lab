@@ -85,9 +85,16 @@ hooks in `.claude/settings.local.json`, renders the hook delivery config to
 `.claude/agent-audit.conf`, writes the Elasticsearch MCP to `.mcp.json` (all in this
 directory), and imports the Agent Audit Kibana **data views** and **saved searches**.
 Steps are idempotent / create-if-absent, so re-run it any time. Both scripts read
-their target endpoints — Elasticsearch and Kibana — from `setup.conf` at the stack
-root, or another file you pass (`setup.sh <config>` / `setup.ps1 -Config <config>`);
-they fail fast if the file is missing or a key is empty rather than assuming localhost.
+their endpoints from `setup.conf` at the stack root, or another file you pass
+(`setup.sh <config>` / `setup.ps1 -Config <config>`), and fail fast if the file is
+missing or a required key is empty rather than assuming localhost. `setup.conf` is
+two planes: a **control plane** (`elasticsearch.url`, `kibana.url` — backend +
+Elasticsearch MCP) and an **agent data plane** — the audit hook's required
+`agent_audit.*` keys (`agent_audit.elasticsearch.url`, `.timeout_ms`, and the four
+`agent_audit.capture.{user_prompt,tool_call}.{enabled,content}` posture values; no
+fallback to `elasticsearch.url`). The hook's Elasticsearch **API key** is a secret:
+it lives only in a gitignored `setup.local.conf` (copy `setup.local.conf.example`);
+absent → empty, which is fine for this security-disabled demo backend.
 
 ### 2. Point a Claude session at the stack
 
@@ -189,7 +196,8 @@ Authored later, with the human:
 ```
 claude-code-elastic-audit/
 ├─ docker-compose.yml                     # thin composition: `include:`s the elastic-audit backend component
-├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / Kibana)
+├─ setup.conf                             # control plane (Elasticsearch / Kibana) + agent data plane (agent_audit.*)
+├─ setup.local.conf.example               # template for the gitignored setup.local.conf (audit api_key secret)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
    ├─ setup.sh                            # bootstrap: audit streams + settings.local.json (hooks) + agent-audit.conf + .mcp.json + Kibana import

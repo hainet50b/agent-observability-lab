@@ -31,13 +31,13 @@ foreach ($line in Get-Content -LiteralPath $Config) {
     }
     $k, $v = $line -split '=', 2
     switch ($k.Trim()) {
-        'collector.otlp_endpoint' {
+        'telemetry.otlp_endpoint' {
             $OtlpEndpoint = $v.Trim()
         }
     }
 }
 if (-not $OtlpEndpoint) {
-    [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key 'collector.otlp_endpoint'.")
+    [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key 'telemetry.otlp_endpoint'.")
     exit 2
 }
 

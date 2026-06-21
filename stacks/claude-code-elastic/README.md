@@ -363,7 +363,7 @@ claude mcp add elasticsearch -- `
 ```
 claude-code-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
-├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / APM OTLP / Kibana)
+├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (APM OTLP)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh

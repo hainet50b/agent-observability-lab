@@ -303,7 +303,7 @@ scripts/resilience-test.sh    # from anywhere — it locates its own stack direc
 ```
 claude-code-otelcol-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
-├─ setup.conf                             # endpoints setup.{sh,ps1} target (Elasticsearch / Collector OTLP / Kibana)
+├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (Collector OTLP)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import (3 components)
    ├─ setup.ps1                           # PowerShell mirror of setup.sh

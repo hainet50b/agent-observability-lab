@@ -30,6 +30,17 @@ Two concerns, kept separate:
 
 `setup.sh` is retained as their **composition** (`setup-backend` then `setup-config`) and forwards `--scope` / `--target`. `--scope` defaults to `local`. The backend must already be up (`docker compose up -d`) before running it. Managed-only **without** a backend is the standalone **`setup-config --scope managed`**.
 
+## setup.conf — two planes
+
+Each stack's `setup.conf` is the single source for the values the setup scripts read, grouped into two clearly commented planes:
+
+- **Control plane** (all stacks): `elasticsearch.url` and `kibana.url` — the backend endpoints `setup-backend` waits on and loads assets into. The **Elasticsearch MCP reuses `elasticsearch.url`** (there is no separate MCP key).
+- **Agent data plane** (where the agent ships data): the key differs by stack kind.
+  - **Telemetry stacks** (`claude-code-elastic`, `codex-cli-elastic`, `claude-code-otelcol-elastic`) carry **`telemetry.otlp_endpoint`** — the OTLP base from which `setup-config` builds the three `/v1/{logs,traces,metrics}` URLs. (Named for symmetry across stacks; the APM-Server stacks point it at `:8200`, the Collector stack at `:4318`.)
+  - **Audit stacks** (`claude-code-elastic-audit`, `codex-cli-elastic-audit`) carry the **required** `agent_audit.*` keys — `agent_audit.elasticsearch.url`, `agent_audit.elasticsearch.timeout_ms`, and `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}` — read fail-fast (no fallback to `elasticsearch.url`). See [`agent-audit.md`](agent-audit.md).
+
+The one **secret** value — the audit `agent_audit.elasticsearch.api_key` — is never in `setup.conf`. It lives only in a gitignored **`setup.local.conf`** (each audit stack ships a committed `setup.local.conf.example` with an empty value); absent file or key → empty, no error.
+
 ## Managed materialize is staged
 
 What a managed deployment materializes depends on what it enforces:
