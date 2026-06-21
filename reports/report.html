@@ -1348,6 +1348,36 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>Config-deployment 3/4: <code>local --target &lt;dir&gt;</code> into an arbitrary project</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>The mechanism was already complete after 1/4 + 2/4 — this task was verify + document.</strong> <code>--target</code> plumbing landed in 1/4 (it defaults to the stack dir, else the passed dir) and 2/4 made the bundle self-contained. So deploying into an arbitrary dir is just <code>setup-config --scope local --target &lt;dir&gt;</code>; I added no new script logic, only confirmed the behaviour and wrote the docs.</li>
+    <li><strong>Verified against a real scratch dir, not in theory.</strong> Deployed both a telemetry bundle (claude-code-elastic) and an audit bundle (claude-code-elastic-audit) into fresh scratch directories. The telemetry target got <code>.claude/settings.local.json</code> (OTLP <code>env</code> pointing at the lab's <code>:8200</code>) + <code>.mcp.json</code>; the audit target got the full <code>.claude/hooks/</code> tree (entry + core + adapter, both shells) + conf + mcp. A <code>grep</code> for <code>components/agents</code> across both targets returned nothing — genuinely self-contained. (An initial grep for the repo name was a false positive: the scratchpad path literally contains "agent-observability-lab".)</li>
+    <li><strong>Backend not required for the deploy itself.</strong> <code>setup-config</code> only renders files; it does not need the stack up. So the scratch-dir verification ran without cycling any backend — useful, since the deploy-into-a-project use case is "configure now, run your work later."</li>
+    <li><strong>Docs in each stack README, caveat included; scripts stay silent.</strong> Added a short "Deploy this config/bundle into your own project (<code>--target</code>)" subsection to all five stack READMEs (tailored: telemetry vs audit, <code>.claude</code> vs <code>.codex</code>, Collector endpoint for otelcol), each carrying the SPEC's sensitive-content caveat ("flows that project's prompts and tool I/O into the lab's Elasticsearch — don't point secret-bearing work at it"). Per the task, the caveat lives only in docs; the scripts do not emit it.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>The five README subsections are near-identical by necessity (the capability is the same per stack, and the lab keeps each stack README self-contained). Kept each to a tight block to limit the duplication CONVENTIONS warns about.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>deploy 4/4 (managed audit-hook materialization) is the last in the series and is explicitly human-gated — it needs a one-time manual host check that an absolute Claude hook <code>command</code> path works, and no automated host execution.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>You can now run <code>scripts/setup-config.sh --scope local --target /path/to/project</code> (or the <code>.ps1</code>) from any stack to drop that stack's self-contained agent bundle — pointing at the lab backend — into a real project, to see/audit what your everyday work emits. Verified end-to-end into scratch dirs (telemetry + audit, both self-contained); each stack README documents the use and the sensitive-content caveat.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>README placement: I put the note as a <code>####</code> subsection under each "Point a session at the stack" step (just before "### 3"). If you'd rather it be its own numbered step or a single shared section, say so.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

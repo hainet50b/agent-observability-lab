@@ -118,6 +118,21 @@ Claude completes is reshaped into a canonical `agent_audit.*` document and POSTe
 captured text in **plaintext** for searchability; production-oriented deployments
 should use encrypted content and restricted read access.
 
+#### Deploy this audit bundle into your own project (`--target`)
+
+The audit bundle is a self-contained copy — hook entry, shared core, and adapter all
+materialized — so you can deploy it into **any** directory (e.g. a real project) to
+audit what your everyday work does, against this lab's Elasticsearch:
+
+```sh
+scripts/setup-config.sh --scope local --target /path/to/your/project
+# PowerShell: scripts/setup-config.ps1 -Scope local -Target C:\path\to\your\project
+```
+
+The target gets its own `.claude/hooks/` (entry + core + adapter), with nothing pointing
+back into this repo. **Caveat:** this captures that project's prompts and tool I/O into
+the lab's Elasticsearch — don't point secret-bearing work at it.
+
 ### 3. Verify the audit path (optional)
 
 ```sh

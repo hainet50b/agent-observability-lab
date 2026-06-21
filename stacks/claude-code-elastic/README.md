@@ -232,6 +232,21 @@ Then run `claude` from a configured shell/directory and do a little work (ask a
 question, let it read or edit a file). Telemetry flushes on the export interval,
 so data lands within ~10–30s.
 
+#### Deploy this config into your own project (`--target`)
+
+The bundle generated above is self-contained, so you can deploy the same telemetry
+config into **any** directory — e.g. a real project — to see what your everyday work
+emits against this lab's backend:
+
+```sh
+scripts/setup-config.sh --scope local --target /path/to/your/project
+# PowerShell: scripts/setup-config.ps1 -Scope local -Target C:\path\to\your\project
+```
+
+It writes a self-contained `.claude/` into that directory, with nothing pointing back
+into this repo. **Caveat:** this flows that project's prompts and tool I/O into the
+lab's Elasticsearch — don't point secret-bearing work at it.
+
 ### 3. Import the Kibana saved objects
 
 Already done by `scripts/setup.sh` (step 1): it imports the Claude Code data

@@ -214,6 +214,21 @@ configurations work the same way as in `claude-code-elastic` — just with the
 little work; telemetry flushes on the export interval, so data lands within
 ~10–30s (the Collector adds only a brief batching delay).
 
+#### Deploy this config into your own project (`--target`)
+
+The bundle generated above is self-contained, so you can deploy the same telemetry
+config (pointing at this stack's **Collector**) into **any** directory — e.g. a real
+project — to see what your everyday work emits:
+
+```sh
+scripts/setup-config.sh --scope local --target /path/to/your/project
+# PowerShell: scripts/setup-config.ps1 -Scope local -Target C:\path\to\your\project
+```
+
+It writes a self-contained `.claude/` into that directory, with nothing pointing back
+into this repo. **Caveat:** this flows that project's prompts and tool I/O into the
+lab's Elasticsearch — don't point secret-bearing work at it.
+
 ### 3. Import the Kibana saved objects
 
 The backend and agent saved objects are the same as `claude-code-elastic` (this

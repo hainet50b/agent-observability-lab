@@ -200,6 +200,21 @@ Remove it (restores the host, removes only the lab-placed files + their markers)
 > writing `codex exec` emits no metrics and `codex mcp-server` emits none — so use
 > the interactive REPL to see signals flow.
 
+#### Deploy this config into your own project (`--target`)
+
+The bundle generated above is self-contained, so you can deploy the same Codex `[otel]`
+config into **any** directory — e.g. a real project — to see what your everyday work
+emits against this lab's backend:
+
+```sh
+scripts/setup-config.sh --scope local --target /path/to/your/project
+# PowerShell: scripts/setup-config.ps1 -Scope local -Target C:\path\to\your\project
+```
+
+It writes a self-contained `.codex/` into that directory, with nothing pointing back
+into this repo. **Caveat:** this flows that project's prompts and tool I/O into the
+lab's Elasticsearch — don't point secret-bearing work at it.
+
 ### 3. Verify the OTLP path (optional)
 
 ```sh
