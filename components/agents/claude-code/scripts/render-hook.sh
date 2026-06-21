@@ -11,7 +11,8 @@ fi
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/templates/hook.template.json"
-ENTRY="$COMPONENT_DIR/hooks/agent-audit.sh"
+HOOKS_SRC="$COMPONENT_DIR/hooks"
+CORE_SRC="$COMPONENT_DIR/../shared/agent-audit/lib"
 out="$target/.claude/settings.local.json"
 
 [ -f "$TEMPLATE" ] || {
@@ -26,6 +27,15 @@ fi
 
 mkdir -p "$target/.claude"
 target_abs=$(cd -- "$target" && pwd)
+
+hooks_dst="$target_abs/.claude/hooks"
+mkdir -p "$hooks_dst/lib"
+cp "$HOOKS_SRC/agent-audit.sh" "$HOOKS_SRC/agent-audit.ps1" "$hooks_dst/"
+cp "$HOOKS_SRC/lib/adapter.sh" "$HOOKS_SRC/lib/adapter.ps1" "$hooks_dst/lib/"
+cp "$CORE_SRC/agent-audit-core.sh" "$CORE_SRC/agent-audit-core.ps1" "$hooks_dst/lib/"
+chmod +x "$hooks_dst/agent-audit.sh"
+ENTRY="$hooks_dst/agent-audit.sh"
+
 conf="$target_abs/.claude/agent-audit.conf"
 user_prompt_cmd="$ENTRY --stream user_prompt --config $conf"
 tool_call_cmd="$ENTRY --stream tool_call --config $conf"

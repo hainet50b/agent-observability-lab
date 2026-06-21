@@ -12,8 +12,7 @@ $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir = Split-Path -Parent $ScriptDir
-$RepoRoot = Split-Path -Parent (Split-Path -Parent $StackDir)
-$HookPs1 = Join-Path $RepoRoot 'components/agents/claude-code/hooks/agent-audit.ps1'
+$HookPs1 = Join-Path $StackDir '.claude/hooks/agent-audit.ps1'
 $ClaudeHome = Join-Path $StackDir '.claude'
 $Settings = Join-Path $ClaudeHome 'settings.local.json'
 
@@ -127,4 +126,5 @@ try {
 finally {
     Pop-Location
 }
+
 

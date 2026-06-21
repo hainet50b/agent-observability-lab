@@ -7,8 +7,7 @@ DATA_STREAM=logs-agent_audit.user_prompt-default
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-REPO_ROOT=$(cd -- "$STACK_DIR/../.." && pwd)
-HOOK="$REPO_ROOT/components/agents/codex-cli/hooks/agent-audit.sh"
+HOOK="$STACK_DIR/.codex/hooks/agent-audit.sh"
 CODEX_HOME_DIR="$STACK_DIR/.codex"
 cd "$STACK_DIR"
 

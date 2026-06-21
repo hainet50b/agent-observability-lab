@@ -7,7 +7,8 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 $Template = Join-Path (Join-Path $ComponentDir 'templates') 'hook.template.json'
-$Entry = Join-Path (Join-Path $ComponentDir 'hooks') 'agent-audit.ps1'
+$HooksSrc = Join-Path $ComponentDir 'hooks'
+$CoreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -25,8 +26,14 @@ if (Test-Path -LiteralPath $out) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.claude') | Out-Null
-$entryAbs = (Resolve-Path -LiteralPath $Entry).Path
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
+
+$hooksDst = Join-Path $targetAbs '.claude/hooks'
+New-Item -ItemType Directory -Force -Path (Join-Path $hooksDst 'lib') | Out-Null
+Copy-Item -LiteralPath (Join-Path $HooksSrc 'agent-audit.sh'), (Join-Path $HooksSrc 'agent-audit.ps1') -Destination $hooksDst -Force
+Copy-Item -LiteralPath (Join-Path $HooksSrc 'lib/adapter.sh'), (Join-Path $HooksSrc 'lib/adapter.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
+Copy-Item -LiteralPath (Join-Path $CoreSrc 'agent-audit-core.sh'), (Join-Path $CoreSrc 'agent-audit-core.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
+$entryAbs = Join-Path $hooksDst 'agent-audit.ps1'
 $conf = Join-Path $targetAbs '.claude/agent-audit.conf'
 
 # Exec form (command=powershell + args) is required on Windows: a command-string
@@ -54,6 +61,7 @@ else {
     [pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $out -Encoding utf8
     Write-Host "wrote $out"
 }
+
 
 
 

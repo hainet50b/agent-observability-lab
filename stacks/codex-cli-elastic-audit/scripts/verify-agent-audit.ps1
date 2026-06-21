@@ -12,8 +12,7 @@ $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $StackDir  = Split-Path -Parent $ScriptDir
-$RepoRoot  = Split-Path -Parent (Split-Path -Parent $StackDir)
-$HookPs1   = Join-Path $RepoRoot 'components/agents/codex-cli/hooks/agent-audit.ps1'
+$HookPs1 = Join-Path $StackDir '.codex/hooks/agent-audit.ps1'
 $CodexHome = Join-Path $StackDir '.codex'
 
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
@@ -122,4 +121,5 @@ try {
 finally {
     Pop-Location
 }
+
 

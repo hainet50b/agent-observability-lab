@@ -7,8 +7,7 @@ DATA_STREAM=logs-agent_audit.user_prompt-default
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-REPO_ROOT=$(cd -- "$STACK_DIR/../.." && pwd)
-HOOK="$REPO_ROOT/components/agents/claude-code/hooks/agent-audit.sh"
+HOOK="$STACK_DIR/.claude/hooks/agent-audit.sh"
 CLAUDE_HOME_DIR="$STACK_DIR/.claude"
 SETTINGS="$CLAUDE_HOME_DIR/settings.local.json"
 cd "$STACK_DIR"

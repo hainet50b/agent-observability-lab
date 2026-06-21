@@ -1317,6 +1317,37 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>Config-deployment 2/4: materialize the hook bundle (self-containment)</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Self-contained layout under <code>.claude/hooks/</code> (resp. <code>.codex/hooks/</code>).</strong> The hook entry sources its core via <code>$hook_dir/../../shared/agent-audit/lib/…</code> — a component-relative path. Replicating that under a deployment target would push a <code>shared/</code> dir up <em>outside</em> <code>.claude/</code> (ugly, and hostile to a real-project <code>--target</code> in 3/4). Instead I materialize everything flat under the target's hook dir: <code>agent-audit.{sh,ps1}</code> at the root, <code>lib/{adapter,agent-audit-core}.{sh,ps1}</code> beside it.</li>
+    <li><strong>Entry finds its core via a bundled-first fallback rather than a copy-time rewrite.</strong> Each entry now resolves core as "<code>$hook_dir/lib/agent-audit-core</code> if present, else the in-repo <code>../../shared/…</code>". So the entry script is copied <strong>verbatim</strong> (no sed/Replace surgery during materialize): in a deployment the bundled <code>lib/agent-audit-core</code> wins; run in-place in the repo (where <code>lib/</code> holds only the adapter) it falls back to <code>shared/</code>. The adapter path (<code>lib/adapter</code>) was already consistent in both layouts, so only core needed the fallback.</li>
+    <li><strong>Materialize lives in the render scripts, not setup-config.</strong> <code>render-hook.sh</code>/<code>.ps1</code> (Claude) and <code>render-hooks.sh</code>/<code>.ps1</code> (Codex) are where the hook <code>command</code> path is computed, so the copy + repoint is localized there; <code>setup-config</code>/<code>setup-audit</code> are unchanged and "materialize" follows transitively. Each renderer copies <strong>both</strong> shells' scripts + both cores so the bundle is complete regardless of platform (Codex's <code>config.toml</code> references both <code>command</code> and <code>commandWindows</code>).</li>
+    <li><strong>Verify scripts repointed to the materialized path.</strong> The <code>HOOK</code>/<code>$HookPs1</code> precondition (and, for Codex, the actually-executed hook) now points at <code>$STACK_DIR/.claude|.codex/hooks/agent-audit.*</code>, not <code>$REPO_ROOT/components/…</code>. This both proves materialization happened and is the regression net for "references nothing under <code>components/</code> at runtime." The now-unused <code>REPO_ROOT</code>/<code>$RepoRoot</code> locals were removed (shellcheck/PSSA clean).</li>
+    <li><strong>Telemetry stacks are out of scope by nature.</strong> <code>setup-telemetry</code> renders only <code>otel</code>/<code>mcp</code> config — no hook scripts — so materialize touches only the two audit stacks. Verified the telemetry path still green via claude-code-elastic smoke.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>Materialize runs only on a fresh render (the renderers keep an existing <code>settings.local.json</code>/<code>config.toml</code> with hooks and exit early). A stale in-place deployment from before this change still points at <code>components/</code> until its <code>.claude/.codex</code> is regenerated — the documented "delete to regenerate" behaviour. Verified by clearing each audit stack's rendered config before the fresh deploy.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>deploy 3/4 (<code>--target &lt;arbitrary dir&gt;</code>) is now unblocked — the bundle is self-contained, so deploying into a scratch/user project will carry its own hook scripts with nothing pointing back into the repo.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>An audit deployment is now a frozen, self-contained copy: <code>setup</code> materializes the hook entry + shared core + per-agent adapter (both <code>.sh</code> and <code>.ps1</code>) into the target's <code>.claude/hooks/</code> or <code>.codex/hooks/</code> and points the hook registration at that copy, so editing a component source no longer alters a live stack. Verified on both audit stacks (fresh deploy → bundle present → <code>verify-agent-audit</code> + <code>verify-tool-call-audit</code> PASS with byte-identical documents; PowerShell path confirmed); the telemetry path stays green.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>The bundled-first core-resolution fallback added to the four entry scripts is the one behavioural change to the hooks themselves — confirm you're comfortable with it. It keeps the entry copy-verbatim and the in-repo run working; output is byte-identical (verify-* asserts the same doc shape and lengths as before).</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
