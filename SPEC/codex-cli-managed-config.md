@@ -139,14 +139,14 @@ Placement is **always interactive:**
 
 ### Never overwrite; track provenance; provide teardown
 
-Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** Placement records a **sidecar provenance marker** beside the managed file (which agent / stack / endpoint / when the lab placed it); the decision is by the existing file's provenance:
+Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** Placement records a **sidecar provenance marker** beside the managed file (which agent / **OTLP endpoint** / when / target the lab placed it). Ownership is keyed on the **endpoint** — what the host is enforced *toward* — not a stack name (a managed deploy is a host act, not a per-stack one):
 
 | Existing file | Verdict |
 | --- | --- |
 | none | place after confirm, write the marker |
-| lab-placed, same stack, same content | no-op (already placed) |
-| lab-placed, same stack, changed content | update after explicit confirm |
-| lab-placed, **different stack** | refuse — "held by stack X; run teardown first" |
+| lab-placed, same endpoint, same content | no-op (already placed) |
+| lab-placed, same endpoint, changed content | update after explicit confirm |
+| lab-placed, **different endpoint** | refuse — "this host already enforces &lt;endpoint&gt;; run teardown first" |
 | present with **no lab marker** (foreign / real org config) | **hard refuse — never touch it** |
 
 A **teardown script is mandatory** — the counterpart to placement, since a host-global change otherwise persists after the experiment (the machine stays enforced). Teardown removes **only** files the marker confirms the lab placed (restoring the host), **refuses to remove a foreign file**, and is itself interactive + fail-loud (no `--yes`).
