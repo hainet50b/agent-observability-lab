@@ -862,6 +862,65 @@ edited region) to confirm the three protobuf probes still land in ES. The live
 parse clean and only comments changed.</p>
 </section>
 
+<section>
+<h2>Managed-config 1/3 — shared placement + teardown primitive</h2>
+<time>2026-06-21</time>
+
+<h3>Judgement points</h3>
+<p>The shared primitive is a sourced library pair
+(<code>components/agents/shared/managed-config/lib/managed-config-core.{sh,ps1}</code>),
+mirroring <code>shared/agent-audit/lib/</code>. The per-agent <em>manifest</em> is
+supplied by an adapter (built in 2/3 and 3/3) via a single contract: set
+<code>mc_agent</code> / <code>$McAgent</code> and define
+<code>mc_manifest&nbsp;&lt;os&gt;</code> / <code>Get-McManifest&nbsp;-Os</code> that emits
+one entry per managed file as <code>key&nbsp;source&nbsp;target</code> (tab-separated on
+sh, objects on ps1). This keeps the core agent-agnostic and content-agnostic — it
+copies whatever rendered bytes the adapter points <code>source</code> at, and only
+records the <code>--endpoint</code> in the provenance marker. Endpoint substitution
+stays the agent's job (like <code>render-otel</code>), not the placement layer's.</p>
+<p>Provenance marker is a sidecar <code>&lt;target&gt;.lab-managed</code> in plain
+<code>key=value</code> lines (agent / stack / endpoint / placed_at / target) — not JSON,
+so it needs no <code>jq</code> and the ps1 side avoids <code>ConvertFrom-StringData</code>
+mangling backslashes in Windows paths. "Same content" is decided by direct byte
+comparison of source vs target (no hashing), which also drives the diff shown on
+update.</p>
+<p>TTY handling: the sh confirm reads from <code>/dev/tty</code> (not stdin, which the
+manifest loop consumes), and <code>mc_require_tty</code> aborts when
+<code>/dev/tty</code> can't be opened; the ps1 aborts on
+<code>[Console]::IsInputRedirected</code>. There is no <code>--yes</code> anywhere —
+the confirm cannot be bypassed. Permission failures on mkdir/copy/remove fail loud
+with the path plus a privileged manual command; foreign or different-stack files are
+refused and the run exits non-zero having touched nothing.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None blocking. Note the sh entry refuses to run under Git Bash on Windows
+(<code>uname -s</code> = <code>MINGW64_NT…</code>) by design — Windows placement is the
+<code>.ps1</code> path; the sh path serves Linux/macOS. The verdict branches were
+exercised in an isolated temp dir with an <code>mc_detect_os</code> override (all eight
+cases: new/no-op/update/foreign-refuse/other-stack-refuse/teardown-remove/teardown-refuse/teardown-noop);
+the real host managed paths were never touched, per the task's no-host-execution rule.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>2/3 and 3/3 (the Claude and Codex adapters + <code>setup-managed</code> /
+<code>teardown-managed</code> façades) now have a stable contract to wire against. When
+2/3 lands, double-check the marker's <code>endpoint</code> field is fed from the
+stack's resolved OTLP endpoint so a re-placement after an endpoint change is detected
+as "changed content" rather than a silent no-op.</p>
+
+<h3>Change summary</h3>
+<p>Added the shared, agent-agnostic engine that any stack will use to safely place
+(and tear down) an agent's machine-global managed-config file: always interactive,
+never overwrites a file the lab didn't place, tracks provenance with a sidecar
+marker, and fails loud on permission errors. Nothing is wired into a stack yet — the
+per-agent adapters come next.</p>
+
+<h3>Review highlights</h3>
+<p>Worth a look: the verdict table in <code>mc_place_one</code> / <code>McPlaceOne</code>
+(foreign vs lab-placed vs different-stack vs identical vs changed) and the TTY/no-yes
+guards, since this primitive will soon write to <code>/etc/claude-code/</code>,
+<code>C:\ProgramData\ClaudeCode\</code>, and the equivalent Codex paths on real hosts.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>
