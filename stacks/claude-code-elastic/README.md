@@ -96,7 +96,7 @@ export OTEL_LOG_USER_PROMPTS=0     # user prompt text
 export OTEL_LOG_TOOL_DETAILS=0     # tool inputs/args (commands, file paths, …)
 export OTEL_LOG_TOOL_CONTENT=0     # tool input+output content (needs tracing)
 export OTEL_LOG_RAW_API_BODIES=0   # full Messages API request/response bodies
-# export OTEL_LOG_RAW_API_BODIES=file:<repo>/var/api-bodies   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
+# export OTEL_LOG_RAW_API_BODIES=file:<dir>   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
 ```
 
 ```fish
@@ -117,7 +117,7 @@ set -gx OTEL_LOG_USER_PROMPTS 0     # user prompt text
 set -gx OTEL_LOG_TOOL_DETAILS 0     # tool inputs/args (commands, file paths, …)
 set -gx OTEL_LOG_TOOL_CONTENT 0     # tool input+output content (needs tracing)
 set -gx OTEL_LOG_RAW_API_BODIES 0   # full Messages API request/response bodies
-# set -gx OTEL_LOG_RAW_API_BODIES file:<repo>/var/api-bodies   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
+# set -gx OTEL_LOG_RAW_API_BODIES file:<dir>   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
 ```
 
 ```powershell
@@ -138,7 +138,7 @@ $env:OTEL_LOG_USER_PROMPTS = "0"     # user prompt text
 $env:OTEL_LOG_TOOL_DETAILS = "0"     # tool inputs/args (commands, file paths, …)
 $env:OTEL_LOG_TOOL_CONTENT = "0"     # tool input+output content (needs tracing)
 $env:OTEL_LOG_RAW_API_BODIES = "0"   # full Messages API request/response bodies
-# $env:OTEL_LOG_RAW_API_BODIES = "file:<repo>/var/api-bodies"   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
+# $env:OTEL_LOG_RAW_API_BODIES = "file:<dir>"   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
 ```
 
 **Option B — `settings.json` `env` block (persistent).** Put the same vars in a
@@ -173,7 +173,7 @@ enables each only on `1` (or `file:<dir>` for `OTEL_LOG_RAW_API_BODIES`), so `0`
 and "unset" both mean off. Flip **one at a time** to observe what it adds, and
 keep real secrets out of any session while a gate is on. The commented-out
 `file:` variant writes **untruncated** request/response bodies to that
-directory (the repo ships a gitignored `var/api-bodies/` for exactly this) and
+directory you point it at (gitignore it) and
 the `api_*_body` events carry `labels.body_ref` pointers instead of inline
 fragments — see the `OTEL_LOG_RAW_API_BODIES` section of
 `SPEC/claude-code-telemetry.md`.
