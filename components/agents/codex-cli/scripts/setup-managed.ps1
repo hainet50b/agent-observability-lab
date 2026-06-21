@@ -37,22 +37,7 @@ foreach ($t in @($requirementsTemplate, $hooksTemplate)) {
     if (-not (Test-Path -LiteralPath $t -PathType Leaf)) { Write-McFatal "template not found: $t" }
 }
 
-# Default: requirements point at the in-repo component hooks (demo). Opt-in
-# (staged, off by default): materialize the hook bundle into the host managed_dir
-# and point the managed config there. Requires a confirmed host check (stack README).
-$hooksRef = Join-Path $ComponentDir 'hooks'
-if ($WithHooks) {
-    if (-not $EsUrl) { Write-McFatal '--with-hooks requires -EsUrl (audit hooks need the ES endpoint)' }
-    $os = Get-McPlatform
-    $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
-    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent | Out-Null
-    $script:McWithHooks = $true
-}
-
-# Telemetry is optional: render managed_config.toml ([otel] defaults) only when the
-# OTLP endpoints are present. With no telemetry the file would be just a comment, so
-# it is not placed (the adapter omits it) — place only requirements.toml. Audit-only
-# keys the marker/ownership on the audit ES url so placement stays meaningful.
+# Telemetry -> managed_config.toml ([otel] defaults), only when the OTLP endpoints are present.
 $managedRendered = ''
 if ($WithTelemetry) {
     $managedTemplate = Join-Path $templates 'managed_config.template.toml'
@@ -69,18 +54,29 @@ if ($WithTelemetry) {
     $managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) + "`n" + $otelSection
     $script:McWithTelemetry = $true
 }
+
+# Hooks -> requirements.toml (the hook-enforcement layer), with the bundle materialized
+# into the host managed_dir. Without -WithHooks there is no enforcement layer to place:
+# a telemetry-only managed deploy is managed_config.toml alone (symmetric with Claude's
+# env-only managed-settings.json).
+$requirementsRendered = ''
+if ($WithHooks) {
+    if (-not $EsUrl) { Write-McFatal '-WithHooks requires -EsUrl (audit hooks need the ES endpoint)' }
+    $os = Get-McPlatform
+    $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
+    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent | Out-Null
+    $script:McWithHooks = $true
+    $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
+        -replace '@@MANAGED_DIR@@', $hooksRef `
+        -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef
+    $hooksRendered = (Get-Content -Raw -LiteralPath $hooksTemplate) `
+        -replace '@@AGENT_AUDIT_SH@@', (Join-Path $hooksRef 'agent-audit.sh') `
+        -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksRef 'agent-audit.ps1') `
+        -replace '@@AGENT_AUDIT_CONF@@', (Join-Path $hooksRef 'agent-audit.conf')
+    $requirementsRendered = $requirementsRendered + "`n" + $hooksRendered
+}
+
 $markerEndpoint = if ($WithTelemetry) { $LogsEndpoint } else { $EsUrl }
-
-$requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
-    -replace '@@MANAGED_DIR@@', $hooksRef `
-    -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef
-
-$hooksRendered = (Get-Content -Raw -LiteralPath $hooksTemplate) `
-    -replace '@@AGENT_AUDIT_SH@@', (Join-Path $hooksRef 'agent-audit.sh') `
-    -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksRef 'agent-audit.ps1') `
-    -replace '@@AGENT_AUDIT_CONF@@', (Join-Path $hooksRef 'agent-audit.conf')
-
-$requirementsRendered = $requirementsRendered + "`n" + $hooksRendered
 
 $managedSource = [System.IO.Path]::GetTempFileName()
 $requirementsSource = [System.IO.Path]::GetTempFileName()

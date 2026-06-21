@@ -17,9 +17,14 @@ function Get-McManifest {
         }
         default { Write-McFatal "no Codex managed-config path for os '$Os'" }
     }
-    [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
+    # requirements.toml is the hook-enforcement layer — placed only when hooks are
+    # deployed (--with-hooks). A telemetry-only managed deploy places managed_config.toml
+    # alone (symmetric with Claude's env-only managed-settings.json).
+    if ($script:McWithHooks) {
+        [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
+    }
     # managed_config.toml carries only telemetry defaults; with no telemetry it
-    # would be just a comment, so place requirements.toml alone (audit-only deploy).
+    # would be just a comment, so place it only when telemetry is present.
     if ($script:McWithTelemetry) {
         [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
     }

@@ -155,7 +155,7 @@ A **teardown script is mandatory** — the counterpart to placement, since a hos
 
 ### What can actually be enforced (state it honestly)
 
-What a deployed managed layer enforces is **agent-specific and must be stated in the templates and the prompt**: Codex enforces via `requirements.toml` (managed hooks, `allow_managed_hooks_only`, `[features].hooks`, sandbox/approval policies), but **`[otel]`/telemetry is only a managed *default*** (`managed_config.toml`), never enforceable — and on Windows `managed_config.toml` is a weak boundary, so real enforcement lives in `requirements.toml` at `%ProgramData%`.
+What a deployed managed layer enforces is **agent-specific and must be stated in the templates and the prompt**: Codex enforces via `requirements.toml` (managed hooks, `allow_managed_hooks_only`, `[features].hooks`; the lab keeps it **hook-scoped** — approval/sandbox-policy enforcement, though Codex supports it, is out of scope for an audit/telemetry tool), but **`[otel]`/telemetry is only a managed *default*** (`managed_config.toml`), never enforceable — and on Windows `managed_config.toml` is a weak boundary, so real enforcement lives in `requirements.toml` at `%ProgramData%`.
 
 This shapes what each managed combination materializes: the audit stacks' hooks-only deploy (`--with-hooks`, no OTLP endpoints) places **only `requirements.toml`** — pinning `[features].hooks = true`, `allow_managed_hooks_only = false`, the `managed_dir` / `windows_managed_dir`, and the hook tables — and **no `managed_config.toml`** (with no telemetry that file would be just a comment). A combined telemetry+hooks deploy adds `managed_config.toml` `[otel]`. The full matrix is in [`config-deployment.md`](config-deployment.md) "Managed materialize".
 

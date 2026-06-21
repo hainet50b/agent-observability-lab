@@ -27,26 +27,12 @@ for t in "$requirements_template" "$hooks_template"; do
   [ -f "$t" ] || managed_config::die "template not found: $t"
 done
 
-# Default: requirements point at the in-repo component hooks (demo). Opt-in
-# (staged, off by default): materialize the hook bundle into the host managed_dir
-# and point the managed config there. Requires a confirmed host check (stack README).
-hooks_ref="$component_dir/hooks"
-if [ "$with_hooks" -eq 1 ]; then
-  [ -n "$es_url" ] || managed_config::die "--with-hooks requires --es-url (audit hooks need the ES endpoint)"
-  managed_config::detect_os
-  hooks_ref="$(managed_config::managed_root "$os")/hooks"
-  managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key" \
-    "$timeout_ms" "$capture_user_prompt_enabled" "$capture_user_prompt_content" \
-    "$capture_tool_call_enabled" "$capture_tool_call_content"
-fi
-
 managed_config_source=$(mktemp) || managed_config::die "could not create temp file"
 requirements_source=$(mktemp) || managed_config::die "could not create temp file"
 trap 'rm -f "$managed_config_source" "$requirements_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' EXIT
 
-# Telemetry is optional: render managed_config.toml ([otel] defaults) only when the
-# OTLP endpoints are present. With no telemetry the file would be just a comment, so
-# it is not placed (the adapter omits it) — place only requirements.toml.
+# Telemetry -> managed_config.toml ([otel] defaults), only when the OTLP endpoints are
+# present (the adapter places it only then).
 if [ "$with_telemetry" -eq 1 ]; then
   managed_template="$templates/managed_config.template.toml"
   otel_template="$templates/otel.template.toml"
@@ -63,23 +49,32 @@ if [ "$with_telemetry" -eq 1 ]; then
       -e "s#@@OTLP_HEADERS@@##" \
       "$otel_template" | sed -n '/^\[otel\]/,$p'
   } >"$managed_config_source" || managed_config::die "failed to render $managed_template"
-else
-  # Audit-only deploy has no logs endpoint; key the marker/ownership on the audit
-  # ES url instead so place()/teardown() and the provenance marker are meaningful.
-  logs_endpoint=$es_url
 fi
 
-sed \
-  -e "s#@@MANAGED_DIR@@#$hooks_ref#" \
-  -e "s#@@WINDOWS_MANAGED_DIR@@#$hooks_ref#" \
-  "$requirements_template" >"$requirements_source" || managed_config::die "failed to render $requirements_template"
-
-printf '\n' >>"$requirements_source"
-
-sed \
-  -e "s#@@AGENT_AUDIT_SH@@#$hooks_ref/agent-audit.sh#" \
-  -e "s#@@AGENT_AUDIT_PS1@@#$hooks_ref/agent-audit.ps1#" \
-  -e "s#@@AGENT_AUDIT_CONF@@#$hooks_ref/agent-audit.conf#" \
-  "$hooks_template" >>"$requirements_source" || managed_config::die "failed to render $hooks_template"
+# Hooks -> requirements.toml (the hook-enforcement layer), with the hook bundle
+# materialized into the host managed_dir. Without --with-hooks there is no enforcement
+# layer to place: a telemetry-only managed deploy is managed_config.toml alone (symmetric
+# with Claude's env-only managed-settings.json).
+if [ "$with_hooks" -eq 1 ]; then
+  [ -n "$es_url" ] || managed_config::die "--with-hooks requires --es-url (audit hooks need the ES endpoint)"
+  managed_config::detect_os
+  hooks_ref="$(managed_config::managed_root "$os")/hooks"
+  managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key" \
+    "$timeout_ms" "$capture_user_prompt_enabled" "$capture_user_prompt_content" \
+    "$capture_tool_call_enabled" "$capture_tool_call_content"
+  # Audit-only deploy has no OTLP logs endpoint; key the marker/ownership on the audit
+  # ES url so place()/teardown() and the provenance marker stay meaningful.
+  [ -n "$logs_endpoint" ] || logs_endpoint=$es_url
+  sed \
+    -e "s#@@MANAGED_DIR@@#$hooks_ref#" \
+    -e "s#@@WINDOWS_MANAGED_DIR@@#$hooks_ref#" \
+    "$requirements_template" >"$requirements_source" || managed_config::die "failed to render $requirements_template"
+  printf '\n' >>"$requirements_source"
+  sed \
+    -e "s#@@AGENT_AUDIT_SH@@#$hooks_ref/agent-audit.sh#" \
+    -e "s#@@AGENT_AUDIT_PS1@@#$hooks_ref/agent-audit.ps1#" \
+    -e "s#@@AGENT_AUDIT_CONF@@#$hooks_ref/agent-audit.conf#" \
+    "$hooks_template" >>"$requirements_source" || managed_config::die "failed to render $hooks_template"
+fi
 
 managed_config::place "$requirements_source" "$managed_config_source"

@@ -4,9 +4,6 @@
 # NOTE: [otel]/telemetry is NOT in the enforceable set — push it as a managed *default*
 # (managed_config.toml), never here. docs: https://developers.openai.com/codex/enterprise/managed-configuration
 
-allowed_approval_policies = ["on-request", "on-failure"]
-allowed_sandbox_modes = ["read-only", "workspace-write"]
-
 # allow_managed_hooks_only = false: the lab keeps the user's own hooks alongside the managed
 # ones (enforce hook *presence*, not exclusivity). managed_dir holds the hook scripts — Codex
 # validates it is absolute and exists but does NOT distribute them; the operator delivers the
@@ -14,8 +11,8 @@ allowed_sandbox_modes = ["read-only", "workspace-write"]
 # The [[hooks.*]] tables are single-sourced in hooks.template.toml and concatenated onto this
 # file at render time (top-level fields + [features] first, the hook arrays last, so it parses).
 allow_managed_hooks_only = false
-managed_dir = "@@MANAGED_DIR@@"
-windows_managed_dir = "@@WINDOWS_MANAGED_DIR@@"
+managed_dir = '@@MANAGED_DIR@@'
+windows_managed_dir = '@@WINDOWS_MANAGED_DIR@@'
 
 [features]
 hooks = true
