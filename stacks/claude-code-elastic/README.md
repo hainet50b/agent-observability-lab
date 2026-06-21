@@ -186,7 +186,43 @@ applies everywhere.
 **Option C — `managed-settings.json` (org enforcement).** Enterprise/MDM-distributed
 [managed settings](https://code.claude.com/docs/en/monitoring-usage.md) have the
 **highest precedence and cannot be overridden by users** — the way to force
-telemetry on across an organization.
+telemetry on across an organization. The `env` block placed here is **enforced**:
+users cannot turn telemetry off, change the endpoint, or flip the `OTEL_LOG_*`
+gates.
+
+This stack can place that single machine-global file for you — **opt-in,
+always interactive, and never destructive**. It lives at a fixed admin-owned
+path (`/etc/claude-code/managed-settings.json` on Linux/WSL,
+`/Library/Application Support/ClaudeCode/managed-settings.json` on macOS,
+`C:\ProgramData\ClaudeCode\managed-settings.json` on Windows) — the same file
+your real employer may already use, so placement **refuses to overwrite any file
+the lab did not place** (tracked by a sidecar `.lab-managed` marker) and prompts
+before writing. There is **no `--yes`**; a non-interactive shell aborts having
+changed nothing, and permission errors fail loud with the privileged command to
+run by hand.
+
+Place it via `setup.sh --managed` (runs after the normal setup steps) or
+directly:
+
+```sh
+../../components/agents/claude-code/scripts/setup-managed.sh \
+  --stack claude-code-elastic --endpoint http://localhost:8200
+```
+
+```powershell
+..\..\components\agents\claude-code\scripts\setup-managed.ps1 `
+  -Stack claude-code-elastic -Endpoint http://localhost:8200
+```
+
+Remove it (restores the host, removes only the lab-placed file + its marker):
+
+```sh
+../../components/agents/claude-code/scripts/teardown-managed.sh --stack claude-code-elastic
+```
+
+```powershell
+..\..\components\agents\claude-code\scripts\teardown-managed.ps1 -Stack claude-code-elastic
+```
 
 Then run `claude` from a configured shell/directory and do a little work (ask a
 question, let it read or edit a file). Telemetry flushes on the export interval,

@@ -921,6 +921,66 @@ guards, since this primitive will soon write to <code>/etc/claude-code/</code>,
 <code>C:\ProgramData\ClaudeCode\</code>, and the equivalent Codex paths on real hosts.</p>
 </section>
 
+<section>
+<h2>Managed-config 2/3 — Claude Code managed-settings.json</h2>
+<time>2026-06-21</time>
+
+<h3>Judgement points</h3>
+<p>Wired the Claude agent onto the shared 1/3 primitive with three small pieces, mirroring
+the existing <code>render-otel</code> / <code>agent-audit</code> patterns rather than inventing
+new structure:</p>
+<ul>
+<li><strong>Template</strong> <code>templates/managed-settings.template.json</code> — the env block
+is a verbatim copy of <code>otel.template.json</code>'s (same <code>@@OTLP_*@@</code> placeholders,
+same export intervals, same four <code>OTEL_LOG_*</code> PII gates pinned to <code>0</code>). Reusing
+the identical block keeps the enforced config consistent with the opt-in
+<code>settings.local.json</code> one; the only difference is the <code>_comment.enforcement</code> line
+stating honestly that these values sit at highest precedence and cannot be overridden.</li>
+<li><strong>Adapter</strong> <code>scripts/lib/managed-config-adapter.{sh,ps1}</code> — sets
+<code>mc_agent='claude-code'</code> and defines the manifest (one file, <code>managed-settings</code>, at the
+three platform paths from <code>SPEC/claude-code-managed-config.md</code>). The <code>source</code> field
+points at <code>mc_source</code>, a rendered temp file the setup façade fills in; teardown leaves it
+empty (the core ignores it there). Shared between the setup/teardown façades so the path table
+lives in one place.</li>
+<li><strong>Façades</strong> <code>setup-managed.{sh,ps1}</code> render the template (endpoint
+substitution stays the agent's job, per 1/3's contract — the marker only records the base
+<code>--endpoint</code>) into a temp file, then call <code>mc_place</code>; <code>teardown-managed.{sh,ps1}</code>
+just call <code>mc_teardown</code>. No <code>--yes</code>, no host execution.</li>
+</ul>
+<p>Opt-in: added a <code>--managed</code> flag to the stack <code>setup.sh</code> (and <code>-Managed</code> switch
+to <code>setup.ps1</code>) that runs placement <em>after</em> the three automated steps. The default
+<code>setup.sh</code> path is unchanged, so the automated suite never places anything — and even if
+<code>--managed</code> were passed in CI, 1/3's non-TTY abort guarantees nothing is written.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None. Per the task, placement was never executed against the host — acceptance was static
+gates plus reading the no-overwrite / TTY-abort / fail-loud branches in the shared core (all of
+which 1/3 already exercised in a temp dir). I additionally rendered the template offline through
+<code>sed | jq</code> to confirm the placeholders resolve to valid JSON, and ran <code>bash -n</code>
+on the new scripts; neither touches a managed path.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>Managed 3/3 (Codex) can now copy this adapter/façade shape exactly — the only deltas are the
+two-file manifest (<code>requirements.toml</code> + <code>managed_config.toml</code>) and the honest
+"telemetry is a default, not enforceable" wording. Also worth a small follow-up: the
+<code>--managed</code> opt-in is documented in the README but not surfaced in <code>setup.sh</code>'s
+usage string — fine for now, but a usage line would help discoverability.</p>
+
+<h3>Change summary</h3>
+<p>Claude Code's org-enforced <code>managed-settings.json</code> can now be placed (and torn down) by
+the stack: an opt-in, always-interactive step (<code>setup.sh --managed</code>, or the
+<code>setup-managed</code>/<code>teardown-managed</code> scripts directly) that writes the enforced
+telemetry env block to the machine-global admin path — and refuses to touch any
+<code>managed-settings.json</code> the lab did not place.</p>
+
+<h3>Review highlights</h3>
+<p>Two things worth a glance: (1) the template's enforced <code>env</code> block — confirm forcing
+the <code>OTEL_LOG_*</code> gates to <code>0</code> org-wide is the posture you want (it means users
+<em>cannot</em> turn prompt/tool/body logging on, which is the safe default but is a real
+constraint); (2) the <code>--managed</code> wiring in <code>setup.{sh,ps1}</code> — it runs placement only
+on the explicit flag and only after the automated steps, so the normal setup flow is untouched.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

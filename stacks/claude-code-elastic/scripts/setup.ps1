@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$Config
+    [string]$Config,
+    [switch]$Managed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,4 +56,11 @@ Write-Host '[setup] 2/3 - Kibana saved objects'
 Write-Host ''
 Write-Host '[setup] 3/3 - Claude Code telemetry config'
 & (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-telemetry.ps1') -TargetDir $StackDir -OtlpEndpoint $OtlpEndpoint 6>&1 | Indent
+
+if ($Managed) {
+    Write-Host ''
+    Write-Host '[setup] managed-config placement (interactive, opt-in)'
+    & (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-managed.ps1') -Stack 'claude-code-elastic' -Endpoint $OtlpEndpoint
+}
+
 
