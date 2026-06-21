@@ -40,4 +40,4 @@ sed \
   -e "s#@@AGENT_AUDIT_CONF@@#$hooks_dir/agent-audit.conf#" \
   "$requirements_template" >"$mc_source_requirements" || mc_die "failed to render $requirements_template"
 
-mc_place
+mc_place "$mc_source_requirements" "$mc_source_managed_config"

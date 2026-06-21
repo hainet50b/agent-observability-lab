@@ -1,9 +1,7 @@
 $script:McAgent = 'codex-cli'
-$script:McSourceRequirements = ''
-$script:McSourceManagedConfig = ''
 
 function Get-McManifest {
-    param([string]$Os)
+    param([string]$Os, [string[]]$Sources = @())
     switch ($Os) {
         'windows' {
             $requirementsTarget = Join-Path $env:ProgramData 'OpenAI\Codex\requirements.toml'
@@ -19,7 +17,8 @@ function Get-McManifest {
         }
         default { McFail "no Codex managed-config path for os '$Os'" }
     }
-    [pscustomobject]@{ Key = 'requirements'; Source = $script:McSourceRequirements; Target = $requirementsTarget }
-    [pscustomobject]@{ Key = 'managed_config'; Source = $script:McSourceManagedConfig; Target = $managedTarget }
+    [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
+    [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
 }
+
 

@@ -187,7 +187,7 @@ mc_place() {
   mc_detect_os
   mc_require_tty
   local manifest_lines
-  manifest_lines=$(mc_manifest "$mc_os")
+  manifest_lines=$(mc_manifest "$mc_os" "$@")
   [ -n "$manifest_lines" ] || mc_die "manifest empty for os '$mc_os' — nothing to place"
   while IFS=$'\t' read -r key source target; do
     [ -n "${key:-}" ] || continue
@@ -203,7 +203,7 @@ mc_teardown() {
   mc_detect_os
   mc_require_tty
   local manifest_lines
-  manifest_lines=$(mc_manifest "$mc_os")
+  manifest_lines=$(mc_manifest "$mc_os" "$@")
   [ -n "$manifest_lines" ] || mc_die "manifest empty for os '$mc_os' — nothing to remove"
   while IFS=$'\t' read -r key _ target; do
     [ -n "${key:-}" ] || continue

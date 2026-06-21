@@ -178,13 +178,13 @@ function McTeardownOne($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
-function Invoke-McPlace($Endpoint) {
+function Invoke-McPlace($Endpoint, $Sources) {
     $script:McEndpoint = $Endpoint
     Test-McAdapter
     if (-not $script:McEndpoint) { McFail 'no endpoint provided' }
     $os = Get-McPlatform
     Assert-McTty
-    $items = @(Get-McManifest -Os $os)
+    $items = @(Get-McManifest -Os $os -Sources $Sources)
     if ($items.Count -eq 0) { McFail "manifest empty for os '$os' — nothing to place" }
     foreach ($item in $items) { McPlaceOne $item }
     if ($script:McFailed) { McFail 'one or more managed files were refused (see above); nothing foreign was touched' }
@@ -199,6 +199,7 @@ function Invoke-McTeardown {
     foreach ($item in $items) { McTeardownOne $item }
     if ($script:McFailed) { McFail 'one or more managed files were refused (see above)' }
 }
+
 
 
 

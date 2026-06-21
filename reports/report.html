@@ -1134,6 +1134,36 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>managed fix: source contract — define the façade↔adapter source handoff</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li>Chose the task's first suggestion — <strong>the manifest takes the rendered source path(s) as parameters</strong> — over a documented global-naming scheme. The source paths are now threaded explicitly: façade → <code>mc_place</code>/<code>Invoke-McPlace</code> → <code>mc_manifest</code>/<code>Get-McManifest</code>. The cross-file implicit globals (<code>mc_source</code>; <code>mc_source_requirements</code>/<code>mc_source_managed_config</code>; and their <code>$script:McSource*</code> twins) are gone — the core no longer threads a contract it never defined.</li>
+    <li><code>.sh</code>: <code>mc_place</code>/<code>mc_teardown</code> forward <code>"$@"</code> to <code>mc_manifest "$mc_os" "$@"</code>; each adapter reads <code>os=$1</code> then named source positionals (<code>source=${2:-}</code>; <code>requirements_source=${2:-} managed_config_source=${3:-}</code>). Teardown calls with no sources (empty <code>"$@"</code>), which the manifest tolerates and teardown ignores (target-only).</li>
+    <li><code>.ps1</code>: <code>Get-McManifest</code> gains <code>[string[]]$Sources = @()</code>; <code>Invoke-McPlace</code> gains <code>$Sources</code> and passes it through. Teardown calls <code>Get-McManifest</code> with no <code>-Sources</code>, so <code>$Sources[0/1]</code> is <code>$null</code> and the teardown path (which never reads <code>Source</code>) is unaffected.</li>
+    <li>Order is the contract: sources are passed in manifest-key order (claude: the one settings file; codex: <code>requirements</code> then <code>managed_config</code>). The façade call sites and the adapter's named locals make that ordering explicit and co-located per agent, replacing the previous "guess the global name" coupling.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>None. No host execution (non-TTY abort); place/teardown branches verified by inspection and static gates.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>None beyond the already-open naming-refactor tasks (which will lowercase the remaining <code>.sh</code> façade temp-file vars and reconcile the <code>Mc</code> function names).</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>Managed-config adapters no longer reach for per-agent magic globals to find the rendered config they should place — the façade now hands those paths straight through the shared core to the adapter, so the contract is visible in the function signatures.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>The source ordering between each façade's <code>mc_place</code>/<code>-Sources</code> call and its adapter's positional reads is the new contract; codex passes <code>requirements</code> first, <code>managed_config</code> second to match the manifest emission order.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

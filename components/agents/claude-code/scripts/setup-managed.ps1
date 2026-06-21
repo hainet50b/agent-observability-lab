@@ -20,14 +20,15 @@ $rendered = (Get-Content -Raw -LiteralPath $template) `
     -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
     -replace '@@OTLP_HEADERS@@', ''
 
-$script:McSource = [System.IO.Path]::GetTempFileName()
+$source = [System.IO.Path]::GetTempFileName()
 try {
-    [System.IO.File]::WriteAllText($script:McSource, $rendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Endpoint $LogsEndpoint
+    [System.IO.File]::WriteAllText($source, $rendered, [System.Text.UTF8Encoding]::new($false))
+    Invoke-McPlace -Endpoint $LogsEndpoint -Sources @($source)
 }
 finally {
-    Remove-Item -LiteralPath $script:McSource -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue
 }
+
 
 
 

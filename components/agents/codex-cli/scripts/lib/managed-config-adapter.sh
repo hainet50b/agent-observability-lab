@@ -4,14 +4,15 @@
 mc_agent='codex-cli'
 
 mc_manifest() {
+  local os=$1 requirements_source=${2:-} managed_config_source=${3:-}
   local managed_target requirements_target
-  case $1 in
+  case $os in
   macos | linux)
     requirements_target='/etc/codex/requirements.toml'
     managed_target='/etc/codex/managed_config.toml'
     ;;
-  *) mc_die "no Codex managed-config path for os '$1'" ;;
+  *) mc_die "no Codex managed-config path for os '$os'" ;;
   esac
-  printf '%s\t%s\t%s\n' 'requirements' "${mc_source_requirements:-}" "$requirements_target"
-  printf '%s\t%s\t%s\n' 'managed_config' "${mc_source_managed_config:-}" "$managed_target"
+  printf '%s\t%s\t%s\n' 'requirements' "$requirements_source" "$requirements_target"
+  printf '%s\t%s\t%s\n' 'managed_config' "$managed_config_source" "$managed_target"
 }

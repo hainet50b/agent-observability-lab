@@ -25,4 +25,4 @@ sed \
   -e "s#@@OTLP_HEADERS@@##" \
   "$template" >"$mc_source" || mc_die "failed to render $template"
 
-mc_place
+mc_place "$mc_source"

@@ -32,17 +32,18 @@ $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
     -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksDir 'agent-audit.ps1') `
     -replace '@@AGENT_AUDIT_CONF@@', (Join-Path $hooksDir 'agent-audit.conf')
 
-$script:McSourceManagedConfig = [System.IO.Path]::GetTempFileName()
-$script:McSourceRequirements = [System.IO.Path]::GetTempFileName()
+$managedSource = [System.IO.Path]::GetTempFileName()
+$requirementsSource = [System.IO.Path]::GetTempFileName()
 try {
-    [System.IO.File]::WriteAllText($script:McSourceManagedConfig, $managedRendered, [System.Text.UTF8Encoding]::new($false))
-    [System.IO.File]::WriteAllText($script:McSourceRequirements, $requirementsRendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Endpoint $LogsEndpoint
+    [System.IO.File]::WriteAllText($managedSource, $managedRendered, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($requirementsSource, $requirementsRendered, [System.Text.UTF8Encoding]::new($false))
+    Invoke-McPlace -Endpoint $LogsEndpoint -Sources @($requirementsSource, $managedSource)
 }
 finally {
-    Remove-Item -LiteralPath $script:McSourceManagedConfig -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $script:McSourceRequirements -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $managedSource -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $requirementsSource -Force -ErrorAction SilentlyContinue
 }
+
 
 
 
