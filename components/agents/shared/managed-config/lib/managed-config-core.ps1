@@ -206,7 +206,9 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
 
 function Get-McHookManifestItem($HooksTarget) {
     foreach ($rel in @('agent-audit.sh', 'agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.sh', 'lib/adapter.ps1', 'lib/agent-audit-core.sh', 'lib/agent-audit-core.ps1')) {
-        [pscustomobject]@{ Key = "hook:$rel"; Source = (Join-Path $script:McHooksStage $rel); Target = (Join-Path $HooksTarget $rel) }
+        # teardown has no staging dir (McHooksStage empty); Source is unused there, and Join-Path rejects an empty -Path.
+        $src = if ($script:McHooksStage) { Join-Path $script:McHooksStage $rel } else { '' }
+        [pscustomobject]@{ Key = "hook:$rel"; Source = $src; Target = (Join-Path $HooksTarget $rel) }
     }
 }
 
