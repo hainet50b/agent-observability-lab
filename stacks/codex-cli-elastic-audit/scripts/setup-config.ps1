@@ -78,6 +78,7 @@ switch ($Scope) {
                 -ToolCallEnabled $Conf['agent_audit.capture.tool_call.enabled'] `
                 -ToolCallContent $Conf['agent_audit.capture.tool_call.content']
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target -Endpoint $Conf['agent_audit.elasticsearch.url']
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/link-auth.ps1') -CodexHome (Join-Path $Target '.codex') -Endpoint $Conf['agent_audit.elasticsearch.url']
         }
     }
     'project' {

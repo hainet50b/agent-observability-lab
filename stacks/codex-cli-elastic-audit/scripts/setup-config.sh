@@ -83,6 +83,7 @@ local)
     "$components_dir/agents/codex-cli/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
       "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
     "$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$target" "$AUDIT_ES_URL"
+    "$components_dir/agents/codex-cli/scripts/link-auth.sh" "$target/.codex" "$AUDIT_ES_URL"
   fi
   ;;
 project)

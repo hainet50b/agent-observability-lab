@@ -24,6 +24,7 @@ hooks_owned=0
 for key_target in \
   "config:$config" \
   "agent-audit:$target/.codex/agent-audit.conf" \
+  "auth:$target/.codex/auth.json" \
   "gitignore:$target/.codex/.gitignore"; do
   key=${key_target%%:*}
   tgt=${key_target#*:}

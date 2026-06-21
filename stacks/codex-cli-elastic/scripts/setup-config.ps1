@@ -65,6 +65,7 @@ switch ($Scope) {
         else {
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target -Endpoint $OtlpEndpoint
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/link-auth.ps1') -CodexHome (Join-Path $Target '.codex') -Endpoint $OtlpEndpoint
         }
     }
     'project' {

@@ -74,6 +74,7 @@ local)
   else
     "$components_dir/agents/codex-cli/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint" "$OTLP_API_KEY"
     "$components_dir/agents/codex-cli/scripts/render-mcp.sh" "$target" "$otlp_endpoint"
+    "$components_dir/agents/codex-cli/scripts/link-auth.sh" "$target/.codex" "$otlp_endpoint"
   fi
   ;;
 project)
