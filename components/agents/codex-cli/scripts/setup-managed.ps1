@@ -5,7 +5,12 @@ param(
     [string]$MetricsEndpoint,
     [switch]$WithHooks,
     [string]$EsUrl,
-    [string]$EsApiKey = ''
+    [string]$EsApiKey = '',
+    [string]$TimeoutMs = '',
+    [string]$UserPromptEnabled = '',
+    [string]$UserPromptContent = '',
+    [string]$ToolCallEnabled = '',
+    [string]$ToolCallContent = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,7 +45,7 @@ if ($WithHooks) {
     if (-not $EsUrl) { Write-McFatal '--with-hooks requires -EsUrl (audit hooks need the ES endpoint)' }
     $os = Get-McPlatform
     $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
-    Add-McHookStage $ComponentDir $EsUrl $EsApiKey | Out-Null
+    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent | Out-Null
     $script:McWithHooks = $true
 }
 

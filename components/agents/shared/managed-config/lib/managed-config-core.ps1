@@ -181,7 +181,7 @@ function Remove-McManagedFile($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
-function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '') {
+function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '') {
     $hooksSrc = Join-Path $ComponentDir 'hooks'
     $coreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
     $confTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
@@ -191,7 +191,14 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '') {
     Copy-Item -LiteralPath (Join-Path $hooksSrc 'agent-audit.sh'), (Join-Path $hooksSrc 'agent-audit.ps1') -Destination $stage -Force
     Copy-Item -LiteralPath (Join-Path $hooksSrc 'lib/adapter.sh'), (Join-Path $hooksSrc 'lib/adapter.ps1') -Destination (Join-Path $stage 'lib') -Force
     Copy-Item -LiteralPath (Join-Path $coreSrc 'agent-audit-core.sh'), (Join-Path $coreSrc 'agent-audit-core.ps1') -Destination (Join-Path $stage 'lib') -Force
-    $conf = (Get-Content -Raw -LiteralPath $confTemplate) -replace '@@ES_URL@@', $EsUrl -replace '@@ES_API_KEY@@', $EsApiKey
+    $conf = (Get-Content -Raw -LiteralPath $confTemplate) `
+        -replace '@@ES_URL@@', $EsUrl `
+        -replace '@@ES_API_KEY@@', $EsApiKey `
+        -replace '@@ES_TIMEOUT_MS@@', $TimeoutMs `
+        -replace '@@CAPTURE_USER_PROMPT_ENABLED@@', $UserPromptEnabled `
+        -replace '@@CAPTURE_USER_PROMPT_CONTENT@@', $UserPromptContent `
+        -replace '@@CAPTURE_TOOL_CALL_ENABLED@@', $ToolCallEnabled `
+        -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent
     [System.IO.File]::WriteAllText((Join-Path $stage 'agent-audit.conf'), $conf, [System.Text.UTF8Encoding]::new($false))
     $script:McHooksStage = $stage
     return $stage

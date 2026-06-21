@@ -105,7 +105,13 @@ switch ($Scope) {
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/teardown-managed.ps1') -WithHooks
         }
         else {
-            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') -WithHooks -EsUrl $Conf['agent_audit.elasticsearch.url'] -EsApiKey $ApiKey
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') `
+                -WithHooks -EsUrl $Conf['agent_audit.elasticsearch.url'] -EsApiKey $ApiKey `
+                -TimeoutMs $Conf['agent_audit.elasticsearch.timeout_ms'] `
+                -UserPromptEnabled $Conf['agent_audit.capture.user_prompt.enabled'] `
+                -UserPromptContent $Conf['agent_audit.capture.user_prompt.content'] `
+                -ToolCallEnabled $Conf['agent_audit.capture.tool_call.enabled'] `
+                -ToolCallContent $Conf['agent_audit.capture.tool_call.content']
         }
     }
     default {

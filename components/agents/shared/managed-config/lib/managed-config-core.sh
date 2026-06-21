@@ -10,6 +10,11 @@ traces_endpoint=''
 metrics_endpoint=''
 es_url=''
 es_api_key=''
+timeout_ms=''
+capture_user_prompt_enabled=''
+capture_user_prompt_content=''
+capture_tool_call_enabled=''
+capture_tool_call_content=''
 with_hooks=0
 with_telemetry=0
 hooks_stage=''
@@ -60,6 +65,31 @@ managed_config::parse_args() {
     --es-api-key)
       [ "$#" -ge 2 ] || managed_config::die "--es-api-key needs a value"
       es_api_key=$2
+      shift 2
+      ;;
+    --timeout-ms)
+      [ "$#" -ge 2 ] || managed_config::die "--timeout-ms needs a value"
+      timeout_ms=$2
+      shift 2
+      ;;
+    --capture-user-prompt-enabled)
+      [ "$#" -ge 2 ] || managed_config::die "--capture-user-prompt-enabled needs a value"
+      capture_user_prompt_enabled=$2
+      shift 2
+      ;;
+    --capture-user-prompt-content)
+      [ "$#" -ge 2 ] || managed_config::die "--capture-user-prompt-content needs a value"
+      capture_user_prompt_content=$2
+      shift 2
+      ;;
+    --capture-tool-call-enabled)
+      [ "$#" -ge 2 ] || managed_config::die "--capture-tool-call-enabled needs a value"
+      capture_tool_call_enabled=$2
+      shift 2
+      ;;
+    --capture-tool-call-content)
+      [ "$#" -ge 2 ] || managed_config::die "--capture-tool-call-content needs a value"
+      capture_tool_call_content=$2
       shift 2
       ;;
     --with-hooks)
@@ -205,6 +235,7 @@ managed_config::teardown_one() {
 
 managed_config::stage_hooks() {
   local component_dir=$1 es_url_val=$2 es_api_key_val=${3:-}
+  local timeout_ms_val=${4:-} up_enabled_val=${5:-} up_content_val=${6:-} tc_enabled_val=${7:-} tc_content_val=${8:-}
   local hooks_src="$component_dir/hooks" core_src="$component_dir/../shared/agent-audit/lib"
   local conf_template="$component_dir/templates/agent-audit.template.conf"
   [ -f "$conf_template" ] || managed_config::die "conf template not found: $conf_template"
@@ -216,7 +247,15 @@ managed_config::stage_hooks() {
     managed_config::die "could not stage hook adapter"
   cp "$core_src/agent-audit-core.sh" "$core_src/agent-audit-core.ps1" "$hooks_stage/lib/" ||
     managed_config::die "could not stage hook core"
-  sed -e "s#@@ES_URL@@#$es_url_val#" -e "s#@@ES_API_KEY@@#$es_api_key_val#" "$conf_template" >"$hooks_stage/agent-audit.conf" ||
+  sed \
+    -e "s#@@ES_URL@@#$es_url_val#" \
+    -e "s#@@ES_API_KEY@@#$es_api_key_val#" \
+    -e "s#@@ES_TIMEOUT_MS@@#$timeout_ms_val#" \
+    -e "s#@@CAPTURE_USER_PROMPT_ENABLED@@#$up_enabled_val#" \
+    -e "s#@@CAPTURE_USER_PROMPT_CONTENT@@#$up_content_val#" \
+    -e "s#@@CAPTURE_TOOL_CALL_ENABLED@@#$tc_enabled_val#" \
+    -e "s#@@CAPTURE_TOOL_CALL_CONTENT@@#$tc_content_val#" \
+    "$conf_template" >"$hooks_stage/agent-audit.conf" ||
     managed_config::die "could not render agent-audit.conf"
   chmod +x "$hooks_stage/agent-audit.sh"
 }
