@@ -5,6 +5,7 @@ set -u
 
 marker_suffix='.managed'
 failed=0
+confirm_all=0
 logs_endpoint=''
 traces_endpoint=''
 metrics_endpoint=''
@@ -108,10 +109,15 @@ managed_config::require_tty() {
 }
 
 managed_config::confirm() {
+  [ "$confirm_all" -eq 1 ] && return 0
   local reply
-  printf '%s [y/N] ' "$1" >&2
+  printf '%s [y/a/N] ' "$1" >&2
   IFS= read -r reply </dev/tty || managed_config::die "aborted (EOF on confirm); nothing was changed"
   case $reply in
+  a | A | all | ALL)
+    confirm_all=1
+    return 0
+    ;;
   y | Y | yes | YES) return 0 ;;
   *)
     managed_config::log "declined — skipping"

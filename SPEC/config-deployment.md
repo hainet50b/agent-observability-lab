@@ -24,7 +24,7 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 |---|---|---|---|---|---|
 | **`local`** | **rejected** (target = stack dir) | **yes** | **yes** (`link-auth`) | no — safe, scriptable, no prompt | non-interactive, marker-matched |
 | **`project`** | **required** `<dir>` | no | no | no — safe, scriptable, no prompt | non-interactive, marker-matched (`--target` again) |
-| **`managed`** | n/a | no | no | **yes** — confirm each file, non-TTY aborts, no `--yes` | interactive (`teardown-managed`) |
+| **`managed`** | n/a | no | no | **yes** — confirm each file (or `a` = yes-to-all), non-TTY aborts, no `--yes` | interactive (`teardown-managed`) |
 
 - **`local`** — user-scope deployment to the **stack's own directory**. Full bundle **including** the Elasticsearch MCP. For a Codex stack it also links the user's `~/.codex/auth.json` into the relocated `CODEX_HOME` (`link-auth`, a `local`-only convenience: symlink, or copy with a staleness warning; no-op if the source is absent or the target exists), so the provider-identity source is present without a fresh `codex login`. (Claude has no auth-link.)
 - **`project`** — user-scope deployment into an arbitrary directory (a user's real project, to see what telemetry/audit their everyday work would emit). Full bundle **except** the MCP — a local-only lab-exploration convenience, not injected into foreign projects, keeping their footprint minimal.
@@ -34,7 +34,7 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 
 Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url. It is what teardown matches on to recognize its own work. A render script writes only its **own** concern's key and takes an optional **marker-endpoint override**, so a deploy that materializes both concerns into one agent home can key every file on a single deployment endpoint and let telemetry + audit **co-own** the shared `settings.local.json` / `config.toml`.
 
-`managed` placement is **interactive** (confirm each file, non-TTY aborts) via `components/agents/shared/managed-config/`. `local` and `project` are **non-interactive** via the shared helper `components/agents/shared/config-place/`, reused by every render script and by local/project teardown. Both share the marker format and the fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
+`managed` placement is **interactive** (confirm each file — or answer `a` once to accept the rest — non-TTY aborts; the `a` shortcut is still interactive, not a `--yes` bypass) via `components/agents/shared/managed-config/`. `local` and `project` are **non-interactive** via the shared helper `components/agents/shared/config-place/`, reused by every render script and by local/project teardown. Both share the marker format and the fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
 
 | Target state | Action |
 |---|---|

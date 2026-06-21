@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:McMarkerSuffix = '.managed'
 $script:McFailed = $false
+$script:McConfirmAll = $false
 $script:McEndpoint = ''
 $script:McWithHooks = $false
 $script:McWithTelemetry = $false
@@ -39,7 +40,9 @@ function Assert-McTty {
 }
 
 function Confirm-McProceed($Prompt) {
-    $reply = Read-Host -Prompt "$Prompt [y/N]"
+    if ($script:McConfirmAll) { return $true }
+    $reply = Read-Host -Prompt "$Prompt [y/a/N]"
+    if ($reply -match '^(a|A|all|ALL)$') { $script:McConfirmAll = $true; return $true }
     if ($reply -match '^(y|Y|yes|YES)$') { return $true }
     Write-McLog 'declined — skipping'
     return $false
