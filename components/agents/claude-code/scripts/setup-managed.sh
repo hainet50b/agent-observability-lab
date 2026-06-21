@@ -9,27 +9,45 @@ component_dir=$(cd -- "$script_dir/.." && pwd)
 . "$script_dir/lib/managed-config-adapter.sh"
 
 managed_config::parse_args "$@"
-[ -n "$logs_endpoint" ] || managed_config::die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
-[ -n "$traces_endpoint" ] || managed_config::die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
-[ -n "$metrics_endpoint" ] || managed_config::die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
+
+with_telemetry=0
+if [ -n "$logs_endpoint" ] || [ -n "$traces_endpoint" ] || [ -n "$metrics_endpoint" ]; then
+  [ -n "$logs_endpoint" ] || managed_config::die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
+  [ -n "$traces_endpoint" ] || managed_config::die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
+  [ -n "$metrics_endpoint" ] || managed_config::die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
+  with_telemetry=1
+fi
+[ "$with_telemetry" -eq 1 ] || [ "$with_hooks" -eq 1 ] ||
+  managed_config::die "nothing to place (need OTLP endpoints and/or --with-hooks)"
 
 template="$component_dir/templates/managed-settings.template.json"
 [ -f "$template" ] || managed_config::die "template not found: $template"
-otel_template="$component_dir/templates/otel.template.json"
-[ -f "$otel_template" ] || managed_config::die "template not found: $otel_template"
 
 rendered_source=$(mktemp) || managed_config::die "could not create temp file"
 trap 'rm -f "$rendered_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' EXIT
-otel_env=$(sed \
-  -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
-  -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
-  -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
-  -e "s#@@OTLP_HEADERS@@##" \
-  "$otel_template" |
-  jq '.env | if .OTEL_EXPORTER_OTLP_HEADERS == "" then del(.OTEL_EXPORTER_OTLP_HEADERS) else . end') ||
-  managed_config::die "failed to render $otel_template"
-jq --argjson env "$otel_env" '.env = $env' "$template" >"$rendered_source" ||
-  managed_config::die "failed to render $template"
+
+# Telemetry is optional: render the env block only when the OTLP endpoints are
+# present. Without them the managed-settings.json carries no env (just _comment,
+# plus hooks if --with-hooks) — an audit-only managed deploy.
+if [ "$with_telemetry" -eq 1 ]; then
+  otel_template="$component_dir/templates/otel.template.json"
+  [ -f "$otel_template" ] || managed_config::die "template not found: $otel_template"
+  otel_env=$(sed \
+    -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
+    -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
+    -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
+    -e "s#@@OTLP_HEADERS@@##" \
+    "$otel_template" |
+    jq '.env | if .OTEL_EXPORTER_OTLP_HEADERS == "" then del(.OTEL_EXPORTER_OTLP_HEADERS) else . end') ||
+    managed_config::die "failed to render $otel_template"
+  jq --argjson env "$otel_env" '.env = $env' "$template" >"$rendered_source" ||
+    managed_config::die "failed to render $template"
+else
+  cp "$template" "$rendered_source" || managed_config::die "failed to stage $template"
+  # Audit-only deploy has no logs endpoint; key the marker/ownership on the audit
+  # ES url instead so place()/teardown() and the provenance marker are meaningful.
+  logs_endpoint=$es_url
+fi
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
 # materializing the hook bundle beside managed-settings.json and adding a hooks

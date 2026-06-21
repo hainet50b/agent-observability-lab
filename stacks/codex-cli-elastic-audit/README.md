@@ -156,6 +156,30 @@ register the Elasticsearch MCP, keeping the foreign project's footprint minimal 
 MCP is a `local`-scope convenience). **Caveat:** this captures that project's prompts
 and tool I/O into the lab's Elasticsearch — don't point secret-bearing work at it.
 
+#### Enforce the audit hooks org-wide (`--scope managed`)
+
+To enforce the audit hooks for **every** user on a machine, deploy at the host-global
+managed location (highest precedence). This is an **audit-only** managed deploy — hooks,
+no telemetry — so it places **only `requirements.toml`** (pinning `[features].hooks` and
+the hook tables, pointing at the host `managed_dir`) and **no `managed_config.toml`** (with
+no telemetry that file would be just a comment):
+
+```sh
+scripts/setup-config.sh --scope managed
+# PowerShell: scripts/setup-config.ps1 -Scope managed
+# teardown:   scripts/setup-config.sh --scope managed --teardown
+```
+
+It materializes the hook bundle into the host `managed_dir` and pins it via
+`requirements.toml`. Placement is **interactive, deploy-only, and marker-aware** (it
+confirms each file, never overwrites a foreign/real-org config, and writes a provenance
+sidecar keyed on the audit ES url); a non-TTY shell aborts. **Caveat — validate the host
+path:** confirm on a **real host** that the absolute hook `command` path resolves under
+the managed root — `/etc/codex` on macOS/Linux and `%ProgramData%\OpenAI\Codex` (Windows
+`Program Files`-class path). The managed scripts abort under Git Bash / MINGW by design;
+run them on the real OS entry. See
+[`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md) "Managed materialize".
+
 ### 3. Verify the audit path (optional)
 
 ```sh

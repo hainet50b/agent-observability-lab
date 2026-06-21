@@ -99,8 +99,17 @@ switch ($Scope) {
         }
     }
     'managed' {
-        [Console]::Error.WriteLine('FAIL: managed scope (audit hooks) is not wired yet - see PRD deploy 4/4.')
-        exit 2
+        # Audit-only managed deploy: hooks, no telemetry. The audit ES url keys the
+        # marker/ownership in place of an OTLP logs endpoint.
+        # TODO: thread agent_audit.elasticsearch.api_key once the managed hook bundle
+        # (Add-McHookStage -> agent-audit.conf) renders @@ES_API_KEY@@; today it renders
+        # only @@ES_URL@@, so a Cloud (auth-required) target is not yet supported.
+        if ($Teardown) {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/teardown-managed.ps1') -WithHooks
+        }
+        else {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') -WithHooks -EsUrl $Conf['agent_audit.elasticsearch.url']
+        }
     }
     default {
         [Console]::Error.WriteLine("FAIL: unknown -Scope '$Scope' (expected local|project|managed)")

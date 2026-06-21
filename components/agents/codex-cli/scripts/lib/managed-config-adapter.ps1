@@ -18,7 +18,11 @@ function Get-McManifest {
         default { Write-McFatal "no Codex managed-config path for os '$Os'" }
     }
     [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
-    [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
+    # managed_config.toml carries only telemetry defaults; with no telemetry it
+    # would be just a comment, so place requirements.toml alone (audit-only deploy).
+    if ($script:McWithTelemetry) {
+        [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
+    }
     if ($script:McWithHooks) {
         Get-McHookManifestItem (Join-Path (Split-Path -Parent $requirementsTarget) 'hooks')
     }

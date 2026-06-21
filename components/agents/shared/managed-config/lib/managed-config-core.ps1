@@ -4,6 +4,7 @@ $script:McMarkerSuffix = '.lab-managed'
 $script:McFailed = $false
 $script:McEndpoint = ''
 $script:McWithHooks = $false
+$script:McWithTelemetry = $false
 $script:McHooksStage = ''
 
 function Write-McLog($Message) {

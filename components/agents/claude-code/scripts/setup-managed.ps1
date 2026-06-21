@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$LogsEndpoint,
-    [Parameter(Mandatory = $true)][string]$TracesEndpoint,
-    [Parameter(Mandatory = $true)][string]$MetricsEndpoint,
+    [string]$LogsEndpoint,
+    [string]$TracesEndpoint,
+    [string]$MetricsEndpoint,
     [switch]$WithHooks,
     [string]$EsUrl
 )
@@ -12,23 +12,43 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/../../shared/managed-config/lib/managed-config-core.ps1"
 . "$PSScriptRoot/lib/managed-config-adapter.ps1"
 
+$WithTelemetry = $false
+if ($LogsEndpoint -or $TracesEndpoint -or $MetricsEndpoint) {
+    if (-not $LogsEndpoint) { Write-McFatal '-LogsEndpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)' }
+    if (-not $TracesEndpoint) { Write-McFatal '-TracesEndpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)' }
+    if (-not $MetricsEndpoint) { Write-McFatal '-MetricsEndpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)' }
+    $WithTelemetry = $true
+}
+if (-not $WithTelemetry -and -not $WithHooks) {
+    Write-McFatal 'nothing to place (need OTLP endpoints and/or -WithHooks)'
+}
+
 $ComponentDir = Split-Path -Parent $PSScriptRoot
 $template = Join-Path (Join-Path $ComponentDir 'templates') 'managed-settings.template.json'
 if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { Write-McFatal "template not found: $template" }
-$otelTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'otel.template.json'
-if (-not (Test-Path -LiteralPath $otelTemplate -PathType Leaf)) { Write-McFatal "template not found: $otelTemplate" }
 
-$otelEnv = ((Get-Content -Raw -LiteralPath $otelTemplate) `
-        -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
-        -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
-        -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
-        -replace '@@OTLP_HEADERS@@', '' | ConvertFrom-Json).env
-if ($otelEnv.OTEL_EXPORTER_OTLP_HEADERS -eq '') {
-    $otelEnv.PSObject.Properties.Remove('OTEL_EXPORTER_OTLP_HEADERS')
-}
+# Telemetry is optional: render the env block only when the OTLP endpoints are
+# present. Without them the managed-settings.json carries no env (just _comment,
+# plus hooks if -WithHooks) — an audit-only managed deploy.
 $cfg = Get-Content -Raw -LiteralPath $template | ConvertFrom-Json
-$cfg | Add-Member -NotePropertyName 'env' -NotePropertyValue $otelEnv -Force
+if ($WithTelemetry) {
+    $otelTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'otel.template.json'
+    if (-not (Test-Path -LiteralPath $otelTemplate -PathType Leaf)) { Write-McFatal "template not found: $otelTemplate" }
+    $otelEnv = ((Get-Content -Raw -LiteralPath $otelTemplate) `
+            -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
+            -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
+            -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
+            -replace '@@OTLP_HEADERS@@', '' | ConvertFrom-Json).env
+    if ($otelEnv.OTEL_EXPORTER_OTLP_HEADERS -eq '') {
+        $otelEnv.PSObject.Properties.Remove('OTEL_EXPORTER_OTLP_HEADERS')
+    }
+    $cfg | Add-Member -NotePropertyName 'env' -NotePropertyValue $otelEnv -Force
+}
 $rendered = $cfg | ConvertTo-Json -Depth 10
+
+# Audit-only deploy has no logs endpoint; key the marker/ownership on the audit ES
+# url so Invoke-McPlace and the provenance marker are meaningful.
+$markerEndpoint = if ($WithTelemetry) { $LogsEndpoint } else { $EsUrl }
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
 # materializing the hook bundle beside managed-settings.json and adding an
@@ -62,7 +82,7 @@ if ($WithHooks) {
 $source = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($source, $rendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Endpoint $LogsEndpoint -Sources @($source)
+    Invoke-McPlace -Endpoint $markerEndpoint -Sources @($source)
 }
 finally {
     Remove-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue

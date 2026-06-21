@@ -9,16 +9,21 @@ component_dir=$(cd -- "$script_dir/.." && pwd)
 . "$script_dir/lib/managed-config-adapter.sh"
 
 managed_config::parse_args "$@"
-[ -n "$logs_endpoint" ] || managed_config::die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
-[ -n "$traces_endpoint" ] || managed_config::die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
-[ -n "$metrics_endpoint" ] || managed_config::die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
+
+with_telemetry=0
+if [ -n "$logs_endpoint" ] || [ -n "$traces_endpoint" ] || [ -n "$metrics_endpoint" ]; then
+  [ -n "$logs_endpoint" ] || managed_config::die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
+  [ -n "$traces_endpoint" ] || managed_config::die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
+  [ -n "$metrics_endpoint" ] || managed_config::die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
+  with_telemetry=1
+fi
+[ "$with_telemetry" -eq 1 ] || [ "$with_hooks" -eq 1 ] ||
+  managed_config::die "nothing to place (need OTLP endpoints and/or --with-hooks)"
 
 templates="$component_dir/templates"
-managed_template="$templates/managed_config.template.toml"
-otel_template="$templates/otel.template.toml"
 requirements_template="$templates/requirements.template.toml"
 hooks_template="$templates/hooks.template.toml"
-for t in "$managed_template" "$otel_template" "$requirements_template" "$hooks_template"; do
+for t in "$requirements_template" "$hooks_template"; do
   [ -f "$t" ] || managed_config::die "template not found: $t"
 done
 
@@ -37,16 +42,30 @@ managed_config_source=$(mktemp) || managed_config::die "could not create temp fi
 requirements_source=$(mktemp) || managed_config::die "could not create temp file"
 trap 'rm -f "$managed_config_source" "$requirements_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' EXIT
 
-{
-  cat "$managed_template"
-  printf '\n'
-  sed \
-    -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
-    -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
-    -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
-    -e "s#@@OTLP_HEADERS@@##" \
-    "$otel_template" | sed -n '/^\[otel\]/,$p'
-} >"$managed_config_source" || managed_config::die "failed to render $managed_template"
+# Telemetry is optional: render managed_config.toml ([otel] defaults) only when the
+# OTLP endpoints are present. With no telemetry the file would be just a comment, so
+# it is not placed (the adapter omits it) — place only requirements.toml.
+if [ "$with_telemetry" -eq 1 ]; then
+  managed_template="$templates/managed_config.template.toml"
+  otel_template="$templates/otel.template.toml"
+  for t in "$managed_template" "$otel_template"; do
+    [ -f "$t" ] || managed_config::die "template not found: $t"
+  done
+  {
+    cat "$managed_template"
+    printf '\n'
+    sed \
+      -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
+      -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
+      -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
+      -e "s#@@OTLP_HEADERS@@##" \
+      "$otel_template" | sed -n '/^\[otel\]/,$p'
+  } >"$managed_config_source" || managed_config::die "failed to render $managed_template"
+else
+  # Audit-only deploy has no logs endpoint; key the marker/ownership on the audit
+  # ES url instead so place()/teardown() and the provenance marker are meaningful.
+  logs_endpoint=$es_url
+fi
 
 sed \
   -e "s#@@MANAGED_DIR@@#$hooks_ref#" \

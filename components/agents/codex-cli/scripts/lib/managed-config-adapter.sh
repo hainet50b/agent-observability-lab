@@ -14,6 +14,8 @@ managed_config::manifest() {
   local os=$1 requirements_source=${2:-} managed_config_source=${3:-} root
   root=$(managed_config::managed_root "$os")
   printf '%s\t%s\t%s\n' 'requirements' "$requirements_source" "$root/requirements.toml"
-  printf '%s\t%s\t%s\n' 'managed_config' "$managed_config_source" "$root/managed_config.toml"
+  # managed_config.toml carries only telemetry defaults; with no telemetry it
+  # would be just a comment, so place requirements.toml alone (audit-only deploy).
+  [ "$with_telemetry" -eq 1 ] && printf '%s\t%s\t%s\n' 'managed_config' "$managed_config_source" "$root/managed_config.toml"
   [ "$with_hooks" -eq 1 ] && managed_config::hook_manifest_lines "$root/hooks"
 }

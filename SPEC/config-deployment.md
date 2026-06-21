@@ -20,7 +20,7 @@ Three scopes, selected by `--scope` (default **`local`**):
 
 - **`local`** — a user-scope deployment to the **stack's own directory**. **Rejects `--target`** (use `project` to deploy into a directory). Materializes the full bundle, **including** the Elasticsearch MCP. Safe, scriptable, no confirmation.
 - **`project`** — a user-scope deployment into an arbitrary directory; **requires `--target <dir>`** — e.g. a user's real project, to see what telemetry/audit their everyday work would emit. Materializes the full bundle **except** the Elasticsearch MCP: the MCP is a local-only lab-exploration convenience and is not injected into foreign projects, keeping their footprint minimal. Safe, scriptable, no confirmation.
-- **`managed`** — org-enforced placement at the machine-global system paths, highest precedence. `--target` is not applicable. This is the **deploy-only, human-gated, never-overwrite** model in `SPEC/claude-code-managed-config.md` and `SPEC/codex-cli-managed-config.md` "Placement in this lab" (interactive, no `--yes`, non-TTY aborts, fail-loud, sidecar provenance marker, mandatory teardown). Dangerous and manual by design.
+- **`managed`** — org-enforced placement at the machine-global system paths, highest precedence. `--target` is not applicable. This is the **deploy-only, human-gated, never-overwrite** model in `SPEC/claude-code-managed-config.md` and `SPEC/codex-cli-managed-config.md` "Placement in this lab" (interactive, no `--yes`, non-TTY aborts, fail-loud, sidecar provenance marker, mandatory teardown). Dangerous and manual by design. A managed deploy can carry **telemetry, hooks, or both**: `setup-managed` requires at least one of (all three OTLP endpoints) or `--with-hooks`, and renders only what is present — see [Managed materialize](#managed-materialize).
 
 ## Placement is marker-aware and fail-if-foreign — across all scopes
 
@@ -40,7 +40,7 @@ This replaces the older permissive behaviour (env-merge into an existing `settin
 
 `setup-config --teardown` is valid for every scope (`local` resolves the target to the stack dir; `project` requires `--target`, like `project` deploy; `managed` takes neither).
 
-- **`managed`** → the existing **interactive** teardown (`teardown-managed`), unchanged.
+- **`managed`** → the existing **interactive** teardown (`teardown-managed`), unchanged. For the audit stacks, `--scope managed --teardown` runs `teardown-managed --with-hooks`, removing the host hook bundle (and, for a combined telemetry+hooks deploy, the telemetry config); teardown enumerates every candidate target, and one that was never placed is a harmless no-op.
 - **`local` / `project`** → **non-interactive**: remove each bundle file that carries a lab marker whose `endpoint` matches this deploy, plus its marker (and the copied `hooks/` tree when the hook-bearing file was lab-owned). Any target **lacking a lab marker, or carrying a different endpoint, is refused** and left untouched, and the run ends non-zero. Only ever removes lab-marked files.
 
 ## Backend vs config
@@ -66,12 +66,15 @@ Each stack's `setup.conf` is the single source for the values the setup scripts 
 - **Audit stacks** — `agent_audit.elasticsearch.api_key`, threaded to the audit hook config. See [`agent-audit.md`](agent-audit.md).
 - **Telemetry stacks** — an optional api_key keyed after the backing service (the APM-Server stacks carry **`telemetry.apm_server.api_key`**, the Collector stack **`telemetry.otel_collector.api_key`**), threaded through `setup-config` → `setup-telemetry` → `render-otel` into the agent's OTLP exporter config. When set, the agent sends **`Authorization: ApiKey <key>`** on its OTLP exports (Claude via `OTEL_EXPORTER_OTLP_HEADERS` in the settings `env` block; Codex via the per-exporter `headers` table in `[otel.*.otlp-http]`). When **absent the rendered otel config is byte-identical to a no-key run** — no header line is emitted — which suits the local demo APM Server / Collector, whose auth is disabled.
 
-## Managed materialize is staged
+## Managed materialize
 
-What a managed deployment materializes depends on what it enforces:
+What a managed deployment materializes depends on what it enforces. `setup-managed` makes the three OTLP endpoints **and** `--with-hooks` independently optional, requiring **at least one** of (all three OTLP endpoints) or `--with-hooks` (which also requires `--es-url`); it dies "nothing to place" if neither. Three combinations result:
 
-- **Config-only (telemetry).** Claude's `managed-settings.json` `env` and Codex's `managed_config.toml` `[otel]` are **self-contained config files** — no scripts to materialize. This is the low-risk baseline and is already in place.
-- **Managed audit hooks.** Enforcing the audit hooks requires materializing the **hook scripts** to a stable host location and pointing the managed config at them: Codex has a first-class **`managed_dir`**; Claude has **no such convention**, so the lab picks a location (a `hooks/` dir beside `managed-settings.json`) and must confirm **on a real host** that an absolute hook `command` path works (the macOS space / Windows `Program Files` caveats). Treat managed-with-hooks as the increment after config-only.
+- **Telemetry-only (config-only).** Claude's `managed-settings.json` `env` and Codex's `managed_config.toml` `[otel]` are **self-contained config files** — no scripts to materialize. This is the low-risk baseline, driven by the telemetry stacks. Telemetry rendering happens **only** when the OTLP endpoints are present, byte-identical to before.
+- **Hooks-only (audit).** Driven by the audit stacks (`--with-hooks --es-url <agent_audit.elasticsearch.url>`, no OTLP endpoints), this materializes the **hook scripts** to a stable host location and points the managed config at them, with **no telemetry config emitted**: Claude's `managed-settings.json` carries only its `_comment` plus the `hooks` block (**no `env`**); Codex places **only `requirements.toml`** (pinning `[features].hooks` and the hook tables) and **does not place `managed_config.toml`** at all — with no telemetry that file would be just a comment. Codex has a first-class **`managed_dir`**; Claude has **no such convention**, so the lab picks a location (a `hooks/` dir beside `managed-settings.json`) and must confirm **on a real host** that an absolute hook `command` path works (the macOS space / Windows `Program Files` caveats).
+- **Combined (telemetry + hooks).** Passing the OTLP endpoints **and** `--with-hooks` carries both: the rendered telemetry config plus the hook bundle and registration.
+
+**Marker endpoint for an audit-only deploy.** The provenance marker and ownership check key on the **logs OTLP endpoint** for a telemetry deploy; an audit-only deploy has none, so `setup-managed` keys them on the **audit ES url** (`--es-url`) instead — the deploy's actual data-plane endpoint — so `place`/`teardown` and the marker stay meaningful. (`teardown` carries no endpoints and enumerates every candidate target; an unplaced one is a harmless no-op.)
 
 ## Sensitive content
 

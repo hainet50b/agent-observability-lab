@@ -10,6 +10,7 @@ traces_endpoint=''
 metrics_endpoint=''
 es_url=''
 with_hooks=0
+with_telemetry=0
 hooks_stage=''
 
 managed_config::log() { printf '[managed-config] %s\n' "$*" >&2; }

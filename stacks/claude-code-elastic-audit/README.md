@@ -142,6 +142,29 @@ register the Elasticsearch MCP, keeping the foreign project's footprint minimal 
 MCP is a `local`-scope convenience). **Caveat:** this captures that project's prompts
 and tool I/O into the lab's Elasticsearch — don't point secret-bearing work at it.
 
+#### Enforce the audit hooks org-wide (`--scope managed`)
+
+To enforce the audit hooks for **every** user on a machine, deploy at the host-global
+managed location (highest precedence). This is an **audit-only** managed deploy — hooks,
+no telemetry — so Claude's `managed-settings.json` carries only the `hooks` block (no
+telemetry `env`):
+
+```sh
+scripts/setup-config.sh --scope managed
+# PowerShell: scripts/setup-config.ps1 -Scope managed
+# teardown:   scripts/setup-config.sh --scope managed --teardown
+```
+
+It materializes the hook bundle into a `hooks/` dir beside `managed-settings.json` and
+pins it. Placement is **interactive, deploy-only, and marker-aware** (it confirms each
+file, never overwrites a foreign/real-org config, and writes a provenance sidecar keyed
+on the audit ES url); a non-TTY shell aborts. **Caveat — validate the host path:** Claude
+has no managed `hooks/` convention, so confirm on a **real host** that the absolute hook
+`command` path resolves under the managed root — `/Library/Application Support/ClaudeCode`
+on macOS (note the space) and `C:\Program Files\ClaudeCode` on Windows. The managed
+scripts abort under Git Bash / MINGW by design; run them on the real OS entry. See
+[`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md) "Managed materialize".
+
 ### 3. Verify the audit path (optional)
 
 ```sh
