@@ -25,10 +25,10 @@ Two scopes, selected by `--scope` (default **`local`**):
 
 Two concerns, kept separate:
 
-- **`setup-backend`** — bring the backend up (`docker compose up`) and load its assets (ES pipelines / templates / ILM, Kibana saved objects).
+- **`setup-backend`** — wait for the (already-up) backend to be healthy, then load its assets (ES pipelines / templates / ILM, Kibana saved objects). Docker lifecycle (up/down) is the **user's**, via plain `docker compose up -d` / `docker compose down`; setup does not run it. It polls Elasticsearch/Kibana with a bounded timeout and fails fast if the stack is not up.
 - **`setup-config`** — deploy a bundle to a `(target, scope)`. **Backend-independent**: it can run with no backend (e.g. managed placement onto a host whose backend is elsewhere or already running).
 
-`setup.sh` is retained as their **composition** (`setup-backend` then `setup-config`) and forwards `--scope` / `--target`. `--scope` defaults to `local`; **`setup.sh --scope managed` also brings the backend up** (it is the composition). Managed-only **without** a backend is the standalone **`setup-config --scope managed`**.
+`setup.sh` is retained as their **composition** (`setup-backend` then `setup-config`) and forwards `--scope` / `--target`. `--scope` defaults to `local`. The backend must already be up (`docker compose up -d`) before running it. Managed-only **without** a backend is the standalone **`setup-config --scope managed`**.
 
 ## Managed materialize is staged
 
