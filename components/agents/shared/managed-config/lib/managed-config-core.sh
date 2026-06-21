@@ -3,75 +3,75 @@
 
 set -u
 
-mc_marker_suffix='.lab-managed'
-mc_failed=0
-mc_logs_endpoint=''
-mc_traces_endpoint=''
-mc_metrics_endpoint=''
+marker_suffix='.lab-managed'
+failed=0
+logs_endpoint=''
+traces_endpoint=''
+metrics_endpoint=''
 
-mc_log() { printf '[managed-config] %s\n' "$*" >&2; }
+managed_config::log() { printf '[managed-config] %s\n' "$*" >&2; }
 
-mc_die() {
-  mc_log "FATAL: $*"
+managed_config::die() {
+  managed_config::log "FATAL: $*"
   exit 1
 }
 
-mc_require_adapter() {
-  [ -n "${mc_agent:-}" ] || mc_die "adapter did not set mc_agent"
-  command -v mc_manifest >/dev/null 2>&1 || mc_die "adapter did not define mc_manifest()"
+managed_config::require_adapter() {
+  [ -n "${agent:-}" ] || managed_config::die "adapter did not set agent"
+  command -v managed_config::manifest >/dev/null 2>&1 || managed_config::die "adapter did not define managed_config::manifest()"
 }
 
-mc_detect_os() {
+managed_config::detect_os() {
   case "$(uname -s 2>/dev/null)" in
-  Linux) mc_os=linux ;;
-  Darwin) mc_os=macos ;;
-  *) mc_die "unsupported OS on this shell: $(uname -s 2>/dev/null) — use the .ps1 entry on Windows" ;;
+  Linux) os=linux ;;
+  Darwin) os=macos ;;
+  *) managed_config::die "unsupported OS on this shell: $(uname -s 2>/dev/null) — use the .ps1 entry on Windows" ;;
   esac
 }
 
-mc_parse_args() {
+managed_config::parse_args() {
   while [ "$#" -gt 0 ]; do
     case $1 in
     --logs-endpoint)
-      [ "$#" -ge 2 ] || mc_die "--logs-endpoint needs a value"
-      mc_logs_endpoint=$2
+      [ "$#" -ge 2 ] || managed_config::die "--logs-endpoint needs a value"
+      logs_endpoint=$2
       shift 2
       ;;
     --traces-endpoint)
-      [ "$#" -ge 2 ] || mc_die "--traces-endpoint needs a value"
-      mc_traces_endpoint=$2
+      [ "$#" -ge 2 ] || managed_config::die "--traces-endpoint needs a value"
+      traces_endpoint=$2
       shift 2
       ;;
     --metrics-endpoint)
-      [ "$#" -ge 2 ] || mc_die "--metrics-endpoint needs a value"
-      mc_metrics_endpoint=$2
+      [ "$#" -ge 2 ] || managed_config::die "--metrics-endpoint needs a value"
+      metrics_endpoint=$2
       shift 2
       ;;
-    *) mc_die "unknown argument: $1" ;;
+    *) managed_config::die "unknown argument: $1" ;;
     esac
   done
 }
 
-mc_require_tty() {
+managed_config::require_tty() {
   if ! { : </dev/tty; } 2>/dev/null; then
-    mc_die "no controlling TTY — placement is always interactive (there is no --yes); nothing was changed"
+    managed_config::die "no controlling TTY — placement is always interactive (there is no --yes); nothing was changed"
   fi
 }
 
-mc_confirm() {
+managed_config::confirm() {
   local reply
   printf '%s [y/N] ' "$1" >&2
-  IFS= read -r reply </dev/tty || mc_die "aborted (EOF on confirm); nothing was changed"
+  IFS= read -r reply </dev/tty || managed_config::die "aborted (EOF on confirm); nothing was changed"
   case $reply in
   y | Y | yes | YES) return 0 ;;
   *)
-    mc_log "declined — skipping"
+    managed_config::log "declined — skipping"
     return 1
     ;;
   esac
 }
 
-mc_marker_field() {
+managed_config::marker_field() {
   [ -f "$1" ] || return 0
   local k v
   while IFS='=' read -r k v || [ -n "$k" ]; do
@@ -83,136 +83,136 @@ mc_marker_field() {
   return 0
 }
 
-mc_show_diff() {
+managed_config::show_diff() {
   if command -v diff >/dev/null 2>&1; then
     diff -u "$1" "$2" >&2 || true
   else
-    mc_log "(diff unavailable) existing content differs from the new content"
+    managed_config::log "(diff unavailable) existing content differs from the new content"
   fi
 }
 
-mc_show_content() {
-  mc_log "content to be written:"
+managed_config::show_content() {
+  managed_config::log "content to be written:"
   sed 's/^/  | /' "$1" >&2
 }
 
-mc_install_file() {
+managed_config::install_file() {
   local source=$1 target=$2 dir
   dir=$(dirname -- "$target")
   mkdir -p "$dir" 2>/dev/null ||
-    mc_die "cannot create $dir — rerun with privileges, e.g.: sudo mkdir -p '$dir'"
+    managed_config::die "cannot create $dir — rerun with privileges, e.g.: sudo mkdir -p '$dir'"
   cp "$source" "$target" 2>/dev/null ||
-    mc_die "cannot write $target (permission denied?) — install it manually with elevated privileges, e.g.: sudo cp '$source' '$target'"
+    managed_config::die "cannot write $target (permission denied?) — install it manually with elevated privileges, e.g.: sudo cp '$source' '$target'"
 }
 
-mc_write_marker() {
+managed_config::write_marker() {
   local marker=$1 target=$2 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf 'agent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$mc_agent" "$mc_logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
+    "$agent" "$logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
 }
 
-mc_place_one() {
+managed_config::place_one() {
   local key=$1 source=$2 target=$3
-  local marker="$target$mc_marker_suffix"
-  [ -f "$source" ] || mc_die "$key: source content not found: $source"
+  local marker="$target$marker_suffix"
+  [ -f "$source" ] || managed_config::die "$key: source content not found: $source"
 
   if [ ! -e "$target" ]; then
-    mc_log "$key: $target does not exist (new file)"
-    mc_show_content "$source"
-    mc_confirm "Place $key at $target?" || return 0
-    mc_install_file "$source" "$target"
-    mc_write_marker "$marker" "$target" || {
+    managed_config::log "$key: $target does not exist (new file)"
+    managed_config::show_content "$source"
+    managed_config::confirm "Place $key at $target?" || return 0
+    managed_config::install_file "$source" "$target"
+    managed_config::write_marker "$marker" "$target" || {
       rm -f "$target" 2>/dev/null
-      mc_die "$key: could not write provenance marker $marker — rolled back $target so it is not left unmarked"
+      managed_config::die "$key: could not write provenance marker $marker — rolled back $target so it is not left unmarked"
     }
-    mc_log "$key: placed $target"
+    managed_config::log "$key: placed $target"
     return 0
   fi
 
   if [ ! -f "$marker" ]; then
-    mc_log "$key: REFUSED — $target exists with no lab marker (foreign / real-org managed config). Never touched."
-    mc_failed=1
+    managed_config::log "$key: REFUSED — $target exists with no lab marker (foreign / real-org managed config). Never touched."
+    failed=1
     return 0
   fi
 
   local marker_endpoint
-  marker_endpoint=$(mc_marker_field "$marker" endpoint)
-  if [ "$marker_endpoint" != "$mc_logs_endpoint" ]; then
-    mc_log "$key: REFUSED — this host already enforces $marker_endpoint; run teardown first."
-    mc_failed=1
+  marker_endpoint=$(managed_config::marker_field "$marker" endpoint)
+  if [ "$marker_endpoint" != "$logs_endpoint" ]; then
+    managed_config::log "$key: REFUSED — this host already enforces $marker_endpoint; run teardown first."
+    failed=1
     return 0
   fi
 
   if [ "$(cat "$source")" = "$(cat "$target")" ]; then
-    mc_log "$key: already placed by the lab and identical — no-op."
+    managed_config::log "$key: already placed by the lab and identical — no-op."
     return 0
   fi
 
-  mc_log "$key: $target was placed by the lab but the content changed:"
-  mc_show_diff "$target" "$source"
-  mc_confirm "Update $key at $target?" || return 0
-  mc_install_file "$source" "$target"
-  mc_write_marker "$marker" "$target" ||
-    mc_die "$key: updated $target but could not rewrite marker $marker — remove $target manually"
-  mc_log "$key: updated $target"
+  managed_config::log "$key: $target was placed by the lab but the content changed:"
+  managed_config::show_diff "$target" "$source"
+  managed_config::confirm "Update $key at $target?" || return 0
+  managed_config::install_file "$source" "$target"
+  managed_config::write_marker "$marker" "$target" ||
+    managed_config::die "$key: updated $target but could not rewrite marker $marker — remove $target manually"
+  managed_config::log "$key: updated $target"
 }
 
-mc_teardown_one() {
+managed_config::teardown_one() {
   local key=$1 target=$2
-  local marker="$target$mc_marker_suffix"
+  local marker="$target$marker_suffix"
 
   if [ ! -e "$target" ] && [ ! -f "$marker" ]; then
-    mc_log "$key: nothing to remove ($target absent)"
+    managed_config::log "$key: nothing to remove ($target absent)"
     return 0
   fi
 
   if [ ! -f "$marker" ]; then
-    mc_log "$key: REFUSED — $target has no lab marker (foreign / real-org config). Not removed."
-    mc_failed=1
+    managed_config::log "$key: REFUSED — $target has no lab marker (foreign / real-org config). Not removed."
+    failed=1
     return 0
   fi
 
   local marker_agent marker_endpoint
-  marker_agent=$(mc_marker_field "$marker" agent)
-  marker_endpoint=$(mc_marker_field "$marker" endpoint)
-  mc_confirm "Remove lab-placed $key at $target (agent='$marker_agent' endpoint='$marker_endpoint')?" || return 0
+  marker_agent=$(managed_config::marker_field "$marker" agent)
+  marker_endpoint=$(managed_config::marker_field "$marker" endpoint)
+  managed_config::confirm "Remove lab-placed $key at $target (agent='$marker_agent' endpoint='$marker_endpoint')?" || return 0
   rm -f "$target" 2>/dev/null ||
-    mc_die "cannot remove $target (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '$target'"
+    managed_config::die "cannot remove $target (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '$target'"
   rm -f "$marker" 2>/dev/null ||
-    mc_log "$key: removed $target but could not remove marker $marker — remove it manually"
-  mc_log "$key: removed $target and its marker"
+    managed_config::log "$key: removed $target but could not remove marker $marker — remove it manually"
+  managed_config::log "$key: removed $target and its marker"
 }
 
-mc_place() {
-  mc_require_adapter
-  [ -n "$mc_logs_endpoint" ] || mc_die "no endpoint provided"
-  mc_detect_os
-  mc_require_tty
+managed_config::place() {
+  managed_config::require_adapter
+  [ -n "$logs_endpoint" ] || managed_config::die "no endpoint provided"
+  managed_config::detect_os
+  managed_config::require_tty
   local manifest_lines
-  manifest_lines=$(mc_manifest "$mc_os" "$@")
-  [ -n "$manifest_lines" ] || mc_die "manifest empty for os '$mc_os' — nothing to place"
+  manifest_lines=$(managed_config::manifest "$os" "$@")
+  [ -n "$manifest_lines" ] || managed_config::die "manifest empty for os '$os' — nothing to place"
   while IFS=$'\t' read -r key source target; do
     [ -n "${key:-}" ] || continue
-    mc_place_one "$key" "$source" "$target"
+    managed_config::place_one "$key" "$source" "$target"
   done <<EOF
 $manifest_lines
 EOF
-  [ "$mc_failed" -eq 0 ] || mc_die "one or more managed files were refused (see above); nothing foreign was touched"
+  [ "$failed" -eq 0 ] || managed_config::die "one or more managed files were refused (see above); nothing foreign was touched"
 }
 
-mc_teardown() {
-  mc_require_adapter
-  mc_detect_os
-  mc_require_tty
+managed_config::teardown() {
+  managed_config::require_adapter
+  managed_config::detect_os
+  managed_config::require_tty
   local manifest_lines
-  manifest_lines=$(mc_manifest "$mc_os" "$@")
-  [ -n "$manifest_lines" ] || mc_die "manifest empty for os '$mc_os' — nothing to remove"
+  manifest_lines=$(managed_config::manifest "$os" "$@")
+  [ -n "$manifest_lines" ] || managed_config::die "manifest empty for os '$os' — nothing to remove"
   while IFS=$'\t' read -r key _ target; do
     [ -n "${key:-}" ] || continue
-    mc_teardown_one "$key" "$target"
+    managed_config::teardown_one "$key" "$target"
   done <<EOF
 $manifest_lines
 EOF
-  [ "$mc_failed" -eq 0 ] || mc_die "one or more managed files were refused (see above)"
+  [ "$failed" -eq 0 ] || managed_config::die "one or more managed files were refused (see above)"
 }

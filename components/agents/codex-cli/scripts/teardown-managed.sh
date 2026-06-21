@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+component_dir=$(cd -- "$script_dir/.." && pwd)
 # shellcheck source=/dev/null
-. "$COMPONENT_DIR/../shared/managed-config/lib/managed-config-core.sh"
+. "$component_dir/../shared/managed-config/lib/managed-config-core.sh"
 # shellcheck source=/dev/null
-. "$SCRIPT_DIR/lib/managed-config-adapter.sh"
+. "$script_dir/lib/managed-config-adapter.sh"
 
-mc_teardown
+managed_config::teardown

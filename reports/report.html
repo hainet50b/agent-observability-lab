@@ -1193,6 +1193,36 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>managed fix: shell naming — lowercase non-env globals, spell names out</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li>Renamed every <code>mc_*</code> <strong>function</strong> across the 7 managed <code>.sh</code> files to the spelled-out <code>managed_config::&lt;verb&gt;</code> namespace, mirroring the hook core's <code>json::&lt;verb&gt;</code> style (the task's "name::verb functions"). <code>command -v managed_config::manifest</code> and the <code>::</code> dispatch both work under bash + shellcheck.</li>
+    <li>Dropped the cryptic <code>mc_</code> prefix from globals and lowercased the script-dir vars: <code>mc_marker_suffix→marker_suffix</code>, <code>mc_failed→failed</code>, <code>mc_{logs,traces,metrics}_endpoint→{…}_endpoint</code>, <code>mc_os→os</code>, <code>mc_agent→agent</code>, and <code>SCRIPT_DIR/COMPONENT_DIR→script_dir/component_dir</code> (kept lowercase since none are exported/env-overridable). The façade temp vars were spelled out too: <code>mc_source→rendered_source</code>, <code>mc_source_requirements→requirements_source</code>, <code>mc_source_managed_config→managed_config_source</code> — the codex ones now match the adapter's positional param names.</li>
+    <li>Did the rename with an ordered <code>sed</code> script (longest/overlapping tokens first — e.g. <code>mc_logs_endpoint</code> before <code>mc_log</code>, <code>mc_place_one</code> before <code>mc_place</code>, the two <code>mc_source_*</code> before <code>mc_source</code>) so no shorter token clobbered a longer one. Verified zero <code>mc_</code>/<code>SCRIPT_DIR</code>/<code>COMPONENT_DIR</code> residue afterward.</li>
+    <li>Kept <code>os</code> (and the loop vars <code>k</code>/<code>v</code>/<code>t</code>) as-is — universally understood and the loop vars are explicitly exempt; the hook core itself tolerates terse-but-clear names like <code>es_url</code>.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>None. Beyond static gates (shfmt + shellcheck clean, all compose files valid), a non-host smoke run of the renamed <code>setup-managed.sh</code> dispatched correctly through arg-parse → endpoint-validate → require-adapter and aborted at the OS check on Git Bash (MINGW), placing nothing.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>None — the companion PowerShell-naming task is already open and handled next.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>The managed-config shell scripts now read in the project's house style — namespaced <code>managed_config::</code> functions and full, lowercase variable names — instead of the cryptic <code>mc_</code> prefix. No behaviour change.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>Function namespace chosen is <code>managed_config::</code> (matches the directory and the hook's <code>json::</code> pattern); flag if you'd prefer a shorter spelled-out namespace.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

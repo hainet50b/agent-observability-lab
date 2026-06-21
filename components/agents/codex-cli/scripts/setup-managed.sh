@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2154
 
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+component_dir=$(cd -- "$script_dir/.." && pwd)
 # shellcheck source=/dev/null
-. "$COMPONENT_DIR/../shared/managed-config/lib/managed-config-core.sh"
+. "$component_dir/../shared/managed-config/lib/managed-config-core.sh"
 # shellcheck source=/dev/null
-. "$SCRIPT_DIR/lib/managed-config-adapter.sh"
+. "$script_dir/lib/managed-config-adapter.sh"
 
-mc_parse_args "$@"
-[ -n "$mc_logs_endpoint" ] || mc_die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
-[ -n "$mc_traces_endpoint" ] || mc_die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
-[ -n "$mc_metrics_endpoint" ] || mc_die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
+managed_config::parse_args "$@"
+[ -n "$logs_endpoint" ] || managed_config::die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
+[ -n "$traces_endpoint" ] || managed_config::die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
+[ -n "$metrics_endpoint" ] || managed_config::die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
 
-templates="$COMPONENT_DIR/templates"
+templates="$component_dir/templates"
 managed_template="$templates/managed_config.template.toml"
 requirements_template="$templates/requirements.template.toml"
 for t in "$managed_template" "$requirements_template"; do
-  [ -f "$t" ] || mc_die "template not found: $t"
+  [ -f "$t" ] || managed_config::die "template not found: $t"
 done
 
-hooks_dir="$COMPONENT_DIR/hooks"
+hooks_dir="$component_dir/hooks"
 
-mc_source_managed_config=$(mktemp) || mc_die "could not create temp file"
-mc_source_requirements=$(mktemp) || mc_die "could not create temp file"
-trap 'rm -f "$mc_source_managed_config" "$mc_source_requirements"' EXIT
+managed_config_source=$(mktemp) || managed_config::die "could not create temp file"
+requirements_source=$(mktemp) || managed_config::die "could not create temp file"
+trap 'rm -f "$managed_config_source" "$requirements_source"' EXIT
 
 sed \
-  -e "s#@@OTLP_LOGS_ENDPOINT@@#$mc_logs_endpoint#" \
-  -e "s#@@OTLP_TRACES_ENDPOINT@@#$mc_traces_endpoint#" \
-  -e "s#@@OTLP_METRICS_ENDPOINT@@#$mc_metrics_endpoint#" \
-  "$managed_template" >"$mc_source_managed_config" || mc_die "failed to render $managed_template"
+  -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
+  -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
+  -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
+  "$managed_template" >"$managed_config_source" || managed_config::die "failed to render $managed_template"
 
 sed \
   -e "s#@@MANAGED_DIR@@#$hooks_dir#" \
@@ -38,6 +38,6 @@ sed \
   -e "s#@@AGENT_AUDIT_SH@@#$hooks_dir/agent-audit.sh#" \
   -e "s#@@AGENT_AUDIT_PS1@@#$hooks_dir/agent-audit.ps1#" \
   -e "s#@@AGENT_AUDIT_CONF@@#$hooks_dir/agent-audit.conf#" \
-  "$requirements_template" >"$mc_source_requirements" || mc_die "failed to render $requirements_template"
+  "$requirements_template" >"$requirements_source" || managed_config::die "failed to render $requirements_template"
 
-mc_place "$mc_source_requirements" "$mc_source_managed_config"
+managed_config::place "$requirements_source" "$managed_config_source"
