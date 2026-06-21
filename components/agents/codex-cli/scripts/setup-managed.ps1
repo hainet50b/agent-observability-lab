@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Stack,
     [Parameter(Mandatory = $true)][string]$LogsEndpoint,
     [Parameter(Mandatory = $true)][string]$TracesEndpoint,
     [Parameter(Mandatory = $true)][string]$MetricsEndpoint
@@ -38,11 +37,12 @@ $script:McSourceRequirements = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($script:McSourceManagedConfig, $managedRendered, [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText($script:McSourceRequirements, $requirementsRendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Stack $Stack -Endpoint $LogsEndpoint
+    Invoke-McPlace -Endpoint $LogsEndpoint
 }
 finally {
     Remove-Item -LiteralPath $script:McSourceManagedConfig -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:McSourceRequirements -Force -ErrorAction SilentlyContinue
 }
+
 
 

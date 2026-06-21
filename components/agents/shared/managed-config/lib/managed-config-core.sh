@@ -5,7 +5,6 @@ set -u
 
 mc_marker_suffix='.lab-managed'
 mc_failed=0
-mc_stack=''
 mc_logs_endpoint=''
 mc_traces_endpoint=''
 mc_metrics_endpoint=''
@@ -33,11 +32,6 @@ mc_detect_os() {
 mc_parse_args() {
   while [ "$#" -gt 0 ]; do
     case $1 in
-    --stack)
-      [ "$#" -ge 2 ] || mc_die "--stack needs a value"
-      mc_stack=$2
-      shift 2
-      ;;
     --logs-endpoint)
       [ "$#" -ge 2 ] || mc_die "--logs-endpoint needs a value"
       mc_logs_endpoint=$2
@@ -114,8 +108,8 @@ mc_install_file() {
 mc_write_marker() {
   local marker=$1 target=$2 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  printf 'agent=%s\nstack=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$mc_agent" "$mc_stack" "$mc_logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null ||
+  printf 'agent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
+    "$mc_agent" "$mc_logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null ||
     mc_die "placed $target but could not write provenance marker $marker — remove $target manually"
 }
 
@@ -140,20 +134,20 @@ mc_place_one() {
     return 0
   fi
 
-  local marker_stack
-  marker_stack=$(mc_marker_field "$marker" stack)
-  if [ "$marker_stack" != "$mc_stack" ]; then
-    mc_log "$key: REFUSED — $target is held by stack '$marker_stack'; run its teardown first."
+  local marker_endpoint
+  marker_endpoint=$(mc_marker_field "$marker" endpoint)
+  if [ "$marker_endpoint" != "$mc_logs_endpoint" ]; then
+    mc_log "$key: REFUSED — this host already enforces $marker_endpoint; run teardown first."
     mc_failed=1
     return 0
   fi
 
   if [ "$(cat "$source")" = "$(cat "$target")" ]; then
-    mc_log "$key: already placed by this stack and identical — no-op."
+    mc_log "$key: already placed by the lab and identical — no-op."
     return 0
   fi
 
-  mc_log "$key: $target was placed by this stack but the content changed:"
+  mc_log "$key: $target was placed by the lab but the content changed:"
   mc_show_diff "$target" "$source"
   mc_confirm "Update $key at $target?" || return 0
   mc_install_file "$source" "$target"
@@ -176,10 +170,10 @@ mc_teardown_one() {
     return 0
   fi
 
-  local marker_agent marker_stack
+  local marker_agent marker_endpoint
   marker_agent=$(mc_marker_field "$marker" agent)
-  marker_stack=$(mc_marker_field "$marker" stack)
-  mc_confirm "Remove lab-placed $key at $target (agent='$marker_agent' stack='$marker_stack')?" || return 0
+  marker_endpoint=$(mc_marker_field "$marker" endpoint)
+  mc_confirm "Remove lab-placed $key at $target (agent='$marker_agent' endpoint='$marker_endpoint')?" || return 0
   rm -f "$target" 2>/dev/null ||
     mc_die "cannot remove $target (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '$target'"
   rm -f "$marker" 2>/dev/null ||
@@ -189,7 +183,7 @@ mc_teardown_one() {
 
 mc_place() {
   mc_require_adapter
-  [ -n "$mc_stack" ] || mc_die "no --stack provided"
+  [ -n "$mc_logs_endpoint" ] || mc_die "no endpoint provided"
   mc_detect_os
   mc_require_tty
   local manifest_lines

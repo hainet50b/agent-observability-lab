@@ -205,14 +205,14 @@ Place it via `setup.sh --managed` (runs after the normal setup steps) or
 directly:
 
 ```sh
-../../components/agents/claude-code/scripts/setup-managed.sh --stack claude-code-elastic \
+../../components/agents/claude-code/scripts/setup-managed.sh \
   --logs-endpoint http://localhost:8200/v1/logs \
   --traces-endpoint http://localhost:8200/v1/traces \
   --metrics-endpoint http://localhost:8200/v1/metrics
 ```
 
 ```powershell
-..\..\components\agents\claude-code\scripts\setup-managed.ps1 -Stack claude-code-elastic `
+..\..\components\agents\claude-code\scripts\setup-managed.ps1 `
   -LogsEndpoint http://localhost:8200/v1/logs `
   -TracesEndpoint http://localhost:8200/v1/traces `
   -MetricsEndpoint http://localhost:8200/v1/metrics
@@ -221,11 +221,11 @@ directly:
 Remove it (restores the host, removes only the lab-placed file + its marker):
 
 ```sh
-../../components/agents/claude-code/scripts/teardown-managed.sh --stack claude-code-elastic
+../../components/agents/claude-code/scripts/teardown-managed.sh
 ```
 
 ```powershell
-..\..\components\agents\claude-code\scripts\teardown-managed.ps1 -Stack claude-code-elastic
+..\..\components\agents\claude-code\scripts\teardown-managed.ps1
 ```
 
 Then run `claude` from a configured shell/directory and do a little work (ask a

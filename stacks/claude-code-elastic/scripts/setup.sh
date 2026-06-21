@@ -51,7 +51,7 @@ echo "[setup] 3/3 — Claude Code telemetry config"
 if [ "$managed" -eq 1 ]; then
   echo
   echo "[setup] managed-config placement (interactive, opt-in)"
-  "$components_dir/agents/claude-code/scripts/setup-managed.sh" --stack claude-code-elastic \
+  "$components_dir/agents/claude-code/scripts/setup-managed.sh" \
     --logs-endpoint "$otlp_endpoint/v1/logs" \
     --traces-endpoint "$otlp_endpoint/v1/traces" \
     --metrics-endpoint "$otlp_endpoint/v1/metrics"

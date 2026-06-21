@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Stack,
     [Parameter(Mandatory = $true)][string]$LogsEndpoint,
     [Parameter(Mandatory = $true)][string]$TracesEndpoint,
     [Parameter(Mandatory = $true)][string]$MetricsEndpoint
@@ -24,10 +23,11 @@ $rendered = (Get-Content -Raw -LiteralPath $template) `
 $script:McSource = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($script:McSource, $rendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Stack $Stack -Endpoint $LogsEndpoint
+    Invoke-McPlace -Endpoint $LogsEndpoint
 }
 finally {
     Remove-Item -LiteralPath $script:McSource -Force -ErrorAction SilentlyContinue
 }
+
 
 

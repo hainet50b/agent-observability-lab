@@ -2,7 +2,6 @@ $ErrorActionPreference = 'Stop'
 
 $script:McMarkerSuffix = '.lab-managed'
 $script:McFailed = $false
-$script:McStack = ''
 $script:McEndpoint = ''
 
 function Write-McLog($Message) {
@@ -57,7 +56,6 @@ function Write-McMarker($Marker, $Target) {
     $placedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     $lines = @(
         "agent=$script:McAgent"
-        "stack=$script:McStack"
         "endpoint=$script:McEndpoint"
         "placed_at=$placedAt"
         "target=$Target"
@@ -126,19 +124,19 @@ function McPlaceOne($Item) {
         return
     }
 
-    $markerStack = Get-McMarkerField $marker 'stack'
-    if ($markerStack -ne $script:McStack) {
-        Write-McLog "${key}: REFUSED — $target is held by stack '$markerStack'; run its teardown first."
+    $markerEndpoint = Get-McMarkerField $marker 'endpoint'
+    if ($markerEndpoint -ne $script:McEndpoint) {
+        Write-McLog "${key}: REFUSED — this host already enforces $markerEndpoint; run teardown first."
         $script:McFailed = $true
         return
     }
 
     if ((Get-Content -Raw -LiteralPath $source) -eq (Get-Content -Raw -LiteralPath $target)) {
-        Write-McLog "${key}: already placed by this stack and identical — no-op."
+        Write-McLog "${key}: already placed by the lab and identical — no-op."
         return
     }
 
-    Write-McLog "${key}: $target was placed by this stack but the content changed:"
+    Write-McLog "${key}: $target was placed by the lab but the content changed:"
     Show-McDiff $target $source
     if (-not (Confirm-McProceed "Update $key at $target?")) { return }
     Install-McFile $source $target
@@ -163,8 +161,8 @@ function McTeardownOne($Item) {
     }
 
     $markerAgent = Get-McMarkerField $marker 'agent'
-    $markerStack = Get-McMarkerField $marker 'stack'
-    if (-not (Confirm-McProceed "Remove lab-placed $key at $target (agent='$markerAgent' stack='$markerStack')?")) { return }
+    $markerEndpoint = Get-McMarkerField $marker 'endpoint'
+    if (-not (Confirm-McProceed "Remove lab-placed $key at $target (agent='$markerAgent' endpoint='$markerEndpoint')?")) { return }
     try {
         McRemoveFile $target
     }
@@ -180,11 +178,10 @@ function McTeardownOne($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
-function Invoke-McPlace($Stack, $Endpoint) {
-    $script:McStack = $Stack
+function Invoke-McPlace($Endpoint) {
     $script:McEndpoint = $Endpoint
     Test-McAdapter
-    if (-not $script:McStack) { McFail 'no -Stack provided' }
+    if (-not $script:McEndpoint) { McFail 'no endpoint provided' }
     $os = Get-McPlatform
     Assert-McTty
     $items = @(Get-McManifest -Os $os)
@@ -193,8 +190,7 @@ function Invoke-McPlace($Stack, $Endpoint) {
     if ($script:McFailed) { McFail 'one or more managed files were refused (see above); nothing foreign was touched' }
 }
 
-function Invoke-McTeardown($Stack) {
-    $script:McStack = $Stack
+function Invoke-McTeardown {
     Test-McAdapter
     $os = Get-McPlatform
     Assert-McTty
@@ -203,5 +199,7 @@ function Invoke-McTeardown($Stack) {
     foreach ($item in $items) { McTeardownOne $item }
     if ($script:McFailed) { McFail 'one or more managed files were refused (see above)' }
 }
+
+
 
 

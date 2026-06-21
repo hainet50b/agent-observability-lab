@@ -159,14 +159,14 @@ hooks reference scripts in `managed_dir` (set to the lab's
 Place it via `setup.sh --managed` (runs after the normal setup steps) or directly:
 
 ```sh
-../../components/agents/codex-cli/scripts/setup-managed.sh --stack codex-cli-elastic \
+../../components/agents/codex-cli/scripts/setup-managed.sh \
   --logs-endpoint http://localhost:8200/v1/logs \
   --traces-endpoint http://localhost:8200/v1/traces \
   --metrics-endpoint http://localhost:8200/v1/metrics
 ```
 
 ```powershell
-..\..\components\agents\codex-cli\scripts\setup-managed.ps1 -Stack codex-cli-elastic `
+..\..\components\agents\codex-cli\scripts\setup-managed.ps1 `
   -LogsEndpoint http://localhost:8200/v1/logs `
   -TracesEndpoint http://localhost:8200/v1/traces `
   -MetricsEndpoint http://localhost:8200/v1/metrics
@@ -175,11 +175,11 @@ Place it via `setup.sh --managed` (runs after the normal setup steps) or directl
 Remove it (restores the host, removes only the lab-placed files + their markers):
 
 ```sh
-../../components/agents/codex-cli/scripts/teardown-managed.sh --stack codex-cli-elastic
+../../components/agents/codex-cli/scripts/teardown-managed.sh
 ```
 
 ```powershell
-..\..\components\agents\codex-cli\scripts\teardown-managed.ps1 -Stack codex-cli-elastic
+..\..\components\agents\codex-cli\scripts\teardown-managed.ps1
 ```
 
 > **Prompt / tool-call audit is a separate stack.** Capturing what a session did

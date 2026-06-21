@@ -7,5 +7,4 @@ COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/managed-config-adapter.sh"
 
-mc_parse_args "$@"
 mc_teardown

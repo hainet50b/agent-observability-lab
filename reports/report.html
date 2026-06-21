@@ -1074,6 +1074,37 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>managed fix: ownership key — drop <code>--stack</code>, key the overwrite guard on the endpoint</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li>Removed <code>--stack</code>/<code>-Stack</code> from the core, both façades, both teardown wrappers, and both stacks' <code>setup.sh</code>/<code>setup.ps1</code>. The marker now records <code>agent / endpoint / placed_at / target</code> (no <code>stack</code> line). The overwrite guard compares the marker's recorded <code>endpoint</code> against the current logs endpoint: differ → refuse "this host already enforces &lt;endpoint&gt;; run teardown first"; identical content → no-op; same endpoint, changed content → confirm + update.</li>
+    <li>Teardown stays stack- and endpoint-agnostic: it removes any lab-marked file after confirm and hard-refuses foreign files. I dropped the now-unused <code>mc_parse_args "$@"</code> from both <code>teardown-managed.sh</code> (it takes no args now) and emptied the <code>param()</code> block in both <code>teardown-managed.ps1</code>. The confirm prompt now shows <code>agent</code> + <code>endpoint</code> instead of <code>agent</code> + <code>stack</code>.</li>
+    <li>Reworded two place-time log lines ("already placed by this stack" / "was placed by this stack") to "…by the lab" — the stack notion is gone, so the old wording was stale.</li>
+    <li>Updated the two stack READMEs' setup <em>and</em> teardown command examples to drop <code>--stack</code>/<code>-Stack</code> (no README prose referenced the old stack-keyed refuse, verified by grep).</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li><strong>SPEC is now out of step with this change and I did not edit it</strong> (the fix-task forbids editing SPEC, and per this project's spec/implementation separation Ralph never edits the spec layer). See Review highlights — the human needs to reconcile it.</li>
+    <li>No host execution (non-TTY abort); the place/no-op/refuse/teardown branches are correct by inspection.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>A spec-layer reconciliation task (human-owned): <code>SPEC/codex-cli-managed-config.md</code> "Never overwrite; track provenance" still documents the ownership decision table keyed on <em>stack</em> ("lab-placed, same stack…", "different stack → refuse — held by stack X") and lists the marker as recording "which agent / <strong>stack</strong> / endpoint / when". Both now describe the dropped <code>--stack</code> model and should be rewritten around the endpoint key.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>Managed-config placement no longer takes a stack name — it identifies what the lab "owns" on a host by the OTLP endpoint recorded in the sidecar marker, refusing to clobber a host already enforced against a different endpoint and telling you to run teardown first.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li><strong>SPEC contradiction:</strong> the PRD task deliberately overrides the stack-keyed ownership model that <code>SPEC/codex-cli-managed-config.md</code> still documents (decision table + marker-fields list). I implemented the PRD task and left SPEC untouched as instructed; please reconcile the SPEC decision table and the "agent / stack / endpoint" marker description to the new endpoint-keyed model.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

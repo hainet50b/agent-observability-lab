@@ -60,9 +60,10 @@ Write-Host '[setup] 3/3 - Claude Code telemetry config'
 if ($Managed) {
     Write-Host ''
     Write-Host '[setup] managed-config placement (interactive, opt-in)'
-    & (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-managed.ps1') -Stack 'claude-code-elastic' `
+    & (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-managed.ps1') `
         -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
 }
+
 
 
 
