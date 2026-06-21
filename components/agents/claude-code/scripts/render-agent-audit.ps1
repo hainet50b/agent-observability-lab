@@ -1,5 +1,5 @@
 # render-agent-audit.ps1 — render the Claude Code agent's Agent Audit delivery
-# config at <TargetDir>/.claude/agent-audit.conf from ../agent-audit.template.conf
+# config at <TargetDir>/.claude/agent-audit.conf from ../templates/agent-audit.template.conf
 # (PowerShell mirror of render-agent-audit.sh).
 #
 # Fills @@ES_URL@@ (the backend's Elasticsearch base URL) into the flat key=value
@@ -17,7 +17,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-$Template = Join-Path $ComponentDir 'agent-audit.template.conf'
+$Template = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -34,3 +34,4 @@ $content = (Get-Content -Raw -LiteralPath $Template) -replace '@@ES_URL@@', $EsU
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
 [System.IO.File]::WriteAllText($config, $content, [System.Text.UTF8Encoding]::new($false))
 Write-Host "wrote $config"
+

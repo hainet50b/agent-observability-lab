@@ -2,7 +2,7 @@
 # <TargetDir>/.claude/settings.local.json (PowerShell mirror of render-otel.sh).
 #
 # The telemetry env knobs live once in the agent-owned template
-# ../otel.template.json. This fills the four non-agent values — the three FULL
+# ../templates/otel.template.json. This fills the four non-agent values — the three FULL
 # per-signal OTLP endpoints and the headers — and merges the `env` block into
 # the target's settings. The caller supplies the full per-signal endpoints; this
 # script does no path construction (the /v1/<signal> path is the backend's).
@@ -28,7 +28,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-$Template = Join-Path $ComponentDir 'otel.template.json'
+$Template = Join-Path (Join-Path $ComponentDir 'templates') 'otel.template.json'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -67,3 +67,4 @@ else {
     [pscustomobject]@{ env = $envBlock } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $out -Encoding utf8
     Write-Host "wrote $out"
 }
+

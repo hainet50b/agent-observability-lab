@@ -1,5 +1,5 @@
 # render-mcp.ps1 — materialize the Claude Code agent's project-scoped MCP config
-# at <TargetDir>/.mcp.json from ../mcp.template.json (mirror of render-mcp.sh).
+# at <TargetDir>/.mcp.json from ../templates/mcp.template.json (mirror of render-mcp.sh).
 #
 # Writes the agent-owned MCP server definitions verbatim — dropping only the
 # _comment — to the target's .mcp.json, so a `claude` launched from <TargetDir>
@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-$Template = Join-Path $ComponentDir 'mcp.template.json'
+$Template = Join-Path (Join-Path $ComponentDir 'templates') 'mcp.template.json'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     Write-Error "FAIL: template not found: $Template"
@@ -39,3 +39,4 @@ $cfg.PSObject.Properties.Remove('_comment')
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out) | Out-Null
 $cfg | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $out -Encoding utf8
 Write-Host "wrote $out"
+

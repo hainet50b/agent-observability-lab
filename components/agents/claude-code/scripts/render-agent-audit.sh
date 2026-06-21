@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # render-agent-audit.sh — render the Claude Code agent's Agent Audit delivery
-# config at <target>/.claude/agent-audit.conf from ../agent-audit.template.conf.
+# config at <target>/.claude/agent-audit.conf from ../templates/agent-audit.template.conf.
 #
 # The capture-user-prompt hook reads its delivery config (Elasticsearch endpoint,
 # per-stream destination, capture posture) from a flat key=value agent-audit.conf
@@ -26,7 +26,7 @@ fi
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-TEMPLATE="$COMPONENT_DIR/agent-audit.template.conf"
+TEMPLATE="$COMPONENT_DIR/templates/agent-audit.template.conf"
 config="$target_dir/.claude/agent-audit.conf"
 
 [ -f "$TEMPLATE" ] || {

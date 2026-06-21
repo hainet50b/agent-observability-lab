@@ -4,7 +4,7 @@
 # <target>/.claude/settings.local.json (POSIX/bash).
 #
 # Claude Code registers hooks in settings (not a separate hooks file). This merges
-# the `hooks` block from the agent-owned template ../hook.template.json into the
+# the `hooks` block from the agent-owned template ../templates/hook.template.json into the
 # target's settings.local.json, substituting @@USER_PROMPT_COMMAND@@ /
 # @@TOOL_CALL_COMMAND@@ with the single hooks/agent-audit.sh entry plus its
 # per-event `--stream <user_prompt|tool_call>` and `--config <abs>/.claude/agent-audit.conf`.
@@ -29,7 +29,7 @@ fi
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-TEMPLATE="$COMPONENT_DIR/hook.template.json"
+TEMPLATE="$COMPONENT_DIR/templates/hook.template.json"
 ENTRY="$COMPONENT_DIR/hooks/agent-audit.sh"
 out="$target/.claude/settings.local.json"
 

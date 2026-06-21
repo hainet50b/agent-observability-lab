@@ -1,7 +1,7 @@
 # render-hook.ps1 — register the Claude Code audit hooks in
 # <TargetDir>/.claude/settings.local.json (PowerShell mirror of render-hook.sh).
 #
-# Merges the `hooks` block from ../hook.template.json into the target's
+# Merges the `hooks` block from ../templates/hook.template.json into the target's
 # settings.local.json, rendering BOTH hooks (UserPromptSubmit -> -Stream user_prompt,
 # PostToolUse -> -Stream tool_call) in EXEC FORM so they run on Windows:
 # `command: "powershell"` with an `args` array that spawns the single
@@ -33,7 +33,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
-$Template = Join-Path $ComponentDir 'hook.template.json'
+$Template = Join-Path (Join-Path $ComponentDir 'templates') 'hook.template.json'
 $Entry = Join-Path (Join-Path $ComponentDir 'hooks') 'agent-audit.ps1'
 
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
@@ -84,4 +84,5 @@ else {
     [pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $out -Encoding utf8
     Write-Host "wrote $out"
 }
+
 

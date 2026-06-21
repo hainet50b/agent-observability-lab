@@ -4,7 +4,7 @@
 # <target>/.claude/settings.local.json.
 #
 # The telemetry env knobs are the agent's property and live once in the
-# agent-owned template ../otel.template.json. This renders that template's
+# agent-owned template ../templates/otel.template.json. This renders that template's
 # `env` block into the target's settings, filling the four values that are NOT
 # the agent's to fix — the three full per-signal OTLP endpoints and the headers:
 #   @@OTLP_LOGS_ENDPOINT@@     full logs endpoint    (e.g. http://localhost:8200/v1/logs)
@@ -38,7 +38,7 @@ fi
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-TEMPLATE="$COMPONENT_DIR/otel.template.json"
+TEMPLATE="$COMPONENT_DIR/templates/otel.template.json"
 out="$target/.claude/settings.local.json"
 
 [ -f "$TEMPLATE" ] || {

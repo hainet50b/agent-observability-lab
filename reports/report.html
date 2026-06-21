@@ -786,6 +786,41 @@ clean; <code>Invoke-Formatter</code> a no-op and <code>Invoke-ScriptAnalyzer</co
 shebang-stripped <code>.ps1</code>. This was the last open PRD task.</p>
 </section>
 
+<section>
+<h2>(tidy) Move claude-code's flat template files under <code>templates/</code></h2>
+
+<h3>Judgement points</h3>
+<p>The path-rewrite lines were the load-bearing change, but I also updated the
+header-comment references (<code>../hook.template.json</code> &rarr;
+<code>../templates/hook.template.json</code>, etc.) in all eight render scripts — leaving
+them stale would have misdirected a future editor, and the task is explicitly a
+truthful relocation. For the <code>.ps1</code> path lines I matched codex-cli's exact
+idiom <code>Join-Path (Join-Path $ComponentDir 'templates') '&lt;file&gt;'</code> rather than
+inventing a variant, so the two agent components now read identically. Used
+<code>git mv</code> to preserve history on the four moved files.</p>
+
+<h3>Unresolved / workarounds</h3>
+<p>None.</p>
+
+<h3>Next PRD suggestions</h3>
+<p>The render-script header comments are verbose (multi-paragraph what-narration) —
+they are squarely in scope for the open <em>(tidy) Purge comments aggressively</em>
+task, so no separate suggestion needed.</p>
+
+<h3>Change summary</h3>
+<p>Claude Code's four config templates (<code>agent-audit.template.conf</code>,
+<code>hook.template.json</code>, <code>mcp.template.json</code>, <code>otel.template.json</code>) now live
+under <code>components/agents/claude-code/templates/</code> instead of loose at the
+component root, matching codex-cli. Pure relocation — every render script reads the
+new path and produces the same artifacts.</p>
+
+<h3>Review highlights</h3>
+<p>Verified by rendering all four artifacts into a temp dir (each template resolved,
+all files written). <code>docker compose config -q</code> green for all five stacks;
+<code>shfmt -d</code> empty and <code>shellcheck</code> clean; <code>Invoke-Formatter</code> a no-op
+and <code>Invoke-ScriptAnalyzer</code> clean on the four touched <code>.ps1</code>.</p>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

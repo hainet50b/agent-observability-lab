@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # render-mcp.sh — materialize the Claude Code agent's project-scoped MCP config
-# at <target>/.mcp.json from the agent-owned template ../mcp.template.json.
+# at <target>/.mcp.json from the agent-owned template ../templates/mcp.template.json.
 #
 # The MCP server definitions are the agent's property and live once in the
 # template. This writes them verbatim — dropping only the _comment — to the
@@ -28,7 +28,7 @@ fi
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-TEMPLATE="$COMPONENT_DIR/mcp.template.json"
+TEMPLATE="$COMPONENT_DIR/templates/mcp.template.json"
 out="$target/.mcp.json"
 
 [ -f "$TEMPLATE" ] || {
