@@ -8,6 +8,9 @@ failed=0
 logs_endpoint=''
 traces_endpoint=''
 metrics_endpoint=''
+es_url=''
+with_hooks=0
+hooks_stage=''
 
 managed_config::log() { printf '[managed-config] %s\n' "$*" >&2; }
 
@@ -46,6 +49,15 @@ managed_config::parse_args() {
       [ "$#" -ge 2 ] || managed_config::die "--metrics-endpoint needs a value"
       metrics_endpoint=$2
       shift 2
+      ;;
+    --es-url)
+      [ "$#" -ge 2 ] || managed_config::die "--es-url needs a value"
+      es_url=$2
+      shift 2
+      ;;
+    --with-hooks)
+      with_hooks=1
+      shift
       ;;
     *) managed_config::die "unknown argument: $1" ;;
     esac
@@ -182,6 +194,32 @@ managed_config::teardown_one() {
   rm -f "$marker" 2>/dev/null ||
     managed_config::log "$key: removed $target but could not remove marker $marker — remove it manually"
   managed_config::log "$key: removed $target and its marker"
+}
+
+managed_config::stage_hooks() {
+  local component_dir=$1 es_url_val=$2
+  local hooks_src="$component_dir/hooks" core_src="$component_dir/../shared/agent-audit/lib"
+  local conf_template="$component_dir/templates/agent-audit.template.conf"
+  [ -f "$conf_template" ] || managed_config::die "conf template not found: $conf_template"
+  hooks_stage=$(mktemp -d) || managed_config::die "could not create temp staging dir"
+  mkdir -p "$hooks_stage/lib"
+  cp "$hooks_src/agent-audit.sh" "$hooks_src/agent-audit.ps1" "$hooks_stage/" ||
+    managed_config::die "could not stage hook entry scripts"
+  cp "$hooks_src/lib/adapter.sh" "$hooks_src/lib/adapter.ps1" "$hooks_stage/lib/" ||
+    managed_config::die "could not stage hook adapter"
+  cp "$core_src/agent-audit-core.sh" "$core_src/agent-audit-core.ps1" "$hooks_stage/lib/" ||
+    managed_config::die "could not stage hook core"
+  sed -e "s#@@ES_URL@@#$es_url_val#" "$conf_template" >"$hooks_stage/agent-audit.conf" ||
+    managed_config::die "could not render agent-audit.conf"
+  chmod +x "$hooks_stage/agent-audit.sh"
+}
+
+managed_config::hook_manifest_lines() {
+  local hooks_target=$1 rel
+  for rel in agent-audit.sh agent-audit.ps1 agent-audit.conf \
+    lib/adapter.sh lib/adapter.ps1 lib/agent-audit-core.sh lib/agent-audit-core.ps1; do
+    printf '%s\t%s\t%s\n' "hook:$rel" "$hooks_stage/$rel" "$hooks_target/$rel"
+  done
 }
 
 managed_config::place() {

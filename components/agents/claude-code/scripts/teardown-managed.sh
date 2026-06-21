@@ -7,4 +7,5 @@ component_dir=$(cd -- "$script_dir/.." && pwd)
 # shellcheck source=/dev/null
 . "$script_dir/lib/managed-config-adapter.sh"
 
+managed_config::parse_args "$@"
 managed_config::teardown

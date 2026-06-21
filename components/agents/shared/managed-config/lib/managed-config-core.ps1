@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 $script:McMarkerSuffix = '.lab-managed'
 $script:McFailed = $false
 $script:McEndpoint = ''
+$script:McWithHooks = $false
+$script:McHooksStage = ''
 
 function Write-McLog($Message) {
     [Console]::Error.WriteLine("[managed-config] $Message")
@@ -178,6 +180,28 @@ function Remove-McManagedFile($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
+function Add-McHookStage($ComponentDir, $EsUrl) {
+    $hooksSrc = Join-Path $ComponentDir 'hooks'
+    $coreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
+    $confTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
+    if (-not (Test-Path -LiteralPath $confTemplate -PathType Leaf)) { Write-McFatal "conf template not found: $confTemplate" }
+    $stage = Join-Path ([System.IO.Path]::GetTempPath()) ('mc-hooks-' + [System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Force -Path (Join-Path $stage 'lib') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $hooksSrc 'agent-audit.sh'), (Join-Path $hooksSrc 'agent-audit.ps1') -Destination $stage -Force
+    Copy-Item -LiteralPath (Join-Path $hooksSrc 'lib/adapter.sh'), (Join-Path $hooksSrc 'lib/adapter.ps1') -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $coreSrc 'agent-audit-core.sh'), (Join-Path $coreSrc 'agent-audit-core.ps1') -Destination (Join-Path $stage 'lib') -Force
+    $conf = (Get-Content -Raw -LiteralPath $confTemplate) -replace '@@ES_URL@@', $EsUrl
+    [System.IO.File]::WriteAllText((Join-Path $stage 'agent-audit.conf'), $conf, [System.Text.UTF8Encoding]::new($false))
+    $script:McHooksStage = $stage
+    return $stage
+}
+
+function Get-McHookManifestItem($HooksTarget) {
+    foreach ($rel in @('agent-audit.sh', 'agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.sh', 'lib/adapter.ps1', 'lib/agent-audit-core.sh', 'lib/agent-audit-core.ps1')) {
+        [pscustomobject]@{ Key = "hook:$rel"; Source = (Join-Path $script:McHooksStage $rel); Target = (Join-Path $HooksTarget $rel) }
+    }
+}
+
 function Invoke-McPlace($Endpoint, $Sources) {
     $script:McEndpoint = $Endpoint
     Test-McAdapter
@@ -199,4 +223,5 @@ function Invoke-McTeardown {
     foreach ($item in $items) { Remove-McManagedFile $item }
     if ($script:McFailed) { Write-McFatal 'one or more managed files were refused (see above)' }
 }
+
 

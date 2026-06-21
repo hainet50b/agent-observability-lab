@@ -1378,6 +1378,40 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>Config-deployment 4/4: managed audit-hook materialization (staged, off by default)</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Confirmed scope with the human before building.</strong> This task is uniquely human-gated (its acceptance is a manual host check I can't perform) and the SPEC says "managed stays config-only until confirmed." I asked and the human chose "build staged, off by default." So I implemented the capability behind an explicit <code>--with-hooks</code> / <code>-WithHooks</code> opt-in (default OFF → managed enforces telemetry only, byte-identical to before) and documented the host-check gate; no host execution.</li>
+    <li><strong>The per-line manifest is the clean extension point.</strong> Placement already iterates <code>key\tsource\ttarget</code> lines, each copied with its own <code>.lab-managed</code> provenance marker. So materializing the hook bundle = emitting 7 extra manifest lines (entry + adapter + core, both shells, + rendered <code>agent-audit.conf</code>) with targets under the managed <code>hooks/</code> dir. No change to the place/teardown/marker machinery — it just sees more files. Two shared core helpers (<code>stage_hooks</code> + <code>hook_manifest_lines</code>, and their PS equivalents <code>Add-McHookStage</code> + <code>Get-McHookManifestItem</code>) carry the agent-agnostic part; each adapter exposes a <code>managed_root</code> so setup-managed and the manifest agree on the path.</li>
+    <li><strong>Claude vs Codex placement (per SPEC).</strong> Claude has no managed hooks-dir convention, so the bundle goes to a <code>hooks/</code> dir beside <code>managed-settings.json</code> and a <code>hooks</code> block is injected into it (command-string on POSIX via the <code>.sh</code> entry, exec-form <code>powershell + args</code> via the <code>.ps1</code>). Codex has a first-class <code>managed_dir</code>: <code>--with-hooks</code> repoints it from the in-repo component dir to the host <code>&lt;managed root&gt;/hooks</code> and materializes the bundle there — which also resolves the pre-existing "operator must hand-place <code>agent-audit.conf</code>" caveat the Codex README documents.</li>
+    <li><strong>Verified by inspection (no host execution possible by design).</strong> (a) A library harness with a fake OS: default → manifest is the single config line; <code>--with-hooks</code> → full staged bundle on disk + 7 hook lines targeting the managed <code>hooks/</code>; the rendered <code>agent-audit.conf</code> carries the ES URL. (b) The Claude jq injection: default managed-settings has no <code>hooks</code> key, with-hooks is valid JSON whose hook command points at the materialized path and keeps the telemetry <code>env</code>. (c) All four real <code>.ps1</code> entries (both agents × default/with-hooks) drive their full render→stage→inject path and then hit the non-TTY abort ("nothing was changed") with no prior exception — so the opt-in is exercised end-to-end and automation can never place anything.</li>
+    <li><strong>Teardown symmetry.</strong> <code>teardown-managed</code> didn't parse args, so it would leave a materialized hook bundle behind. Added <code>--with-hooks</code> / <code>-WithHooks</code> to teardown (both agents, both shells) so the same flag that placed the hooks removes them; absent targets skip gracefully via the existing "nothing to remove" path.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li><strong>The host-check gate is yours to clear.</strong> Before relying on <code>--with-hooks</code> on a real fleet, confirm on an actual host that an absolute managed hook <code>command</code> path fires (macOS <code>Application Support</code> space; Windows <code>ProgramData</code>/<code>Program Files</code>) and record the result. Until then, leave it off — managed stays config-only. I could not exercise real host placement (non-TTY abort, by design).</li>
+    <li>The <code>.sh</code> <code>--with-hooks</code> entry can't be smoke-run on this Windows host (its <code>detect_os</code> is macOS/Linux-only — Windows uses the <code>.ps1</code>), so the <code>.sh</code> path was verified via the library harness + the shared logic the <code>.ps1</code> exercised live.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>Once you've cleared the host check, a small follow-up could flip the default or add a stack-level <code>setup.sh --scope managed --with-hooks</code> convenience wire-through (I deliberately kept <code>--with-hooks</code> on the direct <code>setup-managed</code> invocation, matching the SPEC's "guarded manual deploy, not part of the automated suite").</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>Managed config can now <em>optionally</em> enforce the audit hooks org-wide: <code>setup-managed … --with-hooks --es-url &lt;es&gt;</code> materializes the self-contained hook bundle to the host (a <code>hooks/</code> dir beside Claude's <code>managed-settings.json</code>, or Codex's <code>managed_dir</code>) and points the managed config at it; <code>teardown-managed --with-hooks</code> removes it. It is <strong>off by default</strong> (managed stays telemetry-only) and gated on a one-time manual host check documented in the stack READMEs. Verified by inspection; placement is never executed automatically (non-TTY aborts).</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li><strong>Please do the host check before using <code>--with-hooks</code> in anger</strong> — it's the gate the SPEC requires and the one thing I can't verify for you.</li>
+    <li>Default managed behaviour is unchanged for both agents (I verified the manifest, the rendered managed-settings, and the live <code>.ps1</code> abort). The only new surface is reached exclusively via the opt-in flag.</li>
+    <li>Codex's default managed still points <code>managed_dir</code> at the in-repo component hooks (pre-existing demo behaviour); <code>--with-hooks</code> is what makes it self-contained. If you'd prefer Codex's default to drop the repo reference entirely (truly config-only), that's a small follow-up — flagged rather than changed, to avoid destabilizing the recently-reworked Codex managed path unverified.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

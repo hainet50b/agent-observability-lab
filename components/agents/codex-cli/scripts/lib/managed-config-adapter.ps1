@@ -19,7 +19,20 @@ function Get-McManifest {
     }
     [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
     [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
+    if ($script:McWithHooks) {
+        Get-McHookManifestItem (Join-Path (Split-Path -Parent $requirementsTarget) 'hooks')
+    }
 }
+
+function Get-McManagedRoot($Os) {
+    switch ($Os) {
+        'windows' { Join-Path $env:ProgramData 'OpenAI\Codex' }
+        'macos' { '/etc/codex' }
+        'linux' { '/etc/codex' }
+        default { Write-McFatal "no Codex managed-config path for os '$Os'" }
+    }
+}
+
 
 
 

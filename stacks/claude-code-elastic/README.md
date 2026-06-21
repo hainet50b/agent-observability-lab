@@ -218,7 +218,23 @@ directly:
   -MetricsEndpoint http://localhost:8200/v1/metrics
 ```
 
-Remove it (restores the host, removes only the lab-placed file + its marker):
+**Staged opt-in — also enforce the audit hooks (`--with-hooks`).** Off by default
+(managed enforces telemetry only — "config-only"). Adding `--with-hooks --es-url <es>`
+(sh) / `-WithHooks -EsUrl <es>` (ps1) **materializes** the audit-hook bundle (entry +
+shared core + adapter, both shells, plus a rendered `agent-audit.conf`) into a
+`hooks/` dir **beside** `managed-settings.json` and adds a `hooks` block pointing at
+it — so the enforced hooks are self-contained on the host, never referencing this
+repo.
+
+> **Host-check gate — do this once before relying on `--with-hooks`.** Claude Code has
+> no managed hooks-directory convention, so the lab picks `hooks/` beside
+> `managed-settings.json`. Confirm on a **real host** that an absolute hook `command`
+> path actually fires (mind the macOS space in `Application Support` and the Windows
+> `ProgramData`/`Program Files` paths) and record the result. Until you have confirmed
+> it, leave `--with-hooks` off and keep managed config-only.
+
+Remove it (restores the host, removes only the lab-placed file + its marker; add
+`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle):
 
 ```sh
 ../../components/agents/claude-code/scripts/teardown-managed.sh

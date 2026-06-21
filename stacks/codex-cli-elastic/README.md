@@ -179,7 +179,21 @@ Place it via `setup.sh --managed` (runs after the normal setup steps) or directl
   -MetricsEndpoint http://localhost:8200/v1/metrics
 ```
 
-Remove it (restores the host, removes only the lab-placed files + their markers):
+**Staged opt-in — materialize the hooks into `managed_dir` (`--with-hooks`).** By
+default the managed `requirements.toml` points `managed_dir` at this repo's
+`components/agents/codex-cli/hooks/` (demo — you must hand-place an `agent-audit.conf`
+there, as noted above). Adding `--with-hooks --es-url <es>` (sh) / `-WithHooks -EsUrl
+<es>` (ps1) instead **materializes** the full bundle — scripts + shared core + adapter
++ a rendered `agent-audit.conf` — into the host `managed_dir` (`/etc/codex/hooks`, or
+`%ProgramData%\OpenAI\Codex\hooks` on Windows) and points `requirements.toml` there,
+so the enforced hooks are self-contained and the conf caveat above no longer applies.
+
+> **Host-check gate — do this once before relying on `--with-hooks`.** Confirm on a
+> **real host** that the absolute managed hook command actually fires, and record the
+> result. Until you have confirmed it, leave `--with-hooks` off.
+
+Remove it (restores the host, removes only the lab-placed files + their markers; add
+`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle):
 
 ```sh
 ../../components/agents/codex-cli/scripts/teardown-managed.sh

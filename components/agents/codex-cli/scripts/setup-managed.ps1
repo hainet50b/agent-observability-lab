@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$LogsEndpoint,
     [Parameter(Mandatory = $true)][string]$TracesEndpoint,
-    [Parameter(Mandatory = $true)][string]$MetricsEndpoint
+    [Parameter(Mandatory = $true)][string]$MetricsEndpoint,
+    [switch]$WithHooks,
+    [string]$EsUrl
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,7 +21,17 @@ foreach ($t in @($managedTemplate, $requirementsTemplate, $hooksTemplate)) {
     if (-not (Test-Path -LiteralPath $t -PathType Leaf)) { Write-McFatal "template not found: $t" }
 }
 
-$hooksDir = Join-Path $ComponentDir 'hooks'
+# Default: requirements point at the in-repo component hooks (demo). Opt-in
+# (staged, off by default): materialize the hook bundle into the host managed_dir
+# and point the managed config there. Requires a confirmed host check (stack README).
+$hooksRef = Join-Path $ComponentDir 'hooks'
+if ($WithHooks) {
+    if (-not $EsUrl) { Write-McFatal '--with-hooks requires -EsUrl (audit hooks need the ES endpoint)' }
+    $os = Get-McPlatform
+    $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
+    Add-McHookStage $ComponentDir $EsUrl | Out-Null
+    $script:McWithHooks = $true
+}
 
 $managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) `
     -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
@@ -27,13 +39,13 @@ $managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) `
     -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint
 
 $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
-    -replace '@@MANAGED_DIR@@', $hooksDir `
-    -replace '@@WINDOWS_MANAGED_DIR@@', $hooksDir
+    -replace '@@MANAGED_DIR@@', $hooksRef `
+    -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef
 
 $hooksRendered = (Get-Content -Raw -LiteralPath $hooksTemplate) `
-    -replace '@@AGENT_AUDIT_SH@@', (Join-Path $hooksDir 'agent-audit.sh') `
-    -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksDir 'agent-audit.ps1') `
-    -replace '@@AGENT_AUDIT_CONF@@', (Join-Path $hooksDir 'agent-audit.conf')
+    -replace '@@AGENT_AUDIT_SH@@', (Join-Path $hooksRef 'agent-audit.sh') `
+    -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksRef 'agent-audit.ps1') `
+    -replace '@@AGENT_AUDIT_CONF@@', (Join-Path $hooksRef 'agent-audit.conf')
 
 $requirementsRendered = $requirementsRendered + "`n" + $hooksRendered
 
@@ -47,7 +59,9 @@ try {
 finally {
     Remove-Item -LiteralPath $managedSource -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $requirementsSource -Force -ErrorAction SilentlyContinue
+    if ($script:McHooksStage) { Remove-Item -LiteralPath $script:McHooksStage -Recurse -Force -ErrorAction SilentlyContinue }
 }
+
 
 
 

@@ -1,15 +1,21 @@
 $script:McAgent = 'claude-code'
 
-function Get-McManifest {
-    param([string]$Os, [string[]]$Sources = @())
+function Get-McManagedRoot($Os) {
     switch ($Os) {
-        'windows' { $target = 'C:\ProgramData\ClaudeCode\managed-settings.json' }
-        'macos' { $target = '/Library/Application Support/ClaudeCode/managed-settings.json' }
-        'linux' { $target = '/etc/claude-code/managed-settings.json' }
+        'windows' { 'C:\ProgramData\ClaudeCode' }
+        'macos' { '/Library/Application Support/ClaudeCode' }
+        'linux' { '/etc/claude-code' }
         default { Write-McFatal "no Claude managed-settings path for os '$Os'" }
     }
-    [pscustomobject]@{ Key = 'managed-settings'; Source = $Sources[0]; Target = $target }
 }
+
+function Get-McManifest {
+    param([string]$Os, [string[]]$Sources = @())
+    $root = Get-McManagedRoot $Os
+    [pscustomobject]@{ Key = 'managed-settings'; Source = $Sources[0]; Target = (Join-Path $root 'managed-settings.json') }
+    if ($script:McWithHooks) { Get-McHookManifestItem (Join-Path $root 'hooks') }
+}
+
 
 
 
