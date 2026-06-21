@@ -16,5 +16,3 @@ Assert-StreamEnabled $Stream
 Read-HookPayload $Stream
 Build-AuditDocument $Stream
 Send-Document
-
-

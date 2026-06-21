@@ -61,7 +61,3 @@ else {
     [pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $out -Encoding utf8
     Write-Host "wrote $out"
 }
-
-
-
-

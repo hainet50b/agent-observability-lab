@@ -50,4 +50,3 @@ switch ($Scope) {
         exit 2
     }
 }
-

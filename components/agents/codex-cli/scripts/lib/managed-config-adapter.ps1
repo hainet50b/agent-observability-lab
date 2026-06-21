@@ -32,7 +32,3 @@ function Get-McManagedRoot($Os) {
         default { Write-McFatal "no Codex managed-config path for os '$Os'" }
     }
 }
-
-
-
-

@@ -165,4 +165,3 @@ function Send-Document {
     catch { Log "deliver failed ($_) — session proceeds uncaptured" }
     exit 0
 }
-

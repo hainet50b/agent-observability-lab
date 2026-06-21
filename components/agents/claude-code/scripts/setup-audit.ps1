@@ -11,4 +11,3 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 & (Join-Path $ScriptDir 'render-hook.ps1') -TargetDir $TargetDir
 & (Join-Path $ScriptDir 'render-agent-audit.ps1') -EsUrl $EsUrl -TargetDir $TargetDir
 & (Join-Path $ScriptDir 'render-mcp.ps1') -TargetDir $TargetDir
-

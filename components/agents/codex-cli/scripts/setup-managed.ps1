@@ -61,10 +61,3 @@ finally {
     Remove-Item -LiteralPath $requirementsSource -Force -ErrorAction SilentlyContinue
     if ($script:McHooksStage) { Remove-Item -LiteralPath $script:McHooksStage -Recurse -Force -ErrorAction SilentlyContinue }
 }
-
-
-
-
-
-
-

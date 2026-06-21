@@ -180,6 +180,3 @@ foreach ($concern in $Concerns) {
 
 Write-Host ''
 Write-Host "PASS: Elasticsearch assets applied on $EsUrl`: $($Concerns -join ', ')."
-
-
-

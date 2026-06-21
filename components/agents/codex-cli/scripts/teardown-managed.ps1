@@ -10,7 +10,3 @@ $ErrorActionPreference = 'Stop'
 
 if ($WithHooks) { $script:McWithHooks = $true }
 Invoke-McTeardown
-
-
-
-

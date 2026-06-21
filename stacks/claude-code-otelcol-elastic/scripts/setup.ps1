@@ -28,4 +28,3 @@ if ($Config) {
     $configArgs['Config'] = $Config
 }
 & (Join-Path $PSScriptRoot 'setup-config.ps1') @configArgs
-

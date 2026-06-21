@@ -223,5 +223,3 @@ function Invoke-McTeardown {
     foreach ($item in $items) { Remove-McManagedFile $item }
     if ($script:McFailed) { Write-McFatal 'one or more managed files were refused (see above)' }
 }
-
-

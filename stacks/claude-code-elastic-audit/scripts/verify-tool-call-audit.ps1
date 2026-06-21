@@ -138,6 +138,3 @@ try {
 finally {
     Pop-Location
 }
-
-
-

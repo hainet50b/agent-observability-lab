@@ -59,4 +59,3 @@ Write-Host '[backend] 2/3 - Elasticsearch backend assets'
 Write-Host ''
 Write-Host '[backend] 3/3 - Kibana saved objects'
 & (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex-cli' 6>&1 | Indent
-

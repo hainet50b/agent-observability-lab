@@ -59,4 +59,3 @@ Write-Host '[backend] 2/3 - Agent Audit data streams'
 Write-Host ''
 Write-Host '[backend] 3/3 - Kibana saved objects'
 & (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') 6>&1 | Indent
-

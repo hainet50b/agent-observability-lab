@@ -15,7 +15,3 @@ function Get-McManifest {
     [pscustomobject]@{ Key = 'managed-settings'; Source = $Sources[0]; Target = (Join-Path $root 'managed-settings.json') }
     if ($script:McWithHooks) { Get-McHookManifestItem (Join-Path $root 'hooks') }
 }
-
-
-
-

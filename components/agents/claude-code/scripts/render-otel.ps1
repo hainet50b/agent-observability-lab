@@ -46,5 +46,3 @@ else {
     [pscustomobject]@{ env = $envBlock } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $out -Encoding utf8
     Write-Host "wrote $out"
 }
-
-

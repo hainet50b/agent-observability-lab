@@ -56,4 +56,3 @@ function Get-RuntimeIdentity {
         organization = [ordered]@{ id = $ident.organization_id; name = $ident.organization_name }
     }
 }
-
