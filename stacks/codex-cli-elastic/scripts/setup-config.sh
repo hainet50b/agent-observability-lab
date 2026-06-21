@@ -46,22 +46,22 @@ config=${config:-$stack_dir/setup.conf}
 
 while IFS='=' read -r key val; do
   case $key in
-  telemetry.otlp_endpoint) otlp_endpoint=$val ;;
+  telemetry.apm_server.endpoint) otlp_endpoint=$val ;;
   esac
 done <"$config"
 [ -n "${otlp_endpoint:-}" ] || {
-  echo "FAIL: $config: missing or empty key 'telemetry.otlp_endpoint'." >&2
+  echo "FAIL: $config: missing or empty key 'telemetry.apm_server.endpoint'." >&2
   exit 2
 }
 
-# Optional secret overlay (gitignored): telemetry.otlp_api_key.
+# Optional secret overlay (gitignored): telemetry.apm_server.api_key.
 # Absent file or key -> empty, no error (no auth header rendered).
 OTLP_API_KEY=""
 local_config="$stack_dir/setup.local.conf"
 if [ -f "$local_config" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case $line in
-    telemetry.otlp_api_key=*) OTLP_API_KEY=${line#telemetry.otlp_api_key=} ;;
+    telemetry.apm_server.api_key=*) OTLP_API_KEY=${line#telemetry.apm_server.api_key=} ;;
     esac
   done <"$local_config"
 fi

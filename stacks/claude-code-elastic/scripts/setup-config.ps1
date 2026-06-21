@@ -31,17 +31,17 @@ foreach ($line in Get-Content -LiteralPath $Config) {
     }
     $k, $v = $line -split '=', 2
     switch ($k.Trim()) {
-        'telemetry.otlp_endpoint' {
+        'telemetry.apm_server.endpoint' {
             $OtlpEndpoint = $v.Trim()
         }
     }
 }
 if (-not $OtlpEndpoint) {
-    [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key 'telemetry.otlp_endpoint'.")
+    [Console]::Error.WriteLine("FAIL: ${Config}: missing or empty key 'telemetry.apm_server.endpoint'.")
     exit 2
 }
 
-# Optional secret overlay (gitignored): telemetry.otlp_api_key.
+# Optional secret overlay (gitignored): telemetry.apm_server.api_key.
 # Absent file or key -> empty, no error (no auth header rendered).
 $OtlpApiKey = ''
 $LocalConfig = Join-Path $StackDir 'setup.local.conf'
@@ -51,7 +51,7 @@ if (Test-Path -LiteralPath $LocalConfig -PathType Leaf) {
             continue
         }
         $k, $v = $line -split '=', 2
-        if ($k.Trim() -eq 'telemetry.otlp_api_key') {
+        if ($k.Trim() -eq 'telemetry.apm_server.api_key') {
             $OtlpApiKey = $v.Trim()
         }
     }

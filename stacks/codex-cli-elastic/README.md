@@ -84,7 +84,7 @@ is missing or a key is empty rather than assuming localhost.
 
 The demo APM Server has auth disabled, so no OTLP credential is needed. To point a
 session at a **secured** endpoint, copy `setup.local.conf.example` to the gitignored
-`setup.local.conf` and set `telemetry.otlp_api_key=<key>` — `setup.sh` then adds
+`setup.local.conf` and set `telemetry.apm_server.api_key=<key>` — `setup.sh` then adds
 `Authorization: ApiKey <key>` to the agent's OTLP exports. Leaving it empty (or
 skipping the file) ships no credential.
 
@@ -306,8 +306,8 @@ later, with the human:
 ```
 codex-cli-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
-├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (APM OTLP)
-├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.otlp_api_key)
+├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
+├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
 └─ scripts/
    ├─ setup.sh                            # bootstrap: trace routing + logs-drop + Codex config + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh

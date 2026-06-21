@@ -125,7 +125,7 @@ empty rather than assuming localhost.
 
 The demo Collector's OTLP receiver has auth disabled, so no credential is needed.
 To point a session at a **secured** endpoint, copy `setup.local.conf.example` to the
-gitignored `setup.local.conf` and set `telemetry.otlp_api_key=<key>` — `setup.sh`
+gitignored `setup.local.conf` and set `telemetry.otel_collector.api_key=<key>` — `setup.sh`
 then adds `Authorization: ApiKey <key>` to the agent's OTLP exports. Leaving it
 empty (or skipping the file) ships no credential.
 
@@ -311,8 +311,8 @@ scripts/resilience-test.sh    # from anywhere — it locates its own stack direc
 ```
 claude-code-otelcol-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
-├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (Collector OTLP)
-├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.otlp_api_key)
+├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otel_collector.endpoint (Collector OTLP)
+├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.otel_collector.api_key)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import (3 components)
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
