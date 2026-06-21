@@ -102,8 +102,9 @@ config_place::append_section() {
   fi
 }
 
-# Remove a lab-placed file and its marker. Refuses (non-zero, no removal) when
-# the target has no lab marker or its endpoint differs from this deploy.
+# Remove a lab-placed file and its marker. A target with NO lab marker is a
+# benign skip (return 0) — it is the user's own file, not ours. A target whose
+# marker endpoint DIFFERS is refused (return 1) — it belongs to another deploy.
 config_place::remove_file() {
   local key=$1 endpoint=$2 target=$3
   local marker="$target$config_place_marker_suffix"
@@ -113,8 +114,8 @@ config_place::remove_file() {
     return 0
   fi
   if [ ! -f "$marker" ]; then
-    config_place::log "$key: REFUSED — $target has no provenance marker (not placed by this tool). Not removed."
-    return 1
+    config_place::log "$key: leaving $target — not placed by this tool (your own login/config). Not an error."
+    return 0
   fi
   local marker_endpoint
   marker_endpoint=$(config_place::marker_field "$marker" endpoint)

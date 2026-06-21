@@ -108,8 +108,9 @@ function Add-CpSection($Key, $Agent, $Endpoint, $Block, $Target, $Sentinel) {
     }
 }
 
-# Remove a lab-placed file and its marker. Refuses (returns $false, no removal)
-# when the target has no lab marker or its endpoint differs from this deploy.
+# Remove a lab-placed file and its marker. A target with NO lab marker is a
+# benign skip (returns $true) — it is the user's own file, not ours. A target
+# whose marker endpoint DIFFERS is refused (returns $false) — another deploy's.
 function Remove-CpFile($Key, $Endpoint, $Target) {
     $marker = "$Target$script:CpMarkerSuffix"
     if (-not (Test-Path -LiteralPath $Target) -and -not (Test-Path -LiteralPath $marker -PathType Leaf)) {
@@ -117,8 +118,8 @@ function Remove-CpFile($Key, $Endpoint, $Target) {
         return $true
     }
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
-        Write-CpLog "${Key}: REFUSED — $Target has no provenance marker (not placed by this tool). Not removed."
-        return $false
+        Write-CpLog "${Key}: leaving $Target — not placed by this tool (your own login/config). Not an error."
+        return $true
     }
     $markerEndpoint = Get-CpMarkerField $marker 'endpoint'
     if ($markerEndpoint -ne $Endpoint) {
