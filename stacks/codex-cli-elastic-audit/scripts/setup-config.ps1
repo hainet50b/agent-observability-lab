@@ -60,8 +60,24 @@ if (Test-Path -LiteralPath $LocalConfig -PathType Leaf) {
 
 switch ($Scope) {
     'local' {
+        if ($Target) {
+            [Console]::Error.WriteLine('FAIL: -Scope local does not take -Target (use -Scope project to deploy into a directory)')
+            exit 2
+        }
+        $Target = $StackDir
+        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-audit.ps1') `
+            -TargetDir $Target -EsUrl $Conf['agent_audit.elasticsearch.url'] `
+            -ApiKey $ApiKey -TimeoutMs $Conf['agent_audit.elasticsearch.timeout_ms'] `
+            -UserPromptEnabled $Conf['agent_audit.capture.user_prompt.enabled'] `
+            -UserPromptContent $Conf['agent_audit.capture.user_prompt.content'] `
+            -ToolCallEnabled $Conf['agent_audit.capture.tool_call.enabled'] `
+            -ToolCallContent $Conf['agent_audit.capture.tool_call.content']
+        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target
+    }
+    'project' {
         if (-not $Target) {
-            $Target = $StackDir
+            [Console]::Error.WriteLine('FAIL: -Scope project requires -Target <dir>')
+            exit 2
         }
         & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-audit.ps1') `
             -TargetDir $Target -EsUrl $Conf['agent_audit.elasticsearch.url'] `
@@ -76,7 +92,7 @@ switch ($Scope) {
         exit 2
     }
     default {
-        [Console]::Error.WriteLine("FAIL: unknown -Scope '$Scope' (expected local|managed)")
+        [Console]::Error.WriteLine("FAIL: unknown -Scope '$Scope' (expected local|project|managed)")
         exit 2
     }
 }

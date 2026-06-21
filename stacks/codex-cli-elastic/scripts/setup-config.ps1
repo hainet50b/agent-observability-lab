@@ -59,8 +59,18 @@ if (Test-Path -LiteralPath $LocalConfig -PathType Leaf) {
 
 switch ($Scope) {
     'local' {
+        if ($Target) {
+            [Console]::Error.WriteLine('FAIL: -Scope local does not take -Target (use -Scope project to deploy into a directory)')
+            exit 2
+        }
+        $Target = $StackDir
+        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
+        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target
+    }
+    'project' {
         if (-not $Target) {
-            $Target = $StackDir
+            [Console]::Error.WriteLine('FAIL: -Scope project requires -Target <dir>')
+            exit 2
         }
         & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
     }
@@ -76,7 +86,7 @@ switch ($Scope) {
         }
     }
     default {
-        [Console]::Error.WriteLine("FAIL: unknown -Scope '$Scope' (expected local|managed)")
+        [Console]::Error.WriteLine("FAIL: unknown -Scope '$Scope' (expected local|project|managed)")
         exit 2
     }
 }

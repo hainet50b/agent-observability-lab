@@ -20,4 +20,3 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 "$SCRIPT_DIR/render-hook.sh" "$agent_home"
 "$SCRIPT_DIR/render-agent-audit.sh" "$es_url" "$agent_home" "$api_key" "$timeout_ms" \
   "$user_prompt_enabled" "$user_prompt_content" "$tool_call_enabled" "$tool_call_content"
-"$SCRIPT_DIR/render-mcp.sh" "$agent_home"

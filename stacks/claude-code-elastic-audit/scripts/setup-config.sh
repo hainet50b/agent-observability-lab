@@ -67,7 +67,20 @@ fi
 
 case $scope in
 local)
-  target=${target:-$stack_dir}
+  [ -z "$target" ] || {
+    echo "FAIL: --scope local does not take --target (use --scope project to deploy into a directory)" >&2
+    exit 2
+  }
+  target=$stack_dir
+  "$components_dir/agents/claude-code/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
+    "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
+  "$components_dir/agents/claude-code/scripts/render-mcp.sh" "$target"
+  ;;
+project)
+  [ -n "$target" ] || {
+    echo "FAIL: --scope project requires --target <dir>" >&2
+    exit 2
+  }
   "$components_dir/agents/claude-code/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
     "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
   ;;
@@ -76,7 +89,7 @@ managed)
   exit 2
   ;;
 *)
-  echo "FAIL: unknown --scope '$scope' (expected local|managed)" >&2
+  echo "FAIL: unknown --scope '$scope' (expected local|project|managed)" >&2
   exit 2
   ;;
 esac

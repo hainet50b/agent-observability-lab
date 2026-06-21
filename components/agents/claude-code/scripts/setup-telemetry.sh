@@ -22,4 +22,3 @@ fi
 "$SCRIPT_DIR/render-otel.sh" "$agent_home" \
   "$otlp_base/v1/logs" "$otlp_base/v1/traces" "$otlp_base/v1/metrics" \
   "$otlp_headers"
-"$SCRIPT_DIR/render-mcp.sh" "$agent_home"

@@ -19,4 +19,3 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
     -ApiKey $ApiKey -TimeoutMs $TimeoutMs `
     -UserPromptEnabled $UserPromptEnabled -UserPromptContent $UserPromptContent `
     -ToolCallEnabled $ToolCallEnabled -ToolCallContent $ToolCallContent
-& (Join-Path $ScriptDir 'render-mcp.ps1') -TargetDir $TargetDir

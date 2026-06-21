@@ -146,13 +146,15 @@ materialized — so you can deploy it into **any** directory (e.g. a real projec
 audit what your everyday work does, against this lab's Elasticsearch:
 
 ```sh
-scripts/setup-config.sh --scope local --target /path/to/your/project
-# PowerShell: scripts/setup-config.ps1 -Scope local -Target C:\path\to\your\project
+scripts/setup-config.sh --scope project --target /path/to/your/project
+# PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
 ```
 
 The target gets its own `.codex/hooks/` (entry + core + adapter), with nothing pointing
-back into this repo. **Caveat:** this captures that project's prompts and tool I/O into
-the lab's Elasticsearch — don't point secret-bearing work at it.
+back into this repo. `project` scope deploys the audit config only and does **not**
+register the Elasticsearch MCP, keeping the foreign project's footprint minimal (the
+MCP is a `local`-scope convenience). **Caveat:** this captures that project's prompts
+and tool I/O into the lab's Elasticsearch — don't point secret-bearing work at it.
 
 ### 3. Verify the audit path (optional)
 

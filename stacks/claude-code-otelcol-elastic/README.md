@@ -231,13 +231,15 @@ config (pointing at this stack's **Collector**) into **any** directory — e.g. 
 project — to see what your everyday work emits:
 
 ```sh
-scripts/setup-config.sh --scope local --target /path/to/your/project
-# PowerShell: scripts/setup-config.ps1 -Scope local -Target C:\path\to\your\project
+scripts/setup-config.sh --scope project --target /path/to/your/project
+# PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
 ```
 
 It writes a self-contained `.claude/` into that directory, with nothing pointing back
-into this repo. **Caveat:** this flows that project's prompts and tool I/O into the
-lab's Elasticsearch — don't point secret-bearing work at it.
+into this repo. `project` scope deploys the telemetry config only and does **not**
+register the Elasticsearch MCP, keeping the foreign project's footprint minimal (the
+MCP is a `local`-scope convenience). **Caveat:** this flows that project's prompts and
+tool I/O into the lab's Elasticsearch — don't point secret-bearing work at it.
 
 ### 3. Import the Kibana saved objects
 
