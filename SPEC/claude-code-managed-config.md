@@ -17,9 +17,9 @@ Codex separates *defaults* (`managed_config.toml`, user-overridable) from *requi
 | --- | --- |
 | macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
 | Linux / WSL | `/etc/claude-code/managed-settings.json` |
-| Windows | `C:\ProgramData\ClaudeCode\managed-settings.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
 
-All are machine-global, admin-owned, fixed system paths — there is no env var that relocates the managed-settings search path (unlike `CODEX_HOME` for Codex's *user* layer, which never reaches managed anyway).
+All are machine-global, admin-owned, fixed system paths — there is no env var that relocates the managed-settings search path (unlike `CODEX_HOME` for Codex's *user* layer, which never reaches managed anyway). Two deployment gotchas: the Windows path is under **`Program Files`** (per the docs — not `ProgramData`; writing there needs installer/admin rights), and the macOS path contains a **space** (`Application Support`), so any tool that places the file or points a hook `command` at a script beside it must quote paths.
 
 ## Precedence
 
@@ -31,9 +31,9 @@ The full settings schema, at highest precedence — notably:
 
 - **`env`** — environment variables, including **telemetry**: `CLAUDE_CODE_ENABLE_TELEMETRY=1` plus the `OTEL_*` exporters. This is the **key asymmetry with Codex**, whose `[otel]` can only be a managed *default* (never enforced): on Claude Code, **telemetry can be forced on org-wide** and the user cannot turn it off.
 - **`permissions`** — `allow` / `deny` / `ask` rules and `defaultMode`, plus guards like `disableBypassPermissionsMode`.
-- **`hooks`** — hooks registered here are enforced and cannot be disabled from the user side.
+- **`hooks`** — a hook registered here is enforced: it sits at the managed layer, so the user cannot remove or disable *that* hook. **The lab does not make hooks exclusive** — it leaves `allowManagedHooksOnly` at its default (off / `false`) so the user's own hooks still load and merge alongside the managed ones; the only enforcement intended is "the managed hook cannot be turned off," not "only managed hooks may run." (`allowManagedHooksOnly: true` would block all user/project hooks — deliberately *not* used.)
 
-(See the upstream settings doc for the exhaustive key list.)
+(See the upstream settings doc for the exhaustive key list. Two hook caveats are **not** documented and must be confirmed once on a real host before relying on them: whether a hook `command` accepts an **absolute path** to a script placed outside any project, and how a path with a space/`Program Files` is invoked on each OS.)
 
 ## Placement & teardown (shared model)
 

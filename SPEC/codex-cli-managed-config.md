@@ -98,6 +98,8 @@ Two behaviors that drive the validation matrix:
 Managed hooks are marked managed/trusted and cannot be disabled from the user
 hook browser.
 
+**Lab hook posture (declared explicitly).** The lab's `requirements.toml` states its hook stance in full rather than by omission: **`allow_managed_hooks_only = false`** — the user's own hooks **coexist**; the lab enforces hook *presence*, not exclusivity — plus **`[features].hooks = true`** (the user cannot disable hooks) and the `managed_dir` / `windows_managed_dir` holding the materialized scripts. The hook **tables are single-sourced** in `templates/hooks.template.toml` and **concatenated** into the rendered `requirements.toml` (top-level fields + `[features]` first, the `[[hooks.*]]` arrays last, so the TOML parses), so the managed-scope and user-scope hook definitions never drift.
+
 ## Windows: `managed_config.toml` is a weak boundary
 
 `managed_config.toml` on Windows lives at `~/.codex/managed_config.toml` —
