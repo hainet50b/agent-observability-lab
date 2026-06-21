@@ -234,7 +234,9 @@ repo.
 > it, leave `--with-hooks` off and keep managed config-only.
 
 Remove it (restores the host, removes only the lab-placed file + its marker; add
-`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle):
+`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle) — either
+`setup-config.sh --scope managed --teardown [--with-hooks]` (the `-Teardown` /
+`-WithHooks` switches on `.ps1`) or directly:
 
 ```sh
 ../../components/agents/claude-code/scripts/teardown-managed.sh

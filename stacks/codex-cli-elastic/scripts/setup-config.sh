@@ -8,6 +8,8 @@ components_dir="$script_dir/../../../components"
 scope=local
 target=""
 config=""
+teardown=0
+with_hooks=0
 while [ "$#" -gt 0 ]; do
   case $1 in
   --scope)
@@ -22,12 +24,24 @@ while [ "$#" -gt 0 ]; do
     scope=managed
     shift
     ;;
+  --teardown)
+    teardown=1
+    shift
+    ;;
+  --with-hooks)
+    with_hooks=1
+    shift
+    ;;
   *)
     config=$1
     shift
     ;;
   esac
 done
+if [ "$teardown" -eq 1 ] && [ "$scope" != managed ]; then
+  echo "FAIL: --teardown is only valid with --scope managed" >&2
+  exit 2
+fi
 config=${config:-$stack_dir/setup.conf}
 [ -f "$config" ] || {
   echo "FAIL: config file not found: $config" >&2
@@ -50,10 +64,16 @@ local)
   "$components_dir/agents/codex-cli/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint"
   ;;
 managed)
-  "$components_dir/agents/codex-cli/scripts/setup-managed.sh" \
-    --logs-endpoint "$otlp_endpoint/v1/logs" \
-    --traces-endpoint "$otlp_endpoint/v1/traces" \
-    --metrics-endpoint "$otlp_endpoint/v1/metrics"
+  if [ "$teardown" -eq 1 ]; then
+    teardown_args=""
+    [ "$with_hooks" -eq 1 ] && teardown_args="--with-hooks"
+    "$components_dir/agents/codex-cli/scripts/teardown-managed.sh" $teardown_args
+  else
+    "$components_dir/agents/codex-cli/scripts/setup-managed.sh" \
+      --logs-endpoint "$otlp_endpoint/v1/logs" \
+      --traces-endpoint "$otlp_endpoint/v1/traces" \
+      --metrics-endpoint "$otlp_endpoint/v1/metrics"
+  fi
   ;;
 *)
   echo "FAIL: unknown --scope '$scope' (expected local|managed)" >&2

@@ -192,7 +192,9 @@ so the enforced hooks are self-contained and the conf caveat above no longer app
 > result. Until you have confirmed it, leave `--with-hooks` off.
 
 Remove it (restores the host, removes only the lab-placed files + their markers; add
-`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle):
+`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle) — either
+`setup-config.sh --scope managed --teardown [--with-hooks]` (the `-Teardown` /
+`-WithHooks` switches on `.ps1`) or directly:
 
 ```sh
 ../../components/agents/codex-cli/scripts/teardown-managed.sh

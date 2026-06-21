@@ -211,7 +211,10 @@ $env:OTEL_LOG_RAW_API_BODIES = "0"   # full Messages API request/response bodies
 Persistent (`settings.json` `env` block) and org-enforced (`managed-settings.json`)
 configurations work the same way as in `claude-code-elastic` — just with the
 `:4318` Collector endpoint. The same staged `--with-hooks` opt-in (off by default,
-gated on a one-time host check) also applies here for managed audit-hook enforcement. Then run `claude` from a configured shell and do a
+gated on a one-time host check) also applies here for managed audit-hook enforcement.
+Remove the managed config with `setup-config.sh --scope managed --teardown` (`-Teardown`
+on `.ps1`); add `--with-hooks` / `-WithHooks` to also remove a materialized hook bundle.
+Then run `claude` from a configured shell and do a
 little work; telemetry flushes on the export interval, so data lands within
 ~10–30s (the Collector adds only a brief batching delay).
 

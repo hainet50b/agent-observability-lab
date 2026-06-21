@@ -3,6 +3,8 @@ param(
     [string]$Scope = 'local',
     [string]$Target,
     [switch]$Managed,
+    [switch]$Teardown,
+    [switch]$WithHooks,
     [string]$Config
 )
 
@@ -13,6 +15,11 @@ $ComponentsDir = Join-Path $PSScriptRoot '../../../components'
 
 if ($Managed) {
     $Scope = 'managed'
+}
+
+if ($Teardown -and $Scope -ne 'managed') {
+    [Console]::Error.WriteLine('FAIL: -Teardown is only valid with -Scope managed')
+    exit 1
 }
 
 if (-not $Config) {
@@ -47,8 +54,15 @@ switch ($Scope) {
         & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint
     }
     'managed' {
-        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') `
-            -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
+        if ($Teardown) {
+            $TeardownArgs = @{}
+            if ($WithHooks) { $TeardownArgs['WithHooks'] = $true }
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/teardown-managed.ps1') @TeardownArgs
+        }
+        else {
+            & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') `
+                -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
+        }
     }
     default {
         [Console]::Error.WriteLine("FAIL: unknown -Scope '$Scope' (expected local|managed)")
