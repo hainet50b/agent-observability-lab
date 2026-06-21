@@ -32,10 +32,8 @@ function Import-File {
         exit 1
     }
 
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-
     if (-not $result.success) {
-        Write-Error "FAIL: $rel did not import cleanly (success=$($result.success))"
+        Write-Error "FAIL: $rel did not import cleanly (success=$($result.success)): $($result.errors | ConvertTo-Json -Depth 10 -Compress)"
         exit 1
     }
     Write-Host "[import] $rel -> $($result.successCount) object(s) imported"

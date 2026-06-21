@@ -28,9 +28,8 @@ apply_ilm() {
     -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT _ilm/policy/$name returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "ILM policy PUT not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT _ilm/policy/$name returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "ILM policy PUT not acknowledged: $body"
   echo "[apply] ILM policy '$name' installed ✓"
 }
 
@@ -41,9 +40,8 @@ apply_component_template() {
     -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT _component_template/$name returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "component template PUT not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT _component_template/$name returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "component template PUT not acknowledged: $body"
   echo "[apply] component template '$name' installed ✓"
 }
 
@@ -54,9 +52,8 @@ apply_pipeline() {
     -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT _ingest/pipeline/$name returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "pipeline PUT not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT _ingest/pipeline/$name returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "pipeline PUT not acknowledged: $body"
   echo "[apply] ingest pipeline '$name' installed ✓"
 }
 
@@ -69,9 +66,8 @@ apply_template() {
     -H 'Content-Type: application/json' --data "@$template_file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT _index_template/$template returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index template PUT not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT _index_template/$template returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index template PUT not acknowledged: $body"
   echo "[apply] index template '$template' installed ✓"
 
   existing=$(curl -s -o /dev/null -w '%{http_code}' "$ES_URL/_data_stream/$data_stream") || fail "request to Elasticsearch failed"
@@ -82,9 +78,8 @@ apply_template() {
     result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/_data_stream/$data_stream") || fail "request to Elasticsearch failed"
     code=$(echo "$result" | tail -n1)
     body=$(echo "$result" | sed '$d')
-    echo "$body" | jq . 2>/dev/null || echo "$body"
-    case "$code" in 2*) : ;; *) fail "PUT _data_stream/$data_stream returned HTTP $code (expected 2xx)" ;; esac
-    [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "data stream create not acknowledged"
+    case "$code" in 2*) : ;; *) fail "PUT _data_stream/$data_stream returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+    [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "data stream create not acknowledged: $body"
     echo "[apply] data stream '$data_stream' created ✓"
   fi
 
@@ -92,16 +87,15 @@ apply_template() {
   simulated=$(curl -s -w '\n%{http_code}' -X POST "$ES_URL/_index_template/_simulate_index/$data_stream") || fail "request to Elasticsearch failed"
   code=$(echo "$simulated" | tail -n1)
   sim_body=$(echo "$simulated" | sed '$d')
-  case "$code" in 2*) : ;; *) fail "POST _simulate_index/$data_stream returned HTTP $code (expected 2xx)" ;; esac
+  case "$code" in 2*) : ;; *) fail "POST _simulate_index/$data_stream returned HTTP $code (expected 2xx): $(echo "$sim_body" | jq -r '.error.reason // .' 2>/dev/null || echo "$sim_body")" ;; esac
   mappings=$(echo "$sim_body" | jq -c '.template.mappings')
   [ -n "$mappings" ] && [ "$mappings" != null ] || fail "resolved composed mapping for $template has no .template.mappings"
   result=$(curl -s -w '\n%{http_code}' -X PUT "$ES_URL/$data_stream/_mapping" \
     -H 'Content-Type: application/json' --data "$mappings") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT $data_stream/_mapping returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "data stream mapping update not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT $data_stream/_mapping returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "data stream mapping update not acknowledged: $body"
   echo "[apply] mapping synced onto '$data_stream' ✓"
 }
 
@@ -112,9 +106,8 @@ apply_index_template() {
     -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT _index_template/$name returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index template PUT not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT _index_template/$name returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index template PUT not acknowledged: $body"
   echo "[apply] index template (overlay) '$name' installed ✓"
 }
 
@@ -130,9 +123,8 @@ apply_index() {
     -H 'Content-Type: application/json' --data "@$file") || fail "request to Elasticsearch failed"
   code=$(echo "$result" | tail -n1)
   body=$(echo "$result" | sed '$d')
-  echo "$body" | jq . 2>/dev/null || echo "$body"
-  case "$code" in 2*) : ;; *) fail "PUT /$name returned HTTP $code (expected 2xx)" ;; esac
-  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index create not acknowledged"
+  case "$code" in 2*) : ;; *) fail "PUT /$name returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.error.reason // .' 2>/dev/null || echo "$body")" ;; esac
+  [ "$(echo "$body" | jq -r '.acknowledged // false')" = true ] || fail "index create not acknowledged: $body"
   echo "[apply] index '$name' created ✓"
 }
 

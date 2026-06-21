@@ -23,14 +23,15 @@ import_file() {
   f=$1
   [ -f "$f" ] || fail "$f not found"
   echo "[import] $f"
-  result=$(curl -s -X POST "$KIBANA_URL/api/saved_objects/_import?overwrite=true" \
+  result=$(curl -s -w '\n%{http_code}' -X POST "$KIBANA_URL/api/saved_objects/_import?overwrite=true" \
     -H "kbn-xsrf: true" --form file=@"$f") || fail "request to Kibana failed for $f"
+  code=$(echo "$result" | tail -n1)
+  body=$(echo "$result" | sed '$d')
+  case "$code" in 2*) : ;; *) fail "$f import returned HTTP $code (expected 2xx): $(echo "$body" | jq -r '.message // .error // .' 2>/dev/null || echo "$body")" ;; esac
 
-  echo "$result" | jq .
-
-  success=$(echo "$result" | jq -r '.success // false')
-  [ "$success" = true ] || fail "$f did not import cleanly (success=$success)"
-  count=$(echo "$result" | jq -r '.successCount // 0')
+  success=$(echo "$body" | jq -r '.success // false')
+  [ "$success" = true ] || fail "$f did not import cleanly (success=$success): $(echo "$body" | jq -c '.errors // .' 2>/dev/null || echo "$body")"
+  count=$(echo "$body" | jq -r '.successCount // 0')
   echo "[import] $f -> $count object(s) imported ✓"
 }
 

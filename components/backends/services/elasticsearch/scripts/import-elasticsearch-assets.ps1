@@ -19,8 +19,7 @@ function Invoke-Ilm($Name, $File) {
             -ContentType 'application/json' -Body $Body
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: ILM policy PUT not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: ILM policy PUT not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] ILM policy '$Name' installed"
 }
 
@@ -33,8 +32,7 @@ function Invoke-ComponentTemplate($Name, $File) {
             -ContentType 'application/json' -Body $Body
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: component template PUT not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: component template PUT not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] component template '$Name' installed"
 }
 
@@ -47,8 +45,7 @@ function Invoke-Pipeline($Name, $File) {
             -ContentType 'application/json' -Body $Body
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: pipeline PUT not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: pipeline PUT not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] ingest pipeline '$Name' installed"
 }
 
@@ -62,8 +59,7 @@ function Invoke-Template($Template, $TemplateFile) {
             -ContentType 'application/json' -Body $Body
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: index template PUT not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: index template PUT not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] index template '$Template' installed"
 
     $exists = $false
@@ -83,8 +79,7 @@ function Invoke-Template($Template, $TemplateFile) {
         Write-Host "[apply] creating data stream '$DataStream' on $EsUrl…"
         try { $result = Invoke-RestMethod -Method Put -Uri "$EsUrl/_data_stream/$DataStream" }
         catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-        $result | ConvertTo-Json -Depth 10 | Write-Host
-        if (-not $result.acknowledged) { Write-Error "FAIL: data stream create not acknowledged"; exit 1 }
+        if (-not $result.acknowledged) { Write-Error "FAIL: data stream create not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
         Write-Host "[apply] data stream '$DataStream' created"
     }
 
@@ -100,8 +95,7 @@ function Invoke-Template($Template, $TemplateFile) {
             -ContentType 'application/json' -Body $mappings
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: data stream mapping update not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: data stream mapping update not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] mapping synced onto '$DataStream'"
 }
 
@@ -113,8 +107,7 @@ function Invoke-IndexTemplatePut($Name, $File) {
             -ContentType 'application/json' -Body $Body
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: index template PUT not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: index template PUT not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] index template (overlay) '$Name' installed"
 }
 
@@ -140,8 +133,7 @@ function Invoke-Index($Name, $File) {
             -ContentType 'application/json' -Body $Body
     }
     catch { Write-Error "FAIL: request to Elasticsearch failed ($_)"; exit 1 }
-    $result | ConvertTo-Json -Depth 10 | Write-Host
-    if (-not $result.acknowledged) { Write-Error "FAIL: index create not acknowledged"; exit 1 }
+    if (-not $result.acknowledged) { Write-Error "FAIL: index create not acknowledged: $($result | ConvertTo-Json -Depth 10 -Compress)"; exit 1 }
     Write-Host "[apply] index '$Name' created"
 }
 
