@@ -7,3 +7,4 @@ $BackendDir = Split-Path -Parent $ScriptDir
 $KibanaScripts = Join-Path $BackendDir '../services/kibana/scripts'
 
 & (Join-Path $KibanaScripts 'import-kibana-assets.ps1') -Sources 'agent-audit'
+

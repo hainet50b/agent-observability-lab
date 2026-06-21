@@ -55,3 +55,4 @@ Write-Host '[setup] 2/3 - Codex session config'
 Write-Host ''
 Write-Host '[setup] 3/3 - Kibana saved objects'
 & (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex-cli' 6>&1 | Indent
+

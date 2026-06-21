@@ -1,13 +1,3 @@
-# render-agent-audit.ps1 — render the Claude Code agent's Agent Audit delivery
-# config at <TargetDir>/.claude/agent-audit.conf from ../templates/agent-audit.template.conf
-# (PowerShell mirror of render-agent-audit.sh).
-#
-# Fills @@ES_URL@@ (the backend's Elasticsearch base URL) into the flat key=value
-# delivery config the capture-user-prompt hook reads. create-if-absent: an existing
-# agent-audit.conf is left untouched (your edits survive). UTF-8 no BOM.
-#
-# Usage: render-agent-audit.ps1 -EsUrl <url> -TargetDir <dir>
-
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$EsUrl,
@@ -34,4 +24,5 @@ $content = (Get-Content -Raw -LiteralPath $Template) -replace '@@ES_URL@@', $EsU
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
 [System.IO.File]::WriteAllText($config, $content, [System.Text.UTF8Encoding]::new($false))
 Write-Host "wrote $config"
+
 

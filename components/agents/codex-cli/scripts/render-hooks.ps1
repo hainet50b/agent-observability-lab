@@ -44,3 +44,4 @@ if (Test-Path -LiteralPath $config) {
     $combined = $block
 }
 [System.IO.File]::WriteAllText($config, $combined, [System.Text.UTF8Encoding]::new($false))
+

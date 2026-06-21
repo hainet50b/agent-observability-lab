@@ -1,23 +1,4 @@
 #!/usr/bin/env bash
-#
-# render-hook.sh — register the Claude Code audit hooks in
-# <target>/.claude/settings.local.json (POSIX/bash).
-#
-# Claude Code registers hooks in settings (not a separate hooks file). This merges
-# the `hooks` block from the agent-owned template ../templates/hook.template.json into the
-# target's settings.local.json, substituting @@USER_PROMPT_COMMAND@@ /
-# @@TOOL_CALL_COMMAND@@ with the single hooks/agent-audit.sh entry plus its
-# per-event `--stream <user_prompt|tool_call>` and `--config <abs>/.claude/agent-audit.conf`.
-# UserPromptSubmit selects --stream user_prompt; PostToolUse selects --stream tool_call.
-# The config path is INJECTED into each hook command (SPEC/agent-audit.md "Delivery
-# and authorization") — a shipped hook never discovers its own config.
-#
-# JSON key-merge, create-if-absent: writes { "hooks": {…} } when the file is
-# absent; adds `hooks` to an existing file only if it has none; never clobbers an
-# existing `hooks` (your edits survive). Re-running is a no-op. `jq` is fine here —
-# render is setup tooling, not the fleet hook.
-#
-# Usage: render-hook.sh <target-dir>
 
 set -euo pipefail
 
@@ -38,7 +19,6 @@ out="$target/.claude/settings.local.json"
   exit 1
 }
 
-# Never clobber an existing hooks block (create-if-absent).
 if [ -e "$out" ] && jq -e 'has("hooks")' "$out" >/dev/null 2>&1; then
   echo "kept existing hooks in $out (delete to regenerate)"
   exit 0
@@ -50,8 +30,6 @@ conf="$target_abs/.claude/agent-audit.conf"
 user_prompt_cmd="$ENTRY --stream user_prompt --config $conf"
 tool_call_cmd="$ENTRY --stream tool_call --config $conf"
 
-# Substitute each event's command placeholder, then take the `hooks` block
-# (this also drops the template's _comment).
 hooks_json=$(jq \
   --arg up "$user_prompt_cmd" \
   --arg tc "$tool_call_cmd" \
@@ -60,7 +38,6 @@ hooks_json=$(jq \
    | .hooks' "$TEMPLATE")
 
 if [ -e "$out" ]; then
-  # File exists but has no hooks — add `hooks` only, leave everything else intact.
   tmp=$(mktemp)
   jq --argjson hooks "$hooks_json" '.hooks = $hooks' "$out" >"$tmp"
   mv "$tmp" "$out"

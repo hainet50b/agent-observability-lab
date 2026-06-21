@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-#
-# render-otel.sh — render the Codex [otel] config.toml block from the agent-owned
-# template ../templates/otel.template.toml. The caller supplies the three FULL
-# per-signal OTLP endpoints; this script does no path construction (the
-# /v1/<signal> path is the receiver's to choose, not the agent's).
-#
-# Usage: render-otel.sh <target-dir> <logs-endpoint> <traces-endpoint> <metrics-endpoint>
 
 set -euo pipefail
 

@@ -52,3 +52,4 @@ Write-Host '[setup] 2/3 - Claude Code audit config'
 Write-Host ''
 Write-Host '[setup] 3/3 - Kibana saved objects'
 & (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') 6>&1 | Indent
+

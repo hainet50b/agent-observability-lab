@@ -1,32 +1,3 @@
-# verify-tool-call-audit.ps1 — claude-code-elastic-audit Agent Audit tool-call verification
-# (PowerShell mirror of verify-tool-call-audit.sh; see that file's header for the full
-# rationale). Verifies the DIRECT Agent Audit tool-call path (PostToolUse hook ->
-# logs-agent_audit.tool_call-default), not the OTLP/APM path. 3A pattern:
-#   Arrange — stack up + wait for Elasticsearch healthy; require setup.ps1 to have
-#             rendered .claude/settings.local.json (hooks.PostToolUse) and
-#             .claude/agent-audit.conf.
-#   Act     — feed a synthetic PostToolUse payload (unique session_id, an object
-#             tool_input + string tool_response) on stdin to the RENDERED hook
-#             exactly as Claude spawns it — read the command + args[] straight from
-#             .claude/settings.local.json and run that process. (Driving
-#             agent-audit.ps1 directly would not catch a broken rendered hook
-#             command, e.g. a non-exec-form hook Git Bash cannot run on Windows — the
-#             class of gap this verification guards.)
-#   Assert  — poll logs-agent_audit.tool_call-default for the document, then check
-#             the tool identity, serialized I/O bodies, and identity envelope.
-#   Cleanup — delete the synthetic document, then print PASS.
-#
-# Fail-open note: the hook always exits 0 (never blocks a tool call), so the signal
-# is the ASSERTION (doc present in ES), not the hook's exit code.
-#
-# The hook is spawned as the rendered command/args (on Windows, exec form:
-# `powershell -NoProfile … -File agent-audit.ps1 -Stream tool_call -Config <conf>`), a real child
-# process, so the payload reaches its stdin ([Console]::In.ReadToEnd()) exactly as
-# Claude drives it.
-#
-# Prereqs: docker (+ daemon), pwsh. SKIP (exit 0) if the daemon is unreachable or
-# setup has not run. Override the ES endpoint with -EsUrl.
-
 [CmdletBinding()]
 param(
     [string]$EsUrl = 'http://localhost:9200'
@@ -35,9 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $DataStream = 'logs-agent_audit.tool_call-default'
 
-# .NET's HTTP client stalls ~2s on the localhost IPv6 (::1) attempt before IPv4
-# fallback (the same quirk the hook works around); use 127.0.0.1 for this script's
-# own ES polling so the verification is fast.
+# .NET's HTTP client stalls ~2s on localhost IPv6 (::1) before IPv4 fallback; use
+# 127.0.0.1 so this script's ES polling is fast.
 $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
@@ -50,21 +20,18 @@ $Settings = Join-Path $ClaudeHome 'settings.local.json'
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
 function Fail($m) { [Console]::Error.WriteLine("FAIL: $m"); exit 1 }
 
-# --- Preconditions ---------------------------------------------------------
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Skip 'docker CLI not found' }
 try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not reachable; nothing to verify' } }
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
 if (-not (Test-Path -LiteralPath $Settings)) { Skip 'no .claude/settings.local.json — run scripts/setup.ps1 first' }
 if (-not (Test-Path -LiteralPath (Join-Path $ClaudeHome 'agent-audit.conf'))) { Skip 'no .claude/agent-audit.conf — run scripts/setup.ps1 first' }
-# Confirm the hook is registered on PostToolUse in settings.local.json.
 if (-not ((Get-Content -Raw -LiteralPath $Settings | ConvertFrom-Json).hooks.PostToolUse)) {
     Fail 'no hooks.PostToolUse registered in .claude/settings.local.json'
 }
 
 Push-Location $StackDir
 try {
-    # --- Arrange ---------------------------------------------------------------
     Write-Host '[arrange] bringing the stack up (docker compose up -d)…'
     docker compose up -d
     if ($LASTEXITCODE -ne 0) { Fail 'docker compose up failed' }
@@ -77,14 +44,9 @@ try {
     }
     if (-not $healthy) { docker compose ps; Fail 'aol-elasticsearch did not become healthy' }
 
-    # --- Act -------------------------------------------------------------------
     $cid = "aol-verify-tc-$([int][double]::Parse((Get-Date -UFormat %s)))-$PID"
     Write-Host "[act] feeding a synthetic PostToolUse payload (conversation_id=$cid) through the configured hook…"
 
-    # Object tool_input + string tool_response (the heterogeneous shapes the hook
-    # serializes). Claude's PostToolUse carries a turn_id (unlike UserPromptSubmit)
-    # and no model; cwd/transcript_path/permission_mode confirm the strict mapping
-    # drops them.
     $payload = [ordered]@{
         session_id      = $cid
         turn_id         = 'verify-turn-1'
@@ -98,16 +60,11 @@ try {
         permission_mode = 'auto'
     } | ConvertTo-Json -Compress
 
-    # Spawn the hook EXACTLY as Claude does: read the rendered command + args[] from
-    # settings.local.json and run that process with the payload on stdin (the config
-    # path is already baked into the rendered args). Fail-open: it always exits 0;
-    # the assertion below is the signal.
     $entry = (Get-Content -Raw -LiteralPath $Settings | ConvertFrom-Json).hooks.PostToolUse[0].hooks[0]
     $hookArgs = if ($entry.PSObject.Properties.Name -contains 'args') { @($entry.args) } else { @() }
     Write-Host "[act] spawning the rendered hook: $($entry.command) $($hookArgs -join ' ')"
     $payload | & $entry.command @hookArgs
 
-    # --- Assert ----------------------------------------------------------------
     Write-Host "[assert] querying $DataStream for the audit document…"
     $query = @{ query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
     $landed = $false
@@ -138,7 +95,6 @@ try {
     if ($tc.tool.name -ne 'Bash') { Fail 'tool.name not captured' }
     if ($tc.tool.call_id -ne 'call_verify_0001') { Fail 'tool.call_id not captured (tool_use_id mapping)' }
 
-    # Agent constants: provider=anthropic, name=claude-code, turn_id captured, no model.
     if ($hit.agent_audit.agent.provider -ne 'anthropic') { Fail 'agent_audit.agent.provider != anthropic' }
     if ($hit.agent_audit.agent.name -ne 'claude-code') { Fail 'agent_audit.agent.name != claude-code' }
     if ($hit.agent_audit.turn_id -ne 'verify-turn-1') { Fail 'agent_audit.turn_id not captured (turn_id mapping)' }
@@ -146,7 +102,6 @@ try {
         Fail 'audit document carries agent_audit.agent.model — model should be removed from the schema'
     }
     Write-Host '[assert] agent constants ok (anthropic/claude-code, turn_id captured, no model) ✓'
-
     if (-not $tc.input.text) { Fail 'input.text empty — tool_input not serialized (plaintext mode expected)' }
     if ($tc.input.text -notmatch 'command') { Fail 'input.text does not look like serialized tool_input JSON' }
     if ([int]$tc.input.length -le 0) { Fail 'input.length not recorded' }
@@ -172,7 +127,6 @@ try {
         Write-Host '[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)'
     }
 
-    # --- Cleanup ---------------------------------------------------------------
     Write-Host '[cleanup] removing the synthetic verification document…'
     $del = Invoke-RestMethod -Method Post -TimeoutSec 30 `
         -Uri "$EsApi/$DataStream/_delete_by_query?refresh=true&ignore_unavailable=true" `
@@ -185,4 +139,5 @@ try {
 finally {
     Pop-Location
 }
+
 

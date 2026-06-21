@@ -25,3 +25,4 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
 $content = (Get-Content -Raw -LiteralPath $Template) -replace '@@ES_URL@@', $EsUrl
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
 [System.IO.File]::WriteAllText($config, $content, [System.Text.UTF8Encoding]::new($false))
+

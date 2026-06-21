@@ -1,8 +1,3 @@
-# Imports the Kibana saved objects for each SOURCE in -Sources (a dir under this
-# component) via the _import?overwrite=true API. Within each dir, files load in
-# dependency order: data-views → saved-searches → dashboard. PowerShell 7+;
-# -KibanaUrl or KIBANA_URL env overrides the base URL.
-
 [CmdletBinding()]
 param(
     [string]$KibanaUrl = $(if ($env:KIBANA_URL) { $env:KIBANA_URL } else { 'http://localhost:5601' }),
@@ -12,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# component root; per-source paths are built absolutely from it (no Set-Location — it would park the caller's shell here)
+# absolute paths only — no Set-Location, which would park the caller's shell here
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
 
@@ -71,3 +66,4 @@ Write-Host ""
 Write-Host "PASS: Kibana saved objects imported into $KibanaUrl (sources: $($Sources -join ', '))."
 Write-Host "Open Discover (Open menu) for the saved searches, or the data-view selector"
 Write-Host "for the Metrics / Events / Traces views."
+

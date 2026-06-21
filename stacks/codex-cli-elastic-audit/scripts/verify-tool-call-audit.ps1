@@ -1,27 +1,3 @@
-# verify-tool-call-audit.ps1 — codex-cli-elastic-audit Agent Audit tool-call verification
-# (PowerShell mirror of verify-tool-call-audit.sh; see that file's header for the
-# full rationale). Verifies the DIRECT Agent Audit tool-call path (PostToolUse hook
-# -> logs-agent_audit.tool_call-default), not the OTLP/APM path. 3A pattern:
-#   Arrange — stack up + wait for Elasticsearch healthy; require setup.ps1 to have
-#             rendered .codex/config.toml (inline [[hooks.*]]) and .codex/agent-audit.conf.
-#   Act     — feed a synthetic PostToolUse payload (unique session_id, an object
-#             tool_input + string tool_response) on stdin to the configured hook
-#             (agent-audit.ps1 -Stream tool_call), with CODEX_HOME=<stack>/.codex.
-#   Assert  — poll logs-agent_audit.tool_call-default for the document, then check
-#             the tool identity, serialized I/O bodies, and identity envelope.
-#   Cleanup — delete the synthetic document, then print PASS.
-#
-# Fail-open note: the hook always exits 0 (never blocks a tool call), so the signal
-# is the ASSERTION (doc present in ES), not the hook's exit code.
-#
-# The hook is invoked as a real child `pwsh` process so the payload reaches its
-# stdin ([Console]::In.ReadToEnd()) — piping a PowerShell variable straight to
-# `& script.ps1` would hang, because the script reads the process stdin, which is
-# how Codex actually drives it.
-#
-# Prereqs: docker (+ daemon), pwsh. SKIP (exit 0) if the daemon is unreachable or
-# setup has not run. Override the ES endpoint with -EsUrl.
-
 [CmdletBinding()]
 param(
     [string]$EsUrl = 'http://localhost:9200'
@@ -30,9 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $DataStream = 'logs-agent_audit.tool_call-default'
 
-# .NET's HTTP client stalls ~2s on the localhost IPv6 (::1) attempt before IPv4
-# fallback (the same quirk the hook works around); use 127.0.0.1 for this script's
-# own ES polling so the verification is fast.
+# .NET's HTTP client stalls ~2s on localhost IPv6 (::1) before IPv4 fallback; use
+# 127.0.0.1 so this script's ES polling is fast.
 $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
@@ -44,22 +19,18 @@ $CodexHome = Join-Path $StackDir '.codex'
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
 function Fail($m) { [Console]::Error.WriteLine("FAIL: $m"); exit 1 }
 
-# --- Preconditions ---------------------------------------------------------
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Skip 'docker CLI not found' }
 try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not reachable; nothing to verify' } }
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
 if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml — run scripts/setup.ps1 first' }
 if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'agent-audit.conf'))) { Skip 'no .codex/agent-audit.conf — run scripts/setup.ps1 first' }
-# Confirm the hook is registered on PostToolUse: the inline [[hooks.PostToolUse]]
-# table is present in config.toml.
 if (-not (Select-String -SimpleMatch -Quiet -Pattern '[[hooks.PostToolUse]]' -LiteralPath (Join-Path $CodexHome 'config.toml'))) {
     Fail 'no [[hooks.PostToolUse]] registered in .codex/config.toml'
 }
 
 Push-Location $StackDir
 try {
-    # --- Arrange ---------------------------------------------------------------
     Write-Host '[arrange] bringing the stack up (docker compose up -d)…'
     docker compose up -d
     if ($LASTEXITCODE -ne 0) { Fail 'docker compose up failed' }
@@ -72,12 +43,9 @@ try {
     }
     if (-not $healthy) { docker compose ps; Fail 'aol-elasticsearch did not become healthy' }
 
-    # --- Act -------------------------------------------------------------------
     $cid = "aol-verify-tc-$([int][double]::Parse((Get-Date -UFormat %s)))-$PID"
     Write-Host "[act] feeding a synthetic PostToolUse payload (conversation_id=$cid) through the configured hook…"
 
-    # Object tool_input + string tool_response (the heterogeneous shapes the hook
-    # serializes); cwd/transcript_path/permission_mode confirm the strict mapping drops them.
     $payload = [ordered]@{
         session_id      = $cid
         turn_id         = 'verify-turn-1'
@@ -96,7 +64,6 @@ try {
     $conf = Join-Path $CodexHome 'agent-audit.conf'
     try { $payload | & pwsh -NoProfile -File $HookPs1 -Stream tool_call -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
-    # --- Assert ----------------------------------------------------------------
     Write-Host "[assert] querying $DataStream for the audit document…"
     $query = @{ query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
     $landed = $false
@@ -151,7 +118,6 @@ try {
         Write-Host "[assert] no $authFile — skipping provider account.id assertion (API-key auth / null is valid)"
     }
 
-    # --- Cleanup ---------------------------------------------------------------
     Write-Host '[cleanup] removing the synthetic verification document…'
     $del = Invoke-RestMethod -Method Post -TimeoutSec 30 `
         -Uri "$EsApi/$DataStream/_delete_by_query?refresh=true&ignore_unavailable=true" `
@@ -164,3 +130,4 @@ try {
 finally {
     Pop-Location
 }
+

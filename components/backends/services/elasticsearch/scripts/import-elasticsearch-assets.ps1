@@ -1,15 +1,3 @@
-# Applies the Elasticsearch assets for each CONCERN in -Concerns (a dir under this
-# component). Files are typed by suffix: *.ilm.json → ILM policy, *.component.json →
-# component template, *.pipeline.json → ingest pipeline, *.template.json → index
-# template + <name>-default data stream + mapping sync, *.index-template.json → index
-# template only (PUT, no data stream, no mapping sync — a higher-priority overlay over
-# an APM-managed stream), *.index.json → index. Within a concern they are applied
-# ilm → component → pipelines → templates → index-templates → indices, so a referenced
-# object always exists first. Idempotent: PUTs replace; streams/indices
-# created only if absent; a template's mapping is re-synced each run from the RESOLVED
-# composed mapping (a strict mapping still accepts added fields). PowerShell 7+; -EsUrl
-# or ES_URL env overrides the base URL.
-
 [CmdletBinding()]
 param(
     [string]$EsUrl = $(if ($env:ES_URL) { $env:ES_URL } else { 'http://localhost:9200' }),
@@ -157,9 +145,7 @@ function Invoke-Index($Name, $File) {
     Write-Host "[apply] index '$Name' created"
 }
 
-# ilm → component templates → pipelines → index templates → indices; a concern need
-# not ship every type. Lifecycle/mapping objects come first so index templates that
-# compose them resolve.
+# ilm → component → pipelines → templates → index-templates → indices, so composed/referenced objects exist first
 function Import-Concern($Concern) {
     $dir = Join-Path $ComponentDir $Concern
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
@@ -194,5 +180,6 @@ foreach ($concern in $Concerns) {
 
 Write-Host ''
 Write-Host "PASS: Elasticsearch assets applied on $EsUrl`: $($Concerns -join ', ')."
+
 
 

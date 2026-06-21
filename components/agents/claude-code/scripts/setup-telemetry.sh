@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-#
-# setup-telemetry.sh — configure Claude Code for the telemetry concern.
-#
-# Concern-level façade: the stack expresses intent ("configure Claude Code for
-# telemetry, exporting to this OTLP base") plus the values it owns (the agent
-# home and the OTLP base URL). This script owns WHICH render steps realize that
-# concern and their order, so the stack never enumerates the agent's render
-# primitives — a change to how the telemetry config is assembled stays in this
-# component. Renders the OTel env (the three OTLP signal endpoints are derived
-# from the base) and the Elasticsearch MCP config into the agent home.
-#
-# Usage: setup-telemetry.sh <agent_home> <otlp_base>
 
 set -euo pipefail
 

@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-#
-# setup-audit.sh — configure Claude Code for the audit concern.
-#
-# Concern-level façade (see setup-telemetry.sh): the stack passes its agent home
-# and the Elasticsearch URL the hook writes to; this script owns which render
-# steps realize the audit concern and their order. Renders the UserPromptSubmit
-# audit hook registration, the agent-audit.conf delivery config, and the
-# Elasticsearch MCP config into the agent home.
-#
-# Usage: setup-audit.sh <agent_home> <es_url>
 
 set -euo pipefail
 

@@ -1,11 +1,3 @@
-# setup-telemetry.ps1 — configure Codex CLI for the telemetry concern
-# (PowerShell mirror of setup-telemetry.sh).
-#
-# Concern-level façade: the stack passes its agent home (-TargetDir) and the OTLP
-# endpoint (-OtlpEndpoint); this script owns which render steps realize the
-# telemetry concern. Renders the [otel] config.toml block and the Elasticsearch
-# MCP config into the agent home.
-
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$TargetDir,
@@ -18,3 +10,4 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 
 & (Join-Path $ScriptDir 'render-otel.ps1') -TargetDir $TargetDir -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
 & (Join-Path $ScriptDir 'render-mcp.ps1') -TargetDir $TargetDir
+

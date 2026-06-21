@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Imports the Kibana saved objects for each SOURCE arg (a dir under this component)
-# via the _import?overwrite=true API. Within each dir, files load in dependency
-# order: data-views → saved-searches → dashboard. Needs curl, jq.
-
 set -euo pipefail
 
 KIBANA_URL=${KIBANA_URL:-http://localhost:5601}

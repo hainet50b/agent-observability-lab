@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-#
-# setup-telemetry.sh — configure Codex CLI for the telemetry concern.
-#
-# Concern-level façade (see the elastic backend's setup-* pattern): the stack
-# passes its agent home and the OTLP endpoint; this script owns which render
-# steps realize the telemetry concern. Renders the [otel] config.toml block and
-# the Elasticsearch MCP config into the agent home.
-#
-# Usage: setup-telemetry.sh <agent_home> <otlp_endpoint>
 
 set -euo pipefail
 

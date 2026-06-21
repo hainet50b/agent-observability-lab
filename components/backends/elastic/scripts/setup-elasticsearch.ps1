@@ -12,3 +12,4 @@ $BackendDir = Split-Path -Parent $ScriptDir
 $EsScripts = Join-Path $BackendDir '../services/elasticsearch/scripts'
 
 & (Join-Path $EsScripts 'import-elasticsearch-assets.ps1') -Concerns (@('shared') + $Sources)
+

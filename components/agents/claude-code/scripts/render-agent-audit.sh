@@ -1,18 +1,4 @@
 #!/usr/bin/env bash
-#
-# render-agent-audit.sh — render the Claude Code agent's Agent Audit delivery
-# config at <target>/.claude/agent-audit.conf from ../templates/agent-audit.template.conf.
-#
-# The capture-user-prompt hook reads its delivery config (Elasticsearch endpoint,
-# per-stream destination, capture posture) from a flat key=value agent-audit.conf
-# — zero external deps, no jq/TOML parser (SPEC/agent-audit.md "Delivery and
-# authorization"). This fills the one value that is the stack's to supply,
-# @@ES_URL@@ (the backend's Elasticsearch base URL), into that file.
-#
-# create-if-absent: an existing agent-audit.conf is left untouched (your edits —
-# e.g. an api_key, or content=redacted — survive; delete it to regenerate).
-#
-# Usage: render-agent-audit.sh <es-url> <target-dir>
 
 set -euo pipefail
 
