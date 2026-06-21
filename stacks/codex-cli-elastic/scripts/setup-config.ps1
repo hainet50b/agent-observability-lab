@@ -41,12 +41,28 @@ if (-not $OtlpEndpoint) {
     exit 2
 }
 
+# Optional secret overlay (gitignored): telemetry.otlp_api_key.
+# Absent file or key -> empty, no error (no auth header rendered).
+$OtlpApiKey = ''
+$LocalConfig = Join-Path $StackDir 'setup.local.conf'
+if (Test-Path -LiteralPath $LocalConfig -PathType Leaf) {
+    foreach ($line in Get-Content -LiteralPath $LocalConfig) {
+        if ($line -match '^\s*#' -or $line -notmatch '=') {
+            continue
+        }
+        $k, $v = $line -split '=', 2
+        if ($k.Trim() -eq 'telemetry.otlp_api_key') {
+            $OtlpApiKey = $v.Trim()
+        }
+    }
+}
+
 switch ($Scope) {
     'local' {
         if (-not $Target) {
             $Target = $StackDir
         }
-        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint
+        & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-telemetry.ps1') -TargetDir $Target -OtlpEndpoint $OtlpEndpoint -ApiKey $OtlpApiKey
     }
     'managed' {
         if ($Teardown) {

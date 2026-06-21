@@ -39,7 +39,10 @@ Each stack's `setup.conf` is the single source for the values the setup scripts 
   - **Telemetry stacks** (`claude-code-elastic`, `codex-cli-elastic`, `claude-code-otelcol-elastic`) carry **`telemetry.otlp_endpoint`** — the OTLP base from which `setup-config` builds the three `/v1/{logs,traces,metrics}` URLs. (Named for symmetry across stacks; the APM-Server stacks point it at `:8200`, the Collector stack at `:4318`.)
   - **Audit stacks** (`claude-code-elastic-audit`, `codex-cli-elastic-audit`) carry the **required** `agent_audit.*` keys — `agent_audit.elasticsearch.url`, `agent_audit.elasticsearch.timeout_ms`, and `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}` — read fail-fast (no fallback to `elasticsearch.url`). See [`agent-audit.md`](agent-audit.md).
 
-The one **secret** value — the audit `agent_audit.elasticsearch.api_key` — is never in `setup.conf`. It lives only in a gitignored **`setup.local.conf`** (each audit stack ships a committed `setup.local.conf.example` with an empty value); absent file or key → empty, no error.
+**Secret values are never in `setup.conf`.** Each lives only in a gitignored **`setup.local.conf`** (covered by `**/setup.local.conf`), and each stack that has one ships a committed **`setup.local.conf.example`** with an empty value; absent file or key → empty, no error (read symmetrically across stacks — the sh side uses `IFS= read` + a literal prefix-strip so a trailing `=` in a base64 key is preserved). Two symmetric secrets:
+
+- **Audit stacks** — `agent_audit.elasticsearch.api_key`, threaded to the audit hook config. See [`agent-audit.md`](agent-audit.md).
+- **Telemetry stacks** — the optional **`telemetry.otlp_api_key`**, threaded through `setup-config` → `setup-telemetry` → `render-otel` into the agent's OTLP exporter config. When set, the agent sends **`Authorization: ApiKey <key>`** on its OTLP exports (Claude via `OTEL_EXPORTER_OTLP_HEADERS` in the settings `env` block; Codex via the per-exporter `headers` table in `[otel.*.otlp-http]`). When **absent the rendered otel config is byte-identical to a no-key run** — no header line is emitted — which suits the local demo APM Server / Collector, whose auth is disabled.
 
 ## Managed materialize is staged
 

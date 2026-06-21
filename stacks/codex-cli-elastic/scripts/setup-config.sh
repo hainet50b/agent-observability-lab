@@ -54,10 +54,22 @@ done <"$config"
   exit 2
 }
 
+# Optional secret overlay (gitignored): telemetry.otlp_api_key.
+# Absent file or key -> empty, no error (no auth header rendered).
+OTLP_API_KEY=""
+local_config="$stack_dir/setup.local.conf"
+if [ -f "$local_config" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in
+    telemetry.otlp_api_key=*) OTLP_API_KEY=${line#telemetry.otlp_api_key=} ;;
+    esac
+  done <"$local_config"
+fi
+
 case $scope in
 local)
   target=${target:-$stack_dir}
-  "$components_dir/agents/codex-cli/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint"
+  "$components_dir/agents/codex-cli/scripts/setup-telemetry.sh" "$target" "$otlp_endpoint" "$OTLP_API_KEY"
   ;;
 managed)
   if [ "$teardown" -eq 1 ]; then

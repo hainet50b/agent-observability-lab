@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$TargetDir,
     [Parameter(Mandatory = $true)][string]$LogsEndpoint,
     [Parameter(Mandatory = $true)][string]$TracesEndpoint,
-    [Parameter(Mandatory = $true)][string]$MetricsEndpoint
+    [Parameter(Mandatory = $true)][string]$MetricsEndpoint,
+    [string]$ApiKey = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,9 +25,17 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     exit 1
 }
 
+# Optional OTLP auth. Empty key -> empty (headers render byte-identically as `{}`);
+# present -> ` Authorization = "ApiKey <key>" ` inside the per-exporter table.
+$Headers = ''
+if ($ApiKey) {
+    $Headers = " Authorization = `"ApiKey $ApiKey`" "
+}
+
 $content = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
     -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
-    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint
+    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
+    -replace '@@OTLP_HEADERS@@', $Headers
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
 [System.IO.File]::WriteAllText($config, $content, [System.Text.UTF8Encoding]::new($false))

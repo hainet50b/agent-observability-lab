@@ -1,0 +1,8 @@
+# Local secrets overlay (gitignored). Copy to setup.local.conf and fill in.
+# Read by scripts/setup-config.{sh,ps1} in addition to setup.conf; absent or
+# empty -> no OTLP auth header is rendered (fine for the local demo Collector,
+# whose OTLP receiver has auth disabled).
+#
+# telemetry.otlp_api_key: an APM/OTLP API key. When set, the agent sends
+# `Authorization: ApiKey <key>` on its OTLP exports (see SPEC/config-deployment.md).
+telemetry.otlp_api_key=

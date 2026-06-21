@@ -8,14 +8,14 @@ log_user_prompt = false
 [otel.exporter.otlp-http]
 endpoint = "@@OTLP_LOGS_ENDPOINT@@"
 protocol = "binary"
-headers = {}
+headers = {@@OTLP_HEADERS@@}
 
 [otel.trace_exporter.otlp-http]
 endpoint = "@@OTLP_TRACES_ENDPOINT@@"
 protocol = "binary"
-headers = {}
+headers = {@@OTLP_HEADERS@@}
 
 [otel.metrics_exporter.otlp-http]
 endpoint = "@@OTLP_METRICS_ENDPOINT@@"
 protocol = "binary"
-headers = {}
+headers = {@@OTLP_HEADERS@@}

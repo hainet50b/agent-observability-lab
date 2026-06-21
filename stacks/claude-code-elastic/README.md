@@ -50,6 +50,12 @@ target endpoints — Elasticsearch, the APM OTLP endpoint, and Kibana — from
 `setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
 empty rather than assuming localhost.
 
+The demo APM Server has auth disabled, so no OTLP credential is needed. To point a
+session at a **secured** endpoint, copy `setup.local.conf.example` to the gitignored
+`setup.local.conf` and set `telemetry.otlp_api_key=<key>` — `setup.sh` then adds
+`Authorization: ApiKey <key>` to the agent's OTLP exports. Leaving it empty (or
+skipping the file) ships no credential.
+
 Optionally prove the pipeline end to end with the smoke test (see
 [Verify the pipeline](#verify-the-pipeline)):
 
@@ -364,6 +370,7 @@ claude mcp add elasticsearch -- `
 claude-code-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (APM OTLP)
+├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.otlp_api_key)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import
    ├─ setup.ps1                           # PowerShell mirror of setup.sh

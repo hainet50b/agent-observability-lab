@@ -10,6 +10,15 @@ signals ship as importable NDJSON in
 searches** rather than extra data views (a data view holds only an index-pattern
 + time field, not a stored query or columns).
 
+**Optional OTLP auth.** The local demo APM Server runs with security disabled, so
+no credential is needed and the rendered telemetry config carries none by default.
+A stack can still ship one for a secured endpoint: set `telemetry.otlp_api_key` in
+the gitignored `setup.local.conf` (copy from `setup.local.conf.example`) and
+`setup-config` renders `OTEL_EXPORTER_OTLP_HEADERS: "Authorization=ApiKey <key>"`
+into the settings `env` block. Absent or empty → no header line, byte-identical to
+a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; see
+[`config-deployment.md`](config-deployment.md).
+
 ## How to read the data
 
 - **Three data streams:** `metrics-apm.app.claude_code-default` (metrics),

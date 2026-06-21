@@ -15,6 +15,15 @@ live in `components/agents/codex-cli/kibana/`.
 > etc. (see [Conditional events](#conditional-events-not-yet-observed)). The field
 > *shapes* below are stable; the counts are one session's.
 
+**Optional OTLP auth.** The local demo APM Server runs with security disabled, so
+no credential is needed and the rendered `[otel]` config carries none by default. A
+stack can still ship one for a secured endpoint: set `telemetry.otlp_api_key` in the
+gitignored `setup.local.conf` (copy from `setup.local.conf.example`) and
+`setup-config` renders `headers = { Authorization = "ApiKey <key>" }` into each
+`[otel.*.otlp-http]` exporter block. Absent or empty → `headers = {}`, byte-identical
+to a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; see
+[`config-deployment.md`](config-deployment.md).
+
 ## How to read the data
 
 - **Service name is `codex_cli_rs`, not `codex-cli`.** Codex emits the Rust

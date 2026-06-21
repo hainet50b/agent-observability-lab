@@ -123,6 +123,12 @@ stack root, or another file you pass (`setup.sh <config>` /
 `setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
 empty rather than assuming localhost.
 
+The demo Collector's OTLP receiver has auth disabled, so no credential is needed.
+To point a session at a **secured** endpoint, copy `setup.local.conf.example` to the
+gitignored `setup.local.conf` and set `telemetry.otlp_api_key=<key>` — `setup.sh`
+then adds `Authorization: ApiKey <key>` to the agent's OTLP exports. Leaving it
+empty (or skipping the file) ships no credential.
+
 Optionally prove the whole path end to end with the smoke test (see
 [Verify the pipeline](#verify-the-pipeline)):
 
@@ -304,6 +310,7 @@ scripts/resilience-test.sh    # from anywhere — it locates its own stack direc
 claude-code-otelcol-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend + otelcol-sidecar path
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.otlp_endpoint (Collector OTLP)
+├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.otlp_api_key)
 └─ scripts/
    ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import (3 components)
    ├─ setup.ps1                           # PowerShell mirror of setup.sh
