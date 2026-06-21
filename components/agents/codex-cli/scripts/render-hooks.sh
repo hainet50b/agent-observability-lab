@@ -55,3 +55,4 @@ trap 'rm -f "$tmp"' EXIT
 printf '%s\n' "$block" >"$tmp"
 
 config_place::append_section 'hook' 'codex-cli' "$endpoint" "$tmp" "$config" '[[hooks.UserPromptSubmit]]'
+config_place::place_self_ignore 'codex-cli' "$endpoint" "$target_abs/.codex"

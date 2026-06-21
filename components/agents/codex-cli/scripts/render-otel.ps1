@@ -36,3 +36,4 @@ $block = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@OTLP_HEADERS@@', $Headers
 
 Add-CpSection 'otel' 'codex-cli' $Endpoint $block $config '[otel]'
+Set-CpSelfIgnore 'codex-cli' $Endpoint (Join-Path $TargetDir '.codex')

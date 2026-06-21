@@ -50,3 +50,4 @@ jq \
    | {hooks: .hooks}' "$TEMPLATE" >"$tmp"
 
 config_place::place_file 'hook' 'claude-code' "$endpoint" "$tmp" "$out"
+config_place::place_self_ignore 'claude-code' "$endpoint" "$target_abs/.claude"

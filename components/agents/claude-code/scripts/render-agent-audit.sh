@@ -43,3 +43,4 @@ sed \
   "$TEMPLATE" >"$tmp"
 
 config_place::place_file 'agent-audit' 'claude-code' "$es_url" "$tmp" "$config"
+config_place::place_self_ignore 'claude-code' "$es_url" "$target_dir/.claude"

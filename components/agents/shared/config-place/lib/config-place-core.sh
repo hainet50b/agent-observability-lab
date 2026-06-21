@@ -64,6 +64,21 @@ config_place::place_file() {
   config_place::log "$key: wrote $target"
 }
 
+# Self-ignore a materialized agent-home: place <home>/.gitignore = "*" so the
+# surrounding project's git ignores the whole bundle (config + secrets + runtime
+# state) without touching the project's own ignore rules. Same marker-aware path
+# as place_file, keyed on the deploy endpoint — foreign .gitignore is refused,
+# teardown removes the lab-placed one. Idempotent across the render scripts that
+# share an agent-home in one deploy (they pass the same endpoint).
+config_place::place_self_ignore() {
+  local agent=$1 endpoint=$2 home=$3
+  local tmp
+  tmp=$(mktemp)
+  printf '*\n' >"$tmp"
+  config_place::place_file 'gitignore' "$agent" "$endpoint" "$tmp" "$home/.gitignore"
+  rm -f "$tmp"
+}
+
 # Append a rendered section to a shared single-file config (Codex config.toml).
 # ABSENT -> create with the block + mark. OURS -> append the block (separated by
 # a blank line), or skip when <sentinel> already present (idempotent re-run).

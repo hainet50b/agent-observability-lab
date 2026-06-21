@@ -36,3 +36,4 @@ sed \
   "$TEMPLATE" | jq '{env: .env}' >"$tmp"
 
 config_place::place_file 'otel' 'claude-code' "$endpoint" "$tmp" "$out"
+config_place::place_self_ignore 'claude-code' "$endpoint" "$target/.claude"

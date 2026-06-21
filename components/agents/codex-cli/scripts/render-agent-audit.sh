@@ -43,3 +43,4 @@ sed \
   "$template" >"$tmp"
 
 config_place::place_file 'agent-audit' 'codex-cli' "$es_url" "$tmp" "$config"
+config_place::place_self_ignore 'codex-cli' "$es_url" "$target_dir/.codex"

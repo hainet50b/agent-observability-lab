@@ -23,7 +23,8 @@ hooks_owned=0
 
 for key_target in \
   "config:$config" \
-  "agent-audit:$target/.codex/agent-audit.conf"; do
+  "agent-audit:$target/.codex/agent-audit.conf" \
+  "gitignore:$target/.codex/.gitignore"; do
   key=${key_target%%:*}
   tgt=${key_target#*:}
   config_place::remove_file "$key" "$endpoint" "$tgt" || failed=1

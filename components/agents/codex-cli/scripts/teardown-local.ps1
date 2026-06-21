@@ -20,7 +20,8 @@ if ((Test-Path -LiteralPath $configMarker -PathType Leaf) -and
 
 $targets = @(
     @{ Key = 'config'; Target = $config },
-    @{ Key = 'agent-audit'; Target = (Join-Path $TargetDir '.codex/agent-audit.conf') }
+    @{ Key = 'agent-audit'; Target = (Join-Path $TargetDir '.codex/agent-audit.conf') },
+    @{ Key = 'gitignore'; Target = (Join-Path $TargetDir '.codex/.gitignore') }
 )
 foreach ($t in $targets) {
     if (-not (Remove-CpFile $t.Key $Endpoint $t.Target)) { $failed = $true }

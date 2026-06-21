@@ -52,6 +52,7 @@ try {
     ([pscustomobject]@{ hooks = $hooks } | ConvertTo-Json -Depth 10) |
         Set-Content -LiteralPath $tmp -Encoding utf8
     Set-CpFile 'hook' 'claude-code' $Endpoint $tmp $out
+    Set-CpSelfIgnore 'claude-code' $Endpoint (Join-Path $targetAbs '.claude')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue

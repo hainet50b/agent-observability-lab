@@ -45,3 +45,4 @@ Replace('@@AGENT_AUDIT_PS1@@', $AgentAuditPs1).
 Replace('@@AGENT_AUDIT_CONF@@', $AgentAuditConf)
 
 Add-CpSection 'hook' 'codex-cli' $Endpoint $block $config '[[hooks.UserPromptSubmit]]'
+Set-CpSelfIgnore 'codex-cli' $Endpoint (Join-Path $targetAbs '.codex')

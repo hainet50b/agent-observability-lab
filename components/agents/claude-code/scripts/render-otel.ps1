@@ -33,6 +33,7 @@ try {
     ([pscustomobject]@{ env = $envBlock } | ConvertTo-Json -Depth 8) |
         Set-Content -LiteralPath $tmp -Encoding utf8
     Set-CpFile 'otel' 'claude-code' $Endpoint $tmp $out
+    Set-CpSelfIgnore 'claude-code' $Endpoint (Join-Path $TargetDir '.claude')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue

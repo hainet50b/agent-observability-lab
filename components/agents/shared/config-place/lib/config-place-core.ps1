@@ -68,6 +68,19 @@ function Set-CpFile($Key, $Agent, $Endpoint, $Source, $Target) {
     Write-CpLog "${Key}: wrote $Target"
 }
 
+# Self-ignore a materialized agent-home: place <home>/.gitignore = "*" so the
+# surrounding project's git ignores the whole bundle (config + secrets + runtime
+# state) without touching the project's own ignore rules. Same marker-aware path
+# as Set-CpFile, keyed on the deploy endpoint — foreign .gitignore is refused,
+# teardown removes the lab-placed one. Idempotent across the render scripts that
+# share an agent-home in one deploy (they pass the same endpoint).
+function Set-CpSelfIgnore($Agent, $Endpoint, $AgentHome) {
+    $tmp = [System.IO.Path]::GetTempFileName()
+    [System.IO.File]::WriteAllText($tmp, "*`n", [System.Text.UTF8Encoding]::new($false))
+    try { Set-CpFile -Key 'gitignore' -Agent $Agent -Endpoint $Endpoint -Source $tmp -Target (Join-Path $AgentHome '.gitignore') }
+    finally { Remove-Item -LiteralPath $tmp -Force }
+}
+
 # Append a rendered section to a shared single-file config (Codex config.toml).
 # ABSENT -> create with the block + mark. OURS -> append the block (separated by
 # a blank line), or skip when <Sentinel> already present (idempotent re-run).

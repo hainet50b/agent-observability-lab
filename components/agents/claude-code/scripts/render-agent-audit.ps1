@@ -36,6 +36,7 @@ $tmp = New-TemporaryFile
 try {
     [System.IO.File]::WriteAllText($tmp, $content, [System.Text.UTF8Encoding]::new($false))
     Set-CpFile 'agent-audit' 'claude-code' $EsUrl $tmp $config
+    Set-CpSelfIgnore 'claude-code' $EsUrl (Join-Path $TargetDir '.claude')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue

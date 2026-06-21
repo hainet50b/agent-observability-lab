@@ -24,7 +24,8 @@ hooks_owned=0
 for key_target in \
   "settings:$settings" \
   "agent-audit:$target/.claude/agent-audit.conf" \
-  "mcp:$target/.mcp.json"; do
+  "mcp:$target/.mcp.json" \
+  "gitignore:$target/.claude/.gitignore"; do
   key=${key_target%%:*}
   tgt=${key_target#*:}
   config_place::remove_file "$key" "$endpoint" "$tgt" || failed=1

@@ -45,3 +45,4 @@ trap 'rm -f "$tmp"' EXIT
 printf '%s\n' "$block" >"$tmp"
 
 config_place::append_section 'otel' 'codex-cli' "$endpoint" "$tmp" "$config" '[otel]'
+config_place::place_self_ignore 'codex-cli' "$endpoint" "$target_dir/.codex"
