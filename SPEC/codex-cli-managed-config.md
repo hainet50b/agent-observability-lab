@@ -2,14 +2,16 @@
 
 How OpenAI Codex CLI lets an administrator push configuration onto a fleet and
 **enforce** a subset of it, while leaving the user's own `config.toml` in effect
-wherever it does not conflict. This is the reference for the lab's two planned
-managed-config validation stacks. It is **Codex-specific**: Claude Code has no
+wherever it does not conflict. In the lab this surface is driven by the audit
+stacks' `setup-config --scope managed` (`--with-hooks`); the shared placement
+model is owned by [`config-deployment.md`](config-deployment.md). It is
+**Codex-specific**: Claude Code has no
 `config.toml` / `requirements.toml` — its org-enforcement surface is
-`managed-settings.json`, so the mechanics here do **not** carry over to a
-future `claude-code-*` managed stack (only the *idea* does).
+`managed-settings.json` ([`claude-code-managed-config.md`](claude-code-managed-config.md)),
+so the mechanics here do **not** carry over (only the *idea* does).
 
 Upstream docs (read these for the authoritative key list — this file is the
-distilled model and the lab's validation plan):
+distilled model):
 
 - Managed configuration — <https://developers.openai.com/codex/enterprise/managed-configuration>
 - Advanced configuration (`[otel]`, hooks) — <https://developers.openai.com/codex/config-advanced>
@@ -84,7 +86,7 @@ managed-only wrapper fields differ:
     load only managed hooks. **Only honored in `requirements.toml`** (a no-op in
     `config.toml`). This is the switch that makes managed hooks *exclusive*.
 
-Two behaviors that drive the validation matrix:
+Two behaviors that drive the lab's hook posture:
 
 - **Sources merge, not replace.** Managed hooks are *added* to user hooks unless
   `allow_managed_hooks_only = true`. Proving "managed-only" therefore requires
@@ -154,5 +156,7 @@ A **teardown script is mandatory** — the counterpart to placement, since a hos
 ### What can actually be enforced (state it honestly)
 
 What a deployed managed layer enforces is **agent-specific and must be stated in the templates and the prompt**: Codex enforces via `requirements.toml` (managed hooks, `allow_managed_hooks_only`, `[features].hooks`, sandbox/approval policies), but **`[otel]`/telemetry is only a managed *default*** (`managed_config.toml`), never enforceable — and on Windows `managed_config.toml` is a weak boundary, so real enforcement lives in `requirements.toml` at `%ProgramData%`.
+
+This shapes what each managed combination materializes: the audit stacks' hooks-only deploy (`--with-hooks`, no OTLP endpoints) places **only `requirements.toml`** — pinning `[features].hooks = true`, `allow_managed_hooks_only = false`, the `managed_dir` / `windows_managed_dir`, and the hook tables — and **no `managed_config.toml`** (with no telemetry that file would be just a comment). A combined telemetry+hooks deploy adds `managed_config.toml` `[otel]`. The full matrix is in [`config-deployment.md`](config-deployment.md) "Managed materialize".
 
 A **claude-code counterpart** uses `managed-settings.json` — a different mechanism that, unlike Codex's `[otel]`, **can** enforce telemetry; it is documented separately (see the intro) and shares this same deploy-only, human-gated, never-overwrite placement model.

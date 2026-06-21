@@ -17,9 +17,10 @@ variant would be a separate stack, mirroring `claude-code-otelcol-elastic`).
 > 🚧 **Session wired; data views + curated saved searches in.** This stack stands
 > up the composition, proves the OTLP path with the synthetic smoke test, points a
 > real Codex CLI session at it, and ships the Codex data views plus curated saved
-> searches: `scripts/setup.sh` installs trace routing, renders a Codex `[otel]`
-> telemetry config (see [Point a Codex session](#2-point-a-codex-session-at-the-stack)),
-> and imports the Kibana data views and saved searches. A **dashboard, ingest
+> searches: `scripts/setup.sh` loads the Elasticsearch assets (including Codex's
+> trace-isolation pipelines), renders a Codex `[otel]` telemetry config (see
+> [Point a Codex session](#2-point-a-codex-session-at-the-stack)), and imports the
+> Kibana data views and saved searches. A **dashboard, ingest
 > filtering, and normalized summary indices** remain deferred. See
 > [What's deferred](#whats-deferred). For prompt / tool-call **audit**, see the
 > sibling [`codex-cli-elastic-audit`](../codex-cli-elastic-audit/) stack.
@@ -40,11 +41,11 @@ variant would be a separate stack, mirroring `claude-code-otelcol-elastic`).
 
 `codex-cli` mirrors the `service.name: codex-cli` that Codex CLI emits (as
 `claude-code` does its own) and disambiguates from Codex cloud / the IDE
-extension / the legacy Codex model. Codex traces are isolated into the per-agent
-data stream `traces-apm-agents_codex_cli` (routed by `scripts/setup.sh`, step 1),
-and its metrics/events land in the per-service data streams
-`*-apm.app.codex_cli-default` — matching the per-agent isolation already used for
-Claude Code.
+extension / the legacy Codex model. The actual emitted `service.name` is
+**`codex_cli_rs`**, so Codex traces are isolated into the per-agent data stream
+`traces-apm-agents_codex_cli_rs` (routed by `scripts/setup.sh`, step 1), and its
+metrics/events land in the per-service data streams `*-apm.app.codex_cli_rs-default` —
+matching the per-agent isolation already used for Claude Code.
 
 ## Prerequisites
 
@@ -71,10 +72,11 @@ scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 Kibana is then at <http://localhost:5601>. The three backend services
 (`aol-elasticsearch`, `aol-kibana`, `aol-apm-server`) are the same Elastic
 backend the other stacks compose. `scripts/setup.sh` runs the post-up bootstrap
-in one shot — it installs the trace-routing ingest pipeline (isolates Codex's
-spans into a dedicated per-agent trace stream), installs the logs-drop pipeline,
-renders a Codex `[otel]` config to `.codex/config.toml` in this directory
-(pointed at the APM Server OTLP endpoint on `:8200`), and imports the Codex Kibana
+in one shot — it loads the Elasticsearch assets (the APM `@custom` routers,
+Codex's ingest pipelines that isolate its spans into `traces-apm-agents_codex_cli_rs`,
+and the per-agent ILM/templates), renders a Codex `[otel]` config to
+`.codex/config.toml` in this directory (pointed at the APM Server OTLP endpoint on
+`:8200`) and links your `~/.codex/auth.json` into it, and imports the Codex Kibana
 **data views** (Metrics / Events / Traces) and **saved searches**. Steps are
 idempotent / create-if-absent, so re-run it any time.
 Both scripts read their target endpoints — Elasticsearch, the APM OTLP endpoint,
@@ -116,12 +118,13 @@ home so `<dir>/config.toml` *is* the user-level config — the supported,
 non-invasive way to keep telemetry config per-project without editing your real
 `~/.codex`.
 
-> **First run under a fresh `CODEX_HOME` has no credentials.** Because
-> `CODEX_HOME` relocates the entire Codex home, Codex won't see your existing
-> `~/.codex` login. Either `codex login` once under this `CODEX_HOME`, or copy
-> your `~/.codex/auth.json` into `stacks/codex-cli-elastic/.codex/`. (Everything
-> Codex writes here — credentials, history, state — stays in the gitignored
-> `.codex/`.)
+> **Credentials under the relocated `CODEX_HOME`.** Because `CODEX_HOME`
+> relocates the entire Codex home, Codex won't see your existing `~/.codex` login
+> on its own. `local`-scope setup links your `~/.codex/auth.json` into this
+> `.codex/` for you (symlink, or a copy with a staleness note) — so a normal
+> `scripts/setup.sh` run leaves you logged in. If the link is absent (no source
+> login), just `codex login` once under this `CODEX_HOME`. Everything Codex writes
+> here — credentials, history, state — stays in the gitignored `.codex/`.
 
 The rendered config sets `log_user_prompt = false` (prompt text is **not**
 logged) and sends logs / traces / metrics to the APM Server (the `metrics_exporter`
@@ -309,12 +312,14 @@ codex-cli-elastic/
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
 └─ scripts/
-   ├─ setup.sh                            # bootstrap: trace routing + logs-drop + Codex config + Kibana import
-   ├─ setup.ps1                           # PowerShell mirror of setup.sh
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup-backend.sh / .ps1            # wait for health, load ES + Kibana assets
+   ├─ setup-config.sh / .ps1             # render the [otel] config + link auth.json (--scope local|project|managed)
    └─ smoke-test.sh                       # agent-independent OTLP-path verification (stack property)
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The `elastic`
+`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`),
+each calling the component façade scripts directly. The `elastic`
 backend (`../../components/backends/elastic/`) is a thin `include:` of the
 `elasticsearch` / `kibana` / `apm-server` service fragments plus a composition
 script that selects its assets — it owns no asset files. The service fragments

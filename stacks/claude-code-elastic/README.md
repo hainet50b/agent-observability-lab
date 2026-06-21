@@ -42,9 +42,11 @@ scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
 Kibana is then at <http://localhost:5601>. `scripts/setup.sh` runs every post-up
-bootstrap step in one shot — it installs the trace-routing ingest pipeline
-(isolates Claude Code's spans into `traces-apm-agents_claude_code`) and imports the Kibana saved objects — and is idempotent,
-so re-run it any time (e.g. after editing saved objects). Both scripts read their
+bootstrap step in one shot — it loads the Elasticsearch assets (the APM `@custom`
+routers, Claude Code's ingest pipelines that isolate its spans into
+`traces-apm-agents_claude_code`, and the per-agent ILM/templates) and imports the
+Kibana saved objects — and is idempotent, so re-run it any time (e.g. after
+editing saved objects). Both scripts read their
 target endpoints — Elasticsearch, the APM OTLP endpoint, and Kibana — from
 `setup.conf` at the stack root, or another file you pass (`setup.sh <config>` /
 `setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
@@ -236,7 +238,7 @@ repo.
 > no managed hooks-directory convention, so the lab picks `hooks/` beside
 > `managed-settings.json`. Confirm on a **real host** that an absolute hook `command`
 > path actually fires (mind the macOS space in `Application Support` and the Windows
-> `ProgramData`/`Program Files` paths) and record the result. Until you have confirmed
+> `C:\Program Files\ClaudeCode` path) and record the result. Until you have confirmed
 > it, leave `--with-hooks` off and keep managed config-only.
 
 Remove it (restores the host, removes only the lab-placed file + its marker; add
@@ -374,12 +376,14 @@ claude-code-elastic/
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
 └─ scripts/
-   ├─ setup.sh                            # one-shot bootstrap: trace-routing + Kibana import
-   ├─ setup.ps1                           # PowerShell mirror of setup.sh
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup-backend.sh / .ps1            # wait for health, load ES + Kibana assets
+   ├─ setup-config.sh / .ps1             # deploy the agent config bundle (--scope local|project|managed)
    └─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The `elastic`
+`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`),
+each calling the component façade scripts directly. The `elastic`
 backend (`../../components/backends/elastic/`) is a thin `include:` of the
 `elasticsearch` / `kibana` / `apm-server` service fragments plus a composition
 script that selects its assets — it owns no asset files. The service fragments

@@ -120,14 +120,15 @@ env CODEX_HOME="$PWD/.codex" codex
 $env:CODEX_HOME = "$PWD\.codex"; codex
 ```
 
-> **First run under a fresh `CODEX_HOME` has no credentials.** Because
-> `CODEX_HOME` relocates the entire Codex home, Codex won't see your existing
-> `~/.codex` login. Either `codex login` once under this `CODEX_HOME`, or copy
-> your `~/.codex/auth.json` into `stacks/codex-cli-elastic-audit/.codex/`.
-> Provider identity (`agent_audit.agent.account.*` / `organization.*`) is read
-> from that `auth.json`; without it those fields stay `null` (valid — the
-> workstation `user.id` is still derived). Everything Codex writes here stays in
-> the gitignored `.codex/`.
+> **Credentials under the relocated `CODEX_HOME`.** Because `CODEX_HOME`
+> relocates the entire Codex home, Codex won't see your existing `~/.codex` login
+> on its own. `local`-scope setup links your `~/.codex/auth.json` into this
+> `.codex/` for you (symlink, or a copy with a staleness note); if the link is
+> absent (no source login), `codex login` once under this `CODEX_HOME`. Provider
+> identity (`agent_audit.agent.account.*` / `organization.*`) is read from that
+> `auth.json`; without it those fields stay `null` (valid — the workstation
+> `user.id` is still derived). Everything Codex writes here stays in the gitignored
+> `.codex/`.
 
 Then do a little work in the session. Each prompt you submit and each tool call
 Codex completes is reshaped into a canonical `agent_audit.*` document and POSTed
@@ -229,8 +230,6 @@ later, with the human:
 - **Prompt / tool-I/O sealing** — lab mode stores captured text in plaintext; an
   encrypted mode (null `text`, populated `encrypted_text`) is reserved in the
   schema but not built.
-- **A Claude Code audit variant** — `claude-code-elastic-audit` would reuse this
-  `elastic-audit` backend wholesale, adding only Claude Code's audit hooks.
 
 ## Layout
 
@@ -241,26 +240,28 @@ codex-cli-elastic-audit/
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (audit api_key secret)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh                            # bootstrap: audit streams + config.toml (hooks + MCP) + agent-audit.conf + Kibana import
-   ├─ setup.ps1                           # PowerShell mirror of setup.sh
-   ├─ verify-agent-audit.sh               # UserPromptSubmit -> user_prompt stream verification
-   ├─ verify-agent-audit.ps1              # PowerShell mirror
-   ├─ verify-tool-call-audit.sh           # PostToolUse -> tool_call stream verification
-   └─ verify-tool-call-audit.ps1          # PowerShell mirror
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup-backend.sh / .ps1            # wait for health, provision audit streams + Kibana import
+   ├─ setup-config.sh / .ps1             # deploy the audit bundle (--scope local|project|managed)
+   ├─ verify-agent-audit.sh / .ps1       # UserPromptSubmit -> user_prompt stream verification
+   └─ verify-tool-call-audit.sh / .ps1   # PostToolUse -> tool_call stream verification
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The
-`elastic-audit` backend (`../../components/backends/elastic-audit/`) is a thin
-`include:` of the `elasticsearch` / `kibana` service fragments plus a composition
-script that selects its assets — it owns no asset files. The service fragments
-under `../../components/backends/services/` own the service definitions and
-config, the asset libraries (the Agent Audit data-stream index templates under
-`elasticsearch/index-templates/`; the Agent Audit data views and saved searches
-under `kibana/agent-audit/`), and the generic appliers that load them. The Codex
-CLI agent component (`../../components/agents/codex-cli/`) owns only agent-runtime
-config — the audit hooks (`hooks/capture-user-prompt.{sh,ps1}`,
-`hooks/capture-tool-call.{sh,ps1}`), the hook delivery-config template, and the
-render scripts. `scripts/setup.sh` renders the delivery
-config into this directory's gitignored `.codex/agent-audit.conf`, registers the
-stack-local hooks as inline `[hooks]` in `.codex/config.toml`, provisions the audit data streams, and
-imports those Kibana objects.
+`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`),
+each calling the component façade scripts directly. The `elastic-audit` backend
+(`../../components/backends/elastic-audit/`) is a thin `include:` of the
+`elasticsearch` / `kibana` service fragments plus a composition script that
+selects its assets — it owns no asset files. The service fragments under
+`../../components/backends/services/` own the service definitions and config, the
+asset libraries (the Agent Audit data-stream ILM / `@mappings` + `@lifecycle`
+component templates / index templates under `elasticsearch/agent-audit/`; the
+Agent Audit data views and saved searches under `kibana/agent-audit/`), and the
+generic appliers that load them. The Codex CLI agent component
+(`../../components/agents/codex-cli/`) owns only agent-runtime config — the single
+audit-hook entry `hooks/agent-audit.{sh,ps1}` over its per-agent
+`hooks/lib/adapter.{sh,ps1}` (the shared hook core lives once under
+`../../components/agents/shared/agent-audit/lib/`), the hook delivery-config
+template, and the render scripts. `setup-config` renders the delivery config into
+this directory's gitignored `.codex/agent-audit.conf` and registers the
+stack-local hooks as inline `[hooks]` (plus the Elasticsearch MCP) in
+`.codex/config.toml`.

@@ -6,7 +6,9 @@ from a live session (`service.name = codex_cli_rs`, Codex **0.137.0**,
 the source of truth for the version you run — names and fields change fast (Codex
 is high-churn). This is the agent-knowledge companion to the stack's Quick Tour
 (`stacks/codex-cli-elastic/README.md`); the Kibana views built on these signals
-live in `components/agents/codex-cli/kibana/`.
+ship as importable NDJSON in `components/backends/services/kibana/codex-cli/`
+(Kibana-consumed assets live in the kibana service component — see `SPEC.md`
+"Placement rule").
 
 > ⚠️ **Single-session caveat.** This reference is grounded in one interactive
 > session that used the **WebSocket** model transport. The event/metric *mix*
@@ -161,12 +163,17 @@ so the only `codex.api_request` was the `/models` auth probe. A session using th
 SSE/HTTP transport would instead emit `codex.sse_event` and route model calls
 through `codex.api_request`.
 
-## Traces (currently `traces-apm-default`; target `traces-apm-agents_codex_cli_rs`)
+## Traces (`traces-apm-agents_codex_cli_rs`)
 
 Codex emits spans natively (APM receives them on `/v1/traces`, no server change).
-**Until the reroute predicate is corrected** (it shipped matching `codex-cli`, but
-the real `service.name` is `codex_cli_rs` — so it never fires), Codex's spans sit
-unisolated in `traces-apm-default` (3,479 in one session, `span.type: app`).
+This stack **routes** them off the service-agnostic `traces-apm-default` into the
+dedicated `traces-apm-agents_codex_cli_rs` data stream: the agent-agnostic
+`traces-apm@custom` router dispatches by `service.name` to the per-agent
+`traces-apm@custom-codex_cli_rs` sub-pipeline (the real `service.name` is
+`codex_cli_rs`, which the sub-pipeline filename matches), which reroutes to
+namespace `agents_codex_cli_rs` (see [Trace data model](#trace-data-model)). In one
+session ~3,479 spans, `span.type: app` (most are streaming-fragment spans dropped
+before the reroute — see [Volume reduction](#volume-reduction-ingest-drops)).
 
 `transaction.name` shows Codex's **internal span tree** rather than a single
 "interaction" root: `thread/start`, `turn/start`, `model_client.stream_responses_websocket`,

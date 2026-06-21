@@ -225,28 +225,30 @@ claude-code-elastic-audit/
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (audit api_key secret)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh                            # bootstrap: audit streams + settings.local.json (hooks) + agent-audit.conf + .mcp.json + Kibana import
-   ├─ setup.ps1                           # PowerShell mirror of setup.sh
-   ├─ verify-agent-audit.sh               # UserPromptSubmit -> user_prompt stream verification
-   ├─ verify-agent-audit.ps1              # PowerShell mirror
-   ├─ verify-tool-call-audit.sh           # PostToolUse -> tool_call stream verification
-   └─ verify-tool-call-audit.ps1          # PowerShell mirror
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup-backend.sh / .ps1            # wait for health, provision audit streams + Kibana import
+   ├─ setup-config.sh / .ps1             # deploy the audit bundle (--scope local|project|managed)
+   ├─ verify-agent-audit.sh / .ps1       # UserPromptSubmit -> user_prompt stream verification
+   └─ verify-tool-call-audit.sh / .ps1   # PostToolUse -> tool_call stream verification
 ```
 
-`setup.{sh,ps1}` calls the component bootstrap scripts directly. The
-`elastic-audit` backend (`../../components/backends/elastic-audit/`) is a thin
-`include:` of the `elasticsearch` / `kibana` service fragments plus a composition
-script that selects its assets — it owns no asset files. The service fragments
-under `../../components/backends/services/` own the service definitions and
-config, the asset libraries (the Agent Audit data-stream index templates under
-`elasticsearch/index-templates/`; the Agent Audit data views and saved searches
-under `kibana/agent-audit/`), and the generic appliers that load them. The Claude
-Code agent component (`../../components/agents/claude-code/`) owns only
-agent-runtime config — the audit hooks (`hooks/capture-user-prompt.{sh,ps1}`,
-`hooks/capture-tool-call.{sh,ps1}`), the hook delivery-config template, and the
-render scripts (`render-hook`, `render-agent-audit`, `render-mcp`). `scripts/setup.sh`
-registers the hooks in this directory's gitignored `.claude/settings.local.json`,
-renders the delivery
-config into `.claude/agent-audit.conf`, writes `.mcp.json`, provisions the audit
-data streams, and imports those Kibana objects.
+`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`),
+each calling the component façade scripts directly. The `elastic-audit` backend
+(`../../components/backends/elastic-audit/`) is a thin `include:` of the
+`elasticsearch` / `kibana` service fragments plus a composition script that
+selects its assets — it owns no asset files. The service fragments under
+`../../components/backends/services/` own the service definitions and config, the
+asset libraries (the Agent Audit data-stream ILM / `@mappings` + `@lifecycle`
+component templates / index templates under `elasticsearch/agent-audit/`; the
+Agent Audit data views and saved searches under `kibana/agent-audit/`), and the
+generic appliers that load them. The Claude Code agent component
+(`../../components/agents/claude-code/`) owns only agent-runtime config — the
+single audit-hook entry `hooks/agent-audit.{sh,ps1}` over its per-agent
+`hooks/lib/adapter.{sh,ps1}` (the shared hook core lives once under
+`../../components/agents/shared/agent-audit/lib/`), the hook delivery-config
+template, and the render scripts (`render-hook`, `render-agent-audit`,
+`render-mcp`). `setup-config` registers the hooks in this directory's gitignored
+`.claude/settings.local.json` (each command pointed at the absolute
+`agent-audit.conf` via `--config`), renders the delivery config into
+`.claude/agent-audit.conf`, and writes `.mcp.json`.
 ```

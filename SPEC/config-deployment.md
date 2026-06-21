@@ -18,7 +18,7 @@ A deployed bundle is **self-contained** — everything the agent needs at runtim
 
 Three scopes, selected by `--scope` (default **`local`**):
 
-- **`local`** — a user-scope deployment to the **stack's own directory**. **Rejects `--target`** (use `project` to deploy into a directory). Materializes the full bundle, **including** the Elasticsearch MCP. Safe, scriptable, no confirmation.
+- **`local`** — a user-scope deployment to the **stack's own directory**. **Rejects `--target`** (use `project` to deploy into a directory). Materializes the full bundle, **including** the Elasticsearch MCP. For a Codex stack it also links the user's `~/.codex/auth.json` into the relocated `CODEX_HOME` (`link-auth`, a `local`-only convenience: symlink, or copy with a staleness warning; no-op if the source is absent or the target exists), so the provider-identity source is present without a fresh `codex login`. Safe, scriptable, no confirmation.
 - **`project`** — a user-scope deployment into an arbitrary directory; **requires `--target <dir>`** — e.g. a user's real project, to see what telemetry/audit their everyday work would emit. Materializes the full bundle **except** the Elasticsearch MCP: the MCP is a local-only lab-exploration convenience and is not injected into foreign projects, keeping their footprint minimal. Safe, scriptable, no confirmation.
 - **`managed`** — org-enforced placement at the machine-global system paths, highest precedence. `--target` is not applicable. This is the **deploy-only, human-gated, never-overwrite** model in `SPEC/claude-code-managed-config.md` and `SPEC/codex-cli-managed-config.md` "Placement in this lab" (interactive, no `--yes`, non-TTY aborts, fail-loud, sidecar provenance marker, mandatory teardown). Dangerous and manual by design. A managed deploy can carry **telemetry, hooks, or both**: `setup-managed` requires at least one of (all three OTLP endpoints) or `--with-hooks`, and renders only what is present — see [Managed materialize](#managed-materialize).
 
@@ -41,7 +41,7 @@ This replaces the older permissive behaviour (env-merge into an existing `settin
 `setup-config --teardown` is valid for every scope (`local` resolves the target to the stack dir; `project` requires `--target`, like `project` deploy; `managed` takes neither).
 
 - **`managed`** → the existing **interactive** teardown (`teardown-managed`), unchanged. For the audit stacks, `--scope managed --teardown` runs `teardown-managed --with-hooks`, removing the host hook bundle (and, for a combined telemetry+hooks deploy, the telemetry config); teardown enumerates every candidate target, and one that was never placed is a harmless no-op.
-- **`local` / `project`** → **non-interactive**: remove each bundle file that carries a lab marker whose `endpoint` matches this deploy, plus its marker (and the copied `hooks/` tree when the hook-bearing file was lab-owned). Any target **lacking a lab marker, or carrying a different endpoint, is refused** and left untouched, and the run ends non-zero. Only ever removes lab-marked files.
+- **`local` / `project`** → **non-interactive**: remove each bundle file that carries a lab marker whose `endpoint` matches this deploy, plus its marker (and the copied `hooks/` tree when the hook-bearing file was lab-owned, the linked Codex `auth.json` when it was lab-placed, and the agent home's self-ignore `.gitignore`). Any target **lacking a lab marker, or carrying a different endpoint, is refused** and left untouched, and the run ends non-zero. Only ever removes lab-marked files.
 
 ## Backend vs config
 
