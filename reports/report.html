@@ -1223,6 +1223,37 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>managed fix: PowerShell naming — Verb-Noun functions, full names</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li>Renamed the non-cmdlet-shaped functions to approved Verb-Noun: <code>McFail→Write-McFatal</code>, <code>McPlaceOne→Install-McManagedFile</code>, <code>McTeardownOne→Remove-McManagedFile</code>, and the raw fs helpers to a symmetric pair <code>Install-McFile→Copy-McFile</code> / <code>McRemoveFile→Remove-McFile</code> (high-level <code>*-McManagedFile</code> ops delegate to low-level <code>Copy/Remove-McFile</code>). Verified <code>Assert</code> is an approved verb via <code>Get-Verb</code>, so <code>Assert-McTty</code> and the other already-compliant names (<code>Get-/Test-/Show-/Confirm-/Write-/Invoke-Mc*</code>) were left alone.</li>
+    <li><strong>Kept the <code>Mc</code> noun-prefix.</strong> The task said "reconsider" it, but its own examples retain it, and a short module-style noun prefix (à la <code>Az</code>/<code>AD</code>) is idiomatic PowerShell; spelling it to <code>ManagedConfig</code> would make every call verbose for no clarity gain.</li>
+    <li>Spelled out the only abbreviated variables — <code>$rt→$runtimeInformation</code>, <code>$plat→$osPlatform</code> in <code>Get-McPlatform</code> (loop/index <code>$i</code>, <code>$d</code> left as conventional).</li>
+    <li><strong>sed over-match caught and fixed:</strong> <code>s/McFail/Write-McFatal/</code> also hit the <code>$script:McFailed</code> flag variable (<code>McFail</code> is its prefix), producing <code>$script:Write-McFataled</code>. Reverted that token back to <code>McFailed</code> (the failure flag is a variable, not the function) and confirmed no residue.</li>
+    <li><strong>New lint finding resolved (see Review highlights):</strong> adopting the approved <code>Remove-</code> verb made PSScriptAnalyzer fire <code>PSUseShouldProcessForStateChangingFunctions</code> (the old prefix-style <code>McRemoveFile</code> dodged it by not looking like a cmdlet). These are internal helpers gated by interactive <code>Confirm-McProceed</code> / non-TTY abort, not <code>-WhatIf</code>/<code>-Confirm</code>, so I excluded that rule in <code>PSScriptAnalyzerSettings.psd1</code> with a justifying comment — consistent with the repo's existing pragmatic exclusions (<code>PSAvoidUsingWriteHost</code>, BOM). No other repo function uses a state-changing verb, so the exclusion changes nothing elsewhere.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>No host execution. A non-host dispatch smoke (redirected stdin) ran through <code>Test-McAdapter → Get-McPlatform → Assert-McTty</code> and fired <code>Write-McFatal</code> "nothing was changed", confirming the renamed functions load and dispatch and that nothing is placed.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>None — this was the last of the managed-config fix tasks.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>The managed-config PowerShell scripts now use proper Verb-Noun function names (e.g. <code>Install-McManagedFile</code>, <code>Remove-McManagedFile</code>, <code>Write-McFatal</code>) and full variable names, matching PowerShell conventions. No behaviour change.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li><strong>Lint-policy change:</strong> I added <code>PSUseShouldProcessForStateChangingFunctions</code> to <code>PSScriptAnalyzerSettings.psd1</code>'s ExcludeRules (repo-wide). If you'd rather keep that rule active and instead have these helpers implement <code>SupportsShouldProcess</code> (or suppress per-function), say so and I'll switch approaches.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

@@ -8,30 +8,30 @@ function Write-McLog($Message) {
     [Console]::Error.WriteLine("[managed-config] $Message")
 }
 
-function McFail($Message) {
+function Write-McFatal($Message) {
     [Console]::Error.WriteLine("[managed-config] FATAL: $Message")
     exit 1
 }
 
 function Test-McAdapter {
-    if (-not $script:McAgent) { McFail 'adapter did not set $McAgent' }
+    if (-not $script:McAgent) { Write-McFatal 'adapter did not set $McAgent' }
     if (-not (Get-Command -Name Get-McManifest -ErrorAction SilentlyContinue)) {
-        McFail 'adapter did not define Get-McManifest'
+        Write-McFatal 'adapter did not define Get-McManifest'
     }
 }
 
 function Get-McPlatform {
-    $rt = [System.Runtime.InteropServices.RuntimeInformation]
-    $plat = [System.Runtime.InteropServices.OSPlatform]
-    if ($rt::IsOSPlatform($plat::Windows)) { return 'windows' }
-    if ($rt::IsOSPlatform($plat::OSX)) { return 'macos' }
-    if ($rt::IsOSPlatform($plat::Linux)) { return 'linux' }
-    McFail 'unsupported OS'
+    $runtimeInformation = [System.Runtime.InteropServices.RuntimeInformation]
+    $osPlatform = [System.Runtime.InteropServices.OSPlatform]
+    if ($runtimeInformation::IsOSPlatform($osPlatform::Windows)) { return 'windows' }
+    if ($runtimeInformation::IsOSPlatform($osPlatform::OSX)) { return 'macos' }
+    if ($runtimeInformation::IsOSPlatform($osPlatform::Linux)) { return 'linux' }
+    Write-McFatal 'unsupported OS'
 }
 
 function Assert-McTty {
     if ([Console]::IsInputRedirected) {
-        McFail 'input is not a TTY — placement is always interactive (there is no -Yes); nothing was changed'
+        Write-McFatal 'input is not a TTY — placement is always interactive (there is no -Yes); nothing was changed'
     }
 }
 
@@ -76,42 +76,42 @@ function Show-McContent($Source) {
     foreach ($line in Get-Content -LiteralPath $Source) { [Console]::Error.WriteLine("  | $line") }
 }
 
-function Install-McFile($Source, $Target) {
+function Copy-McFile($Source, $Target) {
     $dir = Split-Path -Parent $Target
     try {
         if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     }
     catch {
-        McFail "cannot create $dir — rerun with privileges (run as Administrator)"
+        Write-McFatal "cannot create $dir — rerun with privileges (run as Administrator)"
     }
     try {
         Copy-Item -LiteralPath $Source -Destination $Target -Force
     }
     catch {
-        McFail "cannot write $Target (permission denied?) — install it manually with elevated privileges (e.g. Copy-Item '$Source' '$Target' as Administrator)"
+        Write-McFatal "cannot write $Target (permission denied?) — install it manually with elevated privileges (e.g. Copy-Item '$Source' '$Target' as Administrator)"
     }
 }
 
-function McRemoveFile($Path) {
+function Remove-McFile($Path) {
     Remove-Item -LiteralPath $Path -Force
 }
 
-function McPlaceOne($Item) {
+function Install-McManagedFile($Item) {
     $key = $Item.Key
     $source = $Item.Source
     $target = $Item.Target
     $marker = "$target$script:McMarkerSuffix"
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { McFail "${key}: source content not found: $source" }
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { Write-McFatal "${key}: source content not found: $source" }
 
     if (-not (Test-Path -LiteralPath $target)) {
         Write-McLog "${key}: $target does not exist (new file)"
         Show-McContent $source
         if (-not (Confirm-McProceed "Place $key at $target?")) { return }
-        Install-McFile $source $target
+        Copy-McFile $source $target
         try { Write-McMarker $marker $target }
         catch {
             Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
-            McFail "${key}: could not write provenance marker $marker — rolled back $target so it is not left unmarked"
+            Write-McFatal "${key}: could not write provenance marker $marker — rolled back $target so it is not left unmarked"
         }
         Write-McLog "${key}: placed $target"
         return
@@ -138,13 +138,13 @@ function McPlaceOne($Item) {
     Write-McLog "${key}: $target was placed by the lab but the content changed:"
     Show-McDiff $target $source
     if (-not (Confirm-McProceed "Update $key at $target?")) { return }
-    Install-McFile $source $target
+    Copy-McFile $source $target
     try { Write-McMarker $marker $target }
-    catch { McFail "${key}: updated $target but could not rewrite marker $marker — remove $target manually" }
+    catch { Write-McFatal "${key}: updated $target but could not rewrite marker $marker — remove $target manually" }
     Write-McLog "${key}: updated $target"
 }
 
-function McTeardownOne($Item) {
+function Remove-McManagedFile($Item) {
     $key = $Item.Key
     $target = $Item.Target
     $marker = "$target$script:McMarkerSuffix"
@@ -164,13 +164,13 @@ function McTeardownOne($Item) {
     $markerEndpoint = Get-McMarkerField $marker 'endpoint'
     if (-not (Confirm-McProceed "Remove lab-placed $key at $target (agent='$markerAgent' endpoint='$markerEndpoint')?")) { return }
     try {
-        McRemoveFile $target
+        Remove-McFile $target
     }
     catch {
-        McFail "cannot remove $target (permission denied?) — remove it manually with elevated privileges (e.g. Remove-Item '$target' as Administrator)"
+        Write-McFatal "cannot remove $target (permission denied?) — remove it manually with elevated privileges (e.g. Remove-Item '$target' as Administrator)"
     }
     try {
-        McRemoveFile $marker
+        Remove-McFile $marker
     }
     catch {
         Write-McLog "${key}: removed $target but could not remove marker $marker — remove it manually"
@@ -181,13 +181,13 @@ function McTeardownOne($Item) {
 function Invoke-McPlace($Endpoint, $Sources) {
     $script:McEndpoint = $Endpoint
     Test-McAdapter
-    if (-not $script:McEndpoint) { McFail 'no endpoint provided' }
+    if (-not $script:McEndpoint) { Write-McFatal 'no endpoint provided' }
     $os = Get-McPlatform
     Assert-McTty
     $items = @(Get-McManifest -Os $os -Sources $Sources)
-    if ($items.Count -eq 0) { McFail "manifest empty for os '$os' — nothing to place" }
-    foreach ($item in $items) { McPlaceOne $item }
-    if ($script:McFailed) { McFail 'one or more managed files were refused (see above); nothing foreign was touched' }
+    if ($items.Count -eq 0) { Write-McFatal "manifest empty for os '$os' — nothing to place" }
+    foreach ($item in $items) { Install-McManagedFile $item }
+    if ($script:McFailed) { Write-McFatal 'one or more managed files were refused (see above); nothing foreign was touched' }
 }
 
 function Invoke-McTeardown {
@@ -195,7 +195,8 @@ function Invoke-McTeardown {
     $os = Get-McPlatform
     Assert-McTty
     $items = @(Get-McManifest -Os $os)
-    if ($items.Count -eq 0) { McFail "manifest empty for os '$os' — nothing to remove" }
-    foreach ($item in $items) { McTeardownOne $item }
-    if ($script:McFailed) { McFail 'one or more managed files were refused (see above)' }
+    if ($items.Count -eq 0) { Write-McFatal "manifest empty for os '$os' — nothing to remove" }
+    foreach ($item in $items) { Remove-McManagedFile $item }
+    if ($script:McFailed) { Write-McFatal 'one or more managed files were refused (see above)' }
 }
+

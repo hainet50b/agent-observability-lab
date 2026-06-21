@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 $ComponentDir = Split-Path -Parent $PSScriptRoot
 $template = Join-Path (Join-Path $ComponentDir 'templates') 'managed-settings.template.json'
-if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { McFail "template not found: $template" }
+if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { Write-McFatal "template not found: $template" }
 
 $rendered = (Get-Content -Raw -LiteralPath $template) `
     -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
@@ -27,6 +27,7 @@ try {
 finally {
     Remove-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue
 }
+
 
 
 

@@ -15,7 +15,7 @@ $templates = Join-Path $ComponentDir 'templates'
 $managedTemplate = Join-Path $templates 'managed_config.template.toml'
 $requirementsTemplate = Join-Path $templates 'requirements.template.toml'
 foreach ($t in @($managedTemplate, $requirementsTemplate)) {
-    if (-not (Test-Path -LiteralPath $t -PathType Leaf)) { McFail "template not found: $t" }
+    if (-not (Test-Path -LiteralPath $t -PathType Leaf)) { Write-McFatal "template not found: $t" }
 }
 
 $hooksDir = Join-Path $ComponentDir 'hooks'
@@ -43,6 +43,7 @@ finally {
     Remove-Item -LiteralPath $managedSource -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $requirementsSource -Force -ErrorAction SilentlyContinue
 }
+
 
 
 

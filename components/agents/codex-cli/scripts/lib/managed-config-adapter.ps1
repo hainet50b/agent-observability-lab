@@ -15,10 +15,11 @@ function Get-McManifest {
             $requirementsTarget = '/etc/codex/requirements.toml'
             $managedTarget = '/etc/codex/managed_config.toml'
         }
-        default { McFail "no Codex managed-config path for os '$Os'" }
+        default { Write-McFatal "no Codex managed-config path for os '$Os'" }
     }
     [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
     [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
 }
+
 
 

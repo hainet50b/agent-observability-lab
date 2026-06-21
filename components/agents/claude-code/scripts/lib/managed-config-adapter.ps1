@@ -6,9 +6,10 @@ function Get-McManifest {
         'windows' { $target = 'C:\ProgramData\ClaudeCode\managed-settings.json' }
         'macos' { $target = '/Library/Application Support/ClaudeCode/managed-settings.json' }
         'linux' { $target = '/etc/claude-code/managed-settings.json' }
-        default { McFail "no Claude managed-settings path for os '$Os'" }
+        default { Write-McFatal "no Claude managed-settings path for os '$Os'" }
     }
     [pscustomobject]@{ Key = 'managed-settings'; Source = $Sources[0]; Target = $target }
 }
+
 
 
