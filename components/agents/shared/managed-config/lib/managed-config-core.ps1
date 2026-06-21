@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$script:McMarkerSuffix = '.lab-managed'
+$script:McMarkerSuffix = '.managed'
 $script:McFailed = $false
 $script:McEndpoint = ''
 $script:McWithHooks = $false
@@ -121,7 +121,7 @@ function Install-McManagedFile($Item) {
     }
 
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
-        Write-McLog "${key}: REFUSED — $target exists with no lab marker (foreign / real-org managed config). Never touched."
+        Write-McLog "${key}: REFUSED — $target exists with no provenance marker (not placed by this tool / real-org managed config). Never touched."
         $script:McFailed = $true
         return
     }
@@ -134,11 +134,11 @@ function Install-McManagedFile($Item) {
     }
 
     if ((Get-Content -Raw -LiteralPath $source) -eq (Get-Content -Raw -LiteralPath $target)) {
-        Write-McLog "${key}: already placed by the lab and identical — no-op."
+        Write-McLog "${key}: already placed and identical — no-op."
         return
     }
 
-    Write-McLog "${key}: $target was placed by the lab but the content changed:"
+    Write-McLog "${key}: $target was placed by managed setup but the content changed:"
     Show-McDiff $target $source
     if (-not (Confirm-McProceed "Update $key at $target?")) { return }
     Copy-McFile $source $target
@@ -158,14 +158,14 @@ function Remove-McManagedFile($Item) {
     }
 
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
-        Write-McLog "${key}: REFUSED — $target has no lab marker (foreign / real-org config). Not removed."
+        Write-McLog "${key}: REFUSED — $target has no provenance marker (not placed by this tool / real-org config). Not removed."
         $script:McFailed = $true
         return
     }
 
     $markerAgent = Get-McMarkerField $marker 'agent'
     $markerEndpoint = Get-McMarkerField $marker 'endpoint'
-    if (-not (Confirm-McProceed "Remove lab-placed $key at $target (agent='$markerAgent' endpoint='$markerEndpoint')?")) { return }
+    if (-not (Confirm-McProceed "Remove managed $key at $target (agent='$markerAgent' endpoint='$markerEndpoint')?")) { return }
     try {
         Remove-McFile $target
     }

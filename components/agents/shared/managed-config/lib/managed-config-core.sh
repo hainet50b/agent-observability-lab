@@ -3,7 +3,7 @@
 
 set -u
 
-marker_suffix='.lab-managed'
+marker_suffix='.managed'
 failed=0
 logs_endpoint=''
 traces_endpoint=''
@@ -144,7 +144,7 @@ managed_config::place_one() {
   fi
 
   if [ ! -f "$marker" ]; then
-    managed_config::log "$key: REFUSED — $target exists with no lab marker (foreign / real-org managed config). Never touched."
+    managed_config::log "$key: REFUSED — $target exists with no provenance marker (not placed by this tool / real-org managed config). Never touched."
     failed=1
     return 0
   fi
@@ -158,11 +158,11 @@ managed_config::place_one() {
   fi
 
   if [ "$(cat "$source")" = "$(cat "$target")" ]; then
-    managed_config::log "$key: already placed by the lab and identical — no-op."
+    managed_config::log "$key: already placed and identical — no-op."
     return 0
   fi
 
-  managed_config::log "$key: $target was placed by the lab but the content changed:"
+  managed_config::log "$key: $target was placed by managed setup but the content changed:"
   managed_config::show_diff "$target" "$source"
   managed_config::confirm "Update $key at $target?" || return 0
   managed_config::install_file "$source" "$target"
@@ -181,7 +181,7 @@ managed_config::teardown_one() {
   fi
 
   if [ ! -f "$marker" ]; then
-    managed_config::log "$key: REFUSED — $target has no lab marker (foreign / real-org config). Not removed."
+    managed_config::log "$key: REFUSED — $target has no provenance marker (not placed by this tool / real-org config). Not removed."
     failed=1
     return 0
   fi
@@ -189,7 +189,7 @@ managed_config::teardown_one() {
   local marker_agent marker_endpoint
   marker_agent=$(managed_config::marker_field "$marker" agent)
   marker_endpoint=$(managed_config::marker_field "$marker" endpoint)
-  managed_config::confirm "Remove lab-placed $key at $target (agent='$marker_agent' endpoint='$marker_endpoint')?" || return 0
+  managed_config::confirm "Remove managed $key at $target (agent='$marker_agent' endpoint='$marker_endpoint')?" || return 0
   rm -f "$target" 2>/dev/null ||
     managed_config::die "cannot remove $target (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '$target'"
   rm -f "$marker" 2>/dev/null ||

@@ -1,11 +1,11 @@
 # Non-interactive, marker-aware placement for local/project bundle files.
 # Reuses the managed-config marker format exactly: a per-file sidecar
-# <target>.lab-managed with lines agent=, endpoint=, placed_at=, target=.
+# <target>.managed with lines agent=, endpoint=, placed_at=, target=.
 # Placement is scriptable with NO prompt and NO -Yes (local/project are
 # "safe, scriptable, no confirmation" per SPEC); foreign or endpoint-mismatched
 # targets fail loud and are never touched.
 
-$script:CpMarkerSuffix = '.lab-managed'
+$script:CpMarkerSuffix = '.managed'
 
 function Write-CpLog($Message) {
     [Console]::Error.WriteLine("[config-place] $Message")
@@ -47,7 +47,7 @@ function Test-CpOursOrAbsent($Key, $Endpoint, $Target) {
     $marker = "$Target$script:CpMarkerSuffix"
     if (-not (Test-Path -LiteralPath $Target)) { return $false }
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
-        Write-CpFatal "${Key}: REFUSED — $Target exists with no lab marker (foreign / pre-existing). Never touched."
+        Write-CpFatal "${Key}: REFUSED — $Target exists with no provenance marker (not placed by this tool). Never touched."
     }
     $markerEndpoint = Get-CpMarkerField $marker 'endpoint'
     if ($markerEndpoint -ne $Endpoint) {
@@ -104,7 +104,7 @@ function Remove-CpFile($Key, $Endpoint, $Target) {
         return $true
     }
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
-        Write-CpLog "${Key}: REFUSED — $Target has no lab marker (foreign / pre-existing). Not removed."
+        Write-CpLog "${Key}: REFUSED — $Target has no provenance marker (not placed by this tool). Not removed."
         return $false
     }
     $markerEndpoint = Get-CpMarkerField $marker 'endpoint'

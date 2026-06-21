@@ -24,7 +24,7 @@ Three scopes, selected by `--scope` (default **`local`**):
 
 ## Placement is marker-aware and fail-if-foreign — across all scopes
 
-Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.lab-managed`, in one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url. It is what teardown matches on to recognize its own work.
+Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, in one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url. It is what teardown matches on to recognize its own work.
 
 `managed` placement is **interactive** (confirm each file, non-TTY aborts) via `components/agents/shared/managed-config/`. `local` and `project` are **non-interactive** (safe, scriptable, no prompt, no `--yes`) via a shared, non-interactive helper `components/agents/shared/config-place/` reused by every render script and by local/project teardown. Both share the same marker format and the same fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
 

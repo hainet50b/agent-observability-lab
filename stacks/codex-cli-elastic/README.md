@@ -153,7 +153,7 @@ about which actually enforces):
   (Windows).
 
 Placement **refuses to overwrite any file the lab did not place** (tracked by a
-sidecar `.lab-managed` marker — the path may already hold your real
+sidecar `.managed` marker — the path may already hold your real
 organization's MDM-pushed config) and prompts before writing. There is **no
 `--yes`**; a non-interactive shell aborts having changed nothing, and permission
 errors fail loud with the privileged command to run by hand.

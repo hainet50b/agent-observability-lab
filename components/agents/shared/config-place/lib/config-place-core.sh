@@ -3,12 +3,12 @@
 
 # Non-interactive, marker-aware placement for local/project bundle files.
 # Reuses the managed-config marker format exactly: a per-file sidecar
-# <target>.lab-managed with lines agent=, endpoint=, placed_at=, target=.
+# <target>.managed with lines agent=, endpoint=, placed_at=, target=.
 # Placement is scriptable with NO prompt and NO --yes (local/project are
 # "safe, scriptable, no confirmation" per SPEC); foreign or endpoint-mismatched
 # targets fail loud and are never touched.
 
-config_place_marker_suffix='.lab-managed'
+config_place_marker_suffix='.managed'
 
 config_place::log() { printf '[config-place] %s\n' "$*" >&2; }
 
@@ -44,7 +44,7 @@ config_place::assert_ours_or_absent() {
   local marker="$target$config_place_marker_suffix"
   [ -e "$target" ] || return 1
   [ -f "$marker" ] ||
-    config_place::die "$key: REFUSED — $target exists with no lab marker (foreign / pre-existing). Never touched."
+    config_place::die "$key: REFUSED — $target exists with no provenance marker (not placed by this tool). Never touched."
   local marker_endpoint
   marker_endpoint=$(config_place::marker_field "$marker" endpoint)
   [ "$marker_endpoint" = "$endpoint" ] ||
@@ -98,7 +98,7 @@ config_place::remove_file() {
     return 0
   fi
   if [ ! -f "$marker" ]; then
-    config_place::log "$key: REFUSED — $target has no lab marker (foreign / pre-existing). Not removed."
+    config_place::log "$key: REFUSED — $target has no provenance marker (not placed by this tool). Not removed."
     return 1
   fi
   local marker_endpoint
