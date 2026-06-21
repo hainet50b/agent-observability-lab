@@ -151,10 +151,17 @@ Placement **refuses to overwrite any file the lab did not place** (tracked by a
 sidecar `.lab-managed` marker — the path may already hold your real
 organization's MDM-pushed config) and prompts before writing. There is **no
 `--yes`**; a non-interactive shell aborts having changed nothing, and permission
-errors fail loud with the privileged command to run by hand. The managed audit
-hooks reference scripts in `managed_dir` (set to the lab's
-`components/agents/codex-cli/hooks/`); a real deploy also delivers the rendered
-`agent-audit.conf` there.
+errors fail loud with the privileged command to run by hand.
+
+The managed audit hooks run the `agent-audit.{sh,ps1}` scripts from `managed_dir`
+(the lab points it at its repo `components/agents/codex-cli/hooks/`) with
+`--config <managed_dir>/agent-audit.conf`. Codex validates that `managed_dir`
+exists but does **not** distribute its contents — **delivering them is the
+operator's job**. The lab ships the two scripts there but **not** an
+`agent-audit.conf` (that file carries the Elasticsearch URL and is rendered
+per-deployment by `render-agent-audit.sh`). So for the enforced hook to find its
+config you must render an `agent-audit.conf` and place it beside the scripts in
+`managed_dir`; without it the audit hook fails open with no config.
 
 Place it via `setup.sh --managed` (runs after the normal setup steps) or directly:
 
