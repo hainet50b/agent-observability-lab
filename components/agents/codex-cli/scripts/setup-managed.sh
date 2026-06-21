@@ -35,7 +35,7 @@ if [ "$with_hooks" -eq 1 ]; then
   [ -n "$es_url" ] || managed_config::die "--with-hooks requires --es-url (audit hooks need the ES endpoint)"
   managed_config::detect_os
   hooks_ref="$(managed_config::managed_root "$os")/hooks"
-  managed_config::stage_hooks "$component_dir" "$es_url"
+  managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key"
 fi
 
 managed_config_source=$(mktemp) || managed_config::die "could not create temp file"

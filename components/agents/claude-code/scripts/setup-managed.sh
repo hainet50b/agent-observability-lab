@@ -58,7 +58,7 @@ if [ "$with_hooks" -eq 1 ]; then
   root=$(managed_config::managed_root "$os")
   entry_target="$root/hooks/agent-audit.sh"
   conf_target="$root/hooks/agent-audit.conf"
-  managed_config::stage_hooks "$component_dir" "$es_url"
+  managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key"
   hook_template="$component_dir/templates/hook.template.json"
   [ -f "$hook_template" ] || managed_config::die "hook template not found: $hook_template"
   hooks_json=$(jq \

@@ -9,6 +9,7 @@ logs_endpoint=''
 traces_endpoint=''
 metrics_endpoint=''
 es_url=''
+es_api_key=''
 with_hooks=0
 with_telemetry=0
 hooks_stage=''
@@ -54,6 +55,11 @@ managed_config::parse_args() {
     --es-url)
       [ "$#" -ge 2 ] || managed_config::die "--es-url needs a value"
       es_url=$2
+      shift 2
+      ;;
+    --es-api-key)
+      [ "$#" -ge 2 ] || managed_config::die "--es-api-key needs a value"
+      es_api_key=$2
       shift 2
       ;;
     --with-hooks)
@@ -198,7 +204,7 @@ managed_config::teardown_one() {
 }
 
 managed_config::stage_hooks() {
-  local component_dir=$1 es_url_val=$2
+  local component_dir=$1 es_url_val=$2 es_api_key_val=${3:-}
   local hooks_src="$component_dir/hooks" core_src="$component_dir/../shared/agent-audit/lib"
   local conf_template="$component_dir/templates/agent-audit.template.conf"
   [ -f "$conf_template" ] || managed_config::die "conf template not found: $conf_template"
@@ -210,7 +216,7 @@ managed_config::stage_hooks() {
     managed_config::die "could not stage hook adapter"
   cp "$core_src/agent-audit-core.sh" "$core_src/agent-audit-core.ps1" "$hooks_stage/lib/" ||
     managed_config::die "could not stage hook core"
-  sed -e "s#@@ES_URL@@#$es_url_val#" "$conf_template" >"$hooks_stage/agent-audit.conf" ||
+  sed -e "s#@@ES_URL@@#$es_url_val#" -e "s#@@ES_API_KEY@@#$es_api_key_val#" "$conf_template" >"$hooks_stage/agent-audit.conf" ||
     managed_config::die "could not render agent-audit.conf"
   chmod +x "$hooks_stage/agent-audit.sh"
 }

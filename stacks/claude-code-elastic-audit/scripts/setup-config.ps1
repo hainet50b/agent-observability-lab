@@ -101,14 +101,11 @@ switch ($Scope) {
     'managed' {
         # Audit-only managed deploy: hooks, no telemetry. The audit ES url keys the
         # marker/ownership in place of an OTLP logs endpoint.
-        # TODO: thread agent_audit.elasticsearch.api_key once the managed hook bundle
-        # (Add-McHookStage -> agent-audit.conf) renders @@ES_API_KEY@@; today it renders
-        # only @@ES_URL@@, so a Cloud (auth-required) target is not yet supported.
         if ($Teardown) {
             & (Join-Path $ComponentsDir 'agents/claude-code/scripts/teardown-managed.ps1') -WithHooks
         }
         else {
-            & (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-managed.ps1') -WithHooks -EsUrl $Conf['agent_audit.elasticsearch.url']
+            & (Join-Path $ComponentsDir 'agents/claude-code/scripts/setup-managed.ps1') -WithHooks -EsUrl $Conf['agent_audit.elasticsearch.url'] -EsApiKey $ApiKey
         }
     }
     default {
