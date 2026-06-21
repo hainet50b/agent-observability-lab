@@ -15,11 +15,20 @@ $ErrorActionPreference = 'Stop'
 $ComponentDir = Split-Path -Parent $PSScriptRoot
 $template = Join-Path (Join-Path $ComponentDir 'templates') 'managed-settings.template.json'
 if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { Write-McFatal "template not found: $template" }
+$otelTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'otel.template.json'
+if (-not (Test-Path -LiteralPath $otelTemplate -PathType Leaf)) { Write-McFatal "template not found: $otelTemplate" }
 
-$rendered = (Get-Content -Raw -LiteralPath $template) `
-    -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
-    -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
-    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint
+$otelEnv = ((Get-Content -Raw -LiteralPath $otelTemplate) `
+        -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
+        -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
+        -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
+        -replace '@@OTLP_HEADERS@@', '' | ConvertFrom-Json).env
+if ($otelEnv.OTEL_EXPORTER_OTLP_HEADERS -eq '') {
+    $otelEnv.PSObject.Properties.Remove('OTEL_EXPORTER_OTLP_HEADERS')
+}
+$cfg = Get-Content -Raw -LiteralPath $template | ConvertFrom-Json
+$cfg | Add-Member -NotePropertyName 'env' -NotePropertyValue $otelEnv -Force
+$rendered = $cfg | ConvertTo-Json -Depth 10
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
 # materializing the hook bundle beside managed-settings.json and adding an

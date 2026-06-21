@@ -3,22 +3,3 @@
 # ~/.codex (user-writable), so it is a weak boundary — real enforcement is requirements.toml.
 # [otel]/telemetry is ONLY a managed default; Codex requirements cannot pin it (unlike Claude's
 # managed-settings.json). docs: https://developers.openai.com/codex/enterprise/managed-configuration
-
-[otel]
-environment = "dev"
-log_user_prompt = false
-
-[otel.exporter.otlp-http]
-endpoint = "@@OTLP_LOGS_ENDPOINT@@"
-protocol = "binary"
-headers = {}
-
-[otel.trace_exporter.otlp-http]
-endpoint = "@@OTLP_TRACES_ENDPOINT@@"
-protocol = "binary"
-headers = {}
-
-[otel.metrics_exporter.otlp-http]
-endpoint = "@@OTLP_METRICS_ENDPOINT@@"
-protocol = "binary"
-headers = {}

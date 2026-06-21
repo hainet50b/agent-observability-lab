@@ -15,14 +15,21 @@ managed_config::parse_args "$@"
 
 template="$component_dir/templates/managed-settings.template.json"
 [ -f "$template" ] || managed_config::die "template not found: $template"
+otel_template="$component_dir/templates/otel.template.json"
+[ -f "$otel_template" ] || managed_config::die "template not found: $otel_template"
 
 rendered_source=$(mktemp) || managed_config::die "could not create temp file"
 trap 'rm -f "$rendered_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' EXIT
-sed \
+otel_env=$(sed \
   -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
   -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
   -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
-  "$template" >"$rendered_source" || managed_config::die "failed to render $template"
+  -e "s#@@OTLP_HEADERS@@##" \
+  "$otel_template" |
+  jq '.env | if .OTEL_EXPORTER_OTLP_HEADERS == "" then del(.OTEL_EXPORTER_OTLP_HEADERS) else . end') ||
+  managed_config::die "failed to render $otel_template"
+jq --argjson env "$otel_env" '.env = $env' "$template" >"$rendered_source" ||
+  managed_config::die "failed to render $template"
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
 # materializing the hook bundle beside managed-settings.json and adding a hooks

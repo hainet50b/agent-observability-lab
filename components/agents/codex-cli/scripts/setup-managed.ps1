@@ -15,9 +15,10 @@ $ErrorActionPreference = 'Stop'
 $ComponentDir = Split-Path -Parent $PSScriptRoot
 $templates = Join-Path $ComponentDir 'templates'
 $managedTemplate = Join-Path $templates 'managed_config.template.toml'
+$otelTemplate = Join-Path $templates 'otel.template.toml'
 $requirementsTemplate = Join-Path $templates 'requirements.template.toml'
 $hooksTemplate = Join-Path $templates 'hooks.template.toml'
-foreach ($t in @($managedTemplate, $requirementsTemplate, $hooksTemplate)) {
+foreach ($t in @($managedTemplate, $otelTemplate, $requirementsTemplate, $hooksTemplate)) {
     if (-not (Test-Path -LiteralPath $t -PathType Leaf)) { Write-McFatal "template not found: $t" }
 }
 
@@ -33,10 +34,13 @@ if ($WithHooks) {
     $script:McWithHooks = $true
 }
 
-$managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) `
+$otelRendered = (Get-Content -Raw -LiteralPath $otelTemplate) `
     -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
     -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
-    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint
+    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
+    -replace '@@OTLP_HEADERS@@', ''
+$otelSection = ($otelRendered -split "`n" | Select-Object -Skip ([array]::IndexOf(($otelRendered -split "`n"), '[otel]'))) -join "`n"
+$managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) + "`n" + $otelSection
 
 $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
     -replace '@@MANAGED_DIR@@', $hooksRef `

@@ -5,29 +5,5 @@
       "https://code.claude.com/docs/en/settings",
       "https://code.claude.com/docs/en/monitoring-usage"
     ]
-  },
-  "env": {
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
-
-    "OTEL_LOGS_EXPORTER": "otlp",
-    "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL": "http/protobuf",
-    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "@@OTLP_LOGS_ENDPOINT@@",
-    "OTEL_LOGS_EXPORT_INTERVAL": "5000",
-
-    "OTEL_TRACES_EXPORTER": "otlp",
-    "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf",
-    "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "@@OTLP_TRACES_ENDPOINT@@",
-    "OTEL_TRACES_EXPORT_INTERVAL": "5000",
-
-    "OTEL_METRICS_EXPORTER": "otlp",
-    "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": "http/protobuf",
-    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "@@OTLP_METRICS_ENDPOINT@@",
-    "OTEL_METRIC_EXPORT_INTERVAL": "60000",
-
-    "OTEL_LOG_USER_PROMPTS": "0",
-    "OTEL_LOG_RAW_API_BODIES": "0",
-    "OTEL_LOG_TOOL_DETAILS": "0",
-    "OTEL_LOG_TOOL_CONTENT": "0"
   }
 }

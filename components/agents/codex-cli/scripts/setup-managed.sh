@@ -15,9 +15,10 @@ managed_config::parse_args "$@"
 
 templates="$component_dir/templates"
 managed_template="$templates/managed_config.template.toml"
+otel_template="$templates/otel.template.toml"
 requirements_template="$templates/requirements.template.toml"
 hooks_template="$templates/hooks.template.toml"
-for t in "$managed_template" "$requirements_template" "$hooks_template"; do
+for t in "$managed_template" "$otel_template" "$requirements_template" "$hooks_template"; do
   [ -f "$t" ] || managed_config::die "template not found: $t"
 done
 
@@ -36,11 +37,16 @@ managed_config_source=$(mktemp) || managed_config::die "could not create temp fi
 requirements_source=$(mktemp) || managed_config::die "could not create temp file"
 trap 'rm -f "$managed_config_source" "$requirements_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' EXIT
 
-sed \
-  -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
-  -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
-  -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
-  "$managed_template" >"$managed_config_source" || managed_config::die "failed to render $managed_template"
+{
+  cat "$managed_template"
+  printf '\n'
+  sed \
+    -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
+    -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
+    -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
+    -e "s#@@OTLP_HEADERS@@##" \
+    "$otel_template" | sed -n '/^\[otel\]/,$p'
+} >"$managed_config_source" || managed_config::die "failed to render $managed_template"
 
 sed \
   -e "s#@@MANAGED_DIR@@#$hooks_ref#" \
