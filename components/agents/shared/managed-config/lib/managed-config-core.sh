@@ -109,8 +109,7 @@ mc_write_marker() {
   local marker=$1 target=$2 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf 'agent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$mc_agent" "$mc_logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null ||
-    mc_die "placed $target but could not write provenance marker $marker — remove $target manually"
+    "$mc_agent" "$mc_logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
 }
 
 mc_place_one() {
@@ -123,7 +122,10 @@ mc_place_one() {
     mc_show_content "$source"
     mc_confirm "Place $key at $target?" || return 0
     mc_install_file "$source" "$target"
-    mc_write_marker "$marker" "$target"
+    mc_write_marker "$marker" "$target" || {
+      rm -f "$target" 2>/dev/null
+      mc_die "$key: could not write provenance marker $marker — rolled back $target so it is not left unmarked"
+    }
     mc_log "$key: placed $target"
     return 0
   fi
@@ -151,7 +153,8 @@ mc_place_one() {
   mc_show_diff "$target" "$source"
   mc_confirm "Update $key at $target?" || return 0
   mc_install_file "$source" "$target"
-  mc_write_marker "$marker" "$target"
+  mc_write_marker "$marker" "$target" ||
+    mc_die "$key: updated $target but could not rewrite marker $marker — remove $target manually"
   mc_log "$key: updated $target"
 }
 

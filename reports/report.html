@@ -1164,6 +1164,35 @@ on Claude) and the Windows weak-boundary note land the way you intend.</p>
   </ul>
 </section>
 
+<section>
+  <h2>managed fix: nits — marker rollback, omit empty headers, trim trailing blanks</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li><strong>Self-lockout (guard, not note):</strong> the existing code already <em>noted</em> the orphan ("…could not write provenance marker — remove $target manually"), so I added the stronger fix. <code>mc_write_marker</code>/<code>Write-McMarker</code> no longer die internally; the <strong>new-file</strong> branch now rolls back (removes the just-copied file) if the marker write fails, so a file is never left unmarked → no foreign-file self-lockout on the next run. The <strong>update</strong> branch keeps a manual note instead of rolling back — there the target pre-existed and is lab-owned, so deleting it on a marker hiccup would be wrong.</li>
+    <li><strong>Empty headers:</strong> managed setup has no headers input — it always rendered <code>"OTEL_EXPORTER_OTLP_HEADERS": ""</code>. Removed the line from <code>managed-settings.template.json</code> and dropped the dead <code>@@OTLP_HEADERS@@</code> substitution from both façades. Left the non-managed telemetry path (<code>render-otel</code> + <code>otel.template.json</code>) untouched — it takes a real headers parameter, so its placeholder stays.</li>
+    <li><strong>Trailing blanks:</strong> trimmed <code>managed-config-core.ps1</code> to end with the final <code>}</code> + a single newline (the nit named this file specifically; other files' pre-existing trailing blanks were left out of scope).</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>None. No host execution; the rollback / note branches are correct by inspection, static gates green (the rendered managed JSON is still valid per <code>jq empty</code>).</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>Minor consistency: several other <code>.ps1</code> scripts carry pre-existing trailing blank lines; a sweep could normalize them all if desired (out of scope for this nit).</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>If writing the provenance marker fails right after placing a brand-new managed file, the lab now rolls the file back instead of leaving it orphaned (which would lock the lab out next time). The Claude managed config no longer emits an empty OTLP-headers line.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>Confirm the asymmetry is intended: new-file marker failure → rollback (delete the file we just made); update marker failure → keep the file, print a manual-fix note.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

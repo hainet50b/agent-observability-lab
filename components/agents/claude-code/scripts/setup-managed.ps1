@@ -17,8 +17,7 @@ if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { McFail "template n
 $rendered = (Get-Content -Raw -LiteralPath $template) `
     -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
     -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
-    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
-    -replace '@@OTLP_HEADERS@@', ''
+    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint
 
 $source = [System.IO.Path]::GetTempFileName()
 try {
@@ -28,6 +27,7 @@ try {
 finally {
     Remove-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue
 }
+
 
 
 

@@ -22,7 +22,6 @@ sed \
   -e "s#@@OTLP_LOGS_ENDPOINT@@#$mc_logs_endpoint#" \
   -e "s#@@OTLP_TRACES_ENDPOINT@@#$mc_traces_endpoint#" \
   -e "s#@@OTLP_METRICS_ENDPOINT@@#$mc_metrics_endpoint#" \
-  -e "s#@@OTLP_HEADERS@@##" \
   "$template" >"$mc_source" || mc_die "failed to render $template"
 
 mc_place "$mc_source"

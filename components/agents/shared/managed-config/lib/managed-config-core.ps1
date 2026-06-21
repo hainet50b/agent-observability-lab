@@ -60,12 +60,7 @@ function Write-McMarker($Marker, $Target) {
         "placed_at=$placedAt"
         "target=$Target"
     )
-    try {
-        [System.IO.File]::WriteAllText($Marker, ($lines -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
-    }
-    catch {
-        McFail "placed $Target but could not write provenance marker $Marker — remove $Target manually"
-    }
+    [System.IO.File]::WriteAllText($Marker, ($lines -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
 }
 
 function Show-McDiff($Target, $Source) {
@@ -113,7 +108,11 @@ function McPlaceOne($Item) {
         Show-McContent $source
         if (-not (Confirm-McProceed "Place $key at $target?")) { return }
         Install-McFile $source $target
-        Write-McMarker $marker $target
+        try { Write-McMarker $marker $target }
+        catch {
+            Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+            McFail "${key}: could not write provenance marker $marker — rolled back $target so it is not left unmarked"
+        }
         Write-McLog "${key}: placed $target"
         return
     }
@@ -140,7 +139,8 @@ function McPlaceOne($Item) {
     Show-McDiff $target $source
     if (-not (Confirm-McProceed "Update $key at $target?")) { return }
     Install-McFile $source $target
-    Write-McMarker $marker $target
+    try { Write-McMarker $marker $target }
+    catch { McFail "${key}: updated $target but could not rewrite marker $marker — remove $target manually" }
     Write-McLog "${key}: updated $target"
 }
 
@@ -199,8 +199,3 @@ function Invoke-McTeardown {
     foreach ($item in $items) { McTeardownOne $item }
     if ($script:McFailed) { McFail 'one or more managed files were refused (see above)' }
 }
-
-
-
-
-
