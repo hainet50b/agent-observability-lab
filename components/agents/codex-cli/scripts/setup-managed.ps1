@@ -66,9 +66,12 @@ if ($WithHooks) {
     $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
     Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent | Out-Null
     $script:McWithHooks = $true
+    # Codex picks windows_managed_dir on Windows and managed_dir on non-Windows, with no
+    # fallback (hook_config.rs: managed_dir_for_current_platform). This .ps1 runs on Windows,
+    # so emit windows_managed_dir only and drop the managed_dir line.
     $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
-        -replace '@@MANAGED_DIR@@', $hooksRef `
-        -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef
+        -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef `
+        -replace "(?m)^managed_dir = '@@MANAGED_DIR@@'\r?\n", ''
     $hooksRendered = (Get-Content -Raw -LiteralPath $hooksTemplate) `
         -replace '@@AGENT_AUDIT_SH@@', (Join-Path $hooksRef 'agent-audit.sh') `
         -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksRef 'agent-audit.ps1') `

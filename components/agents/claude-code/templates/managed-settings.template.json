@@ -1,9 +1,5 @@
 {
   "_comment": {
-    "enforcement": "managed-settings.json sits at the HIGHEST precedence layer — these values are ENFORCED org-wide and cannot be overridden by the user, the project, or CLI flags. Placing it forces Claude Code telemetry on for every user on this machine.",
-    "docs": [
-      "https://code.claude.com/docs/en/settings",
-      "https://code.claude.com/docs/en/monitoring-usage"
-    ]
+    "docs": "https://code.claude.com/docs/en/settings#managed-settings"
   }
 }

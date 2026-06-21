@@ -1,15 +1,5 @@
-# requirements.toml — ENFORCED constraints (highest precedence; a conflicting user value is
-# dropped to a compatible one and the user is notified — the user cannot override). On Windows
-# this lives at %ProgramData%\OpenAI\Codex\requirements.toml, the only enforceable local layer.
-# NOTE: [otel]/telemetry is NOT in the enforceable set — push it as a managed *default*
-# (managed_config.toml), never here. docs: https://developers.openai.com/codex/enterprise/managed-configuration
-
-# allow_managed_hooks_only = false: the lab keeps the user's own hooks alongside the managed
-# ones (enforce hook *presence*, not exclusivity). managed_dir holds the hook scripts — Codex
-# validates it is absolute and exists but does NOT distribute them; the operator delivers the
-# scripts (and agent-audit.conf) there. [features].hooks = true stops a user disabling hooks.
-# The [[hooks.*]] tables are single-sourced in hooks.template.toml and concatenated onto this
-# file at render time (top-level fields + [features] first, the hook arrays last, so it parses).
+# docs:   https://developers.openai.com/codex/enterprise/managed-configuration
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs
 allow_managed_hooks_only = false
 managed_dir = '@@MANAGED_DIR@@'
 windows_managed_dir = '@@WINDOWS_MANAGED_DIR@@'

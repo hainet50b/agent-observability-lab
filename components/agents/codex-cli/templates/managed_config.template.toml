@@ -1,5 +1,1 @@
-# managed_config.toml — managed DEFAULTS, not enforcement: applied at every launch but
-# user-overridable in-session (reverts next start). On Windows this file lives under
-# ~/.codex (user-writable), so it is a weak boundary — real enforcement is requirements.toml.
-# [otel]/telemetry is ONLY a managed default; Codex requirements cannot pin it (unlike Claude's
-# managed-settings.json). docs: https://developers.openai.com/codex/enterprise/managed-configuration
+# docs: https://developers.openai.com/codex/enterprise/managed-configuration

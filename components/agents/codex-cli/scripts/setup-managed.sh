@@ -65,9 +65,12 @@ if [ "$with_hooks" -eq 1 ]; then
   # Audit-only deploy has no OTLP logs endpoint; key the marker/ownership on the audit
   # ES url so place()/teardown() and the provenance marker stay meaningful.
   [ -n "$logs_endpoint" ] || logs_endpoint=$es_url
+  # Codex picks managed_dir on non-Windows and windows_managed_dir on Windows, with no
+  # fallback (hook_config.rs: managed_dir_for_current_platform). The .sh runs on macOS/Linux,
+  # so emit managed_dir only and drop the windows_managed_dir line.
   sed \
     -e "s#@@MANAGED_DIR@@#$hooks_ref#" \
-    -e "s#@@WINDOWS_MANAGED_DIR@@#$hooks_ref#" \
+    -e "/^windows_managed_dir = /d" \
     "$requirements_template" >"$requirements_source" || managed_config::die "failed to render $requirements_template"
   printf '\n' >>"$requirements_source"
   sed \
