@@ -162,7 +162,7 @@ per-deployment by `render-agent-audit.sh`). So for the enforced hook to find its
 config you must render an `agent-audit.conf` and place it beside the scripts in
 `managed_dir`; without it the audit hook fails open with no config.
 
-Place it via `setup.sh --managed` (runs after the normal setup steps) or directly:
+Place it via `setup.sh --scope managed` (runs after the normal setup steps) or directly:
 
 ```sh
 ../../components/agents/codex-cli/scripts/setup-managed.sh \

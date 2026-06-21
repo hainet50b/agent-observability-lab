@@ -20,10 +20,6 @@ while [ "$#" -gt 0 ]; do
     target=${2:-}
     shift 2
     ;;
-  --managed)
-    scope=managed
-    shift
-    ;;
   --teardown)
     teardown=1
     shift

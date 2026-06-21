@@ -2,15 +2,10 @@
 param(
     [string]$Scope = 'local',
     [string]$Target,
-    [switch]$Managed,
     [string]$Config
 )
 
 $ErrorActionPreference = 'Stop'
-
-if ($Managed) {
-    $Scope = 'managed'
-}
 
 $backendArgs = @{}
 if ($Config) {

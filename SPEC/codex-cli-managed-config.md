@@ -133,7 +133,7 @@ It is deliberately a **guarded manual deploy, not part of the automated suite.**
 
 Placement is **always interactive:**
 
-- An opt-in (`--managed` / a `setup.conf` key) selects the *attempt*; the **confirm itself cannot be bypassed** — there is no `--yes`.
+- An opt-in (`--scope managed` / a `setup.conf` key) selects the *attempt*; the **confirm itself cannot be bypassed** — there is no `--yes`.
 - **Non-TTY / EOF aborts** (never default-yes), so automation (Ralph, CI) can never place managed config even if it reaches the step.
 - A permission error **fails loud** — print the path and the privileged/manual command — rather than fail-open (unlike the audit hook: the operator asked for this write, so a failure must be seen).
 

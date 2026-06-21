@@ -2,7 +2,6 @@
 param(
     [string]$Scope = 'local',
     [string]$Target,
-    [switch]$Managed,
     [switch]$Teardown,
     [switch]$WithHooks,
     [string]$Config
@@ -12,10 +11,6 @@ $ErrorActionPreference = 'Stop'
 
 $StackDir = Split-Path -Parent $PSScriptRoot
 $ComponentsDir = Join-Path $PSScriptRoot '../../../components'
-
-if ($Managed) {
-    $Scope = 'managed'
-}
 
 if ($Teardown -and $Scope -ne 'managed') {
     [Console]::Error.WriteLine('FAIL: -Teardown is only valid with -Scope managed')

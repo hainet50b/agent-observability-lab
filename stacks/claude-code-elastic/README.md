@@ -194,14 +194,14 @@ This stack can place that single machine-global file for you — **opt-in,
 always interactive, and never destructive**. It lives at a fixed admin-owned
 path (`/etc/claude-code/managed-settings.json` on Linux/WSL,
 `/Library/Application Support/ClaudeCode/managed-settings.json` on macOS,
-`C:\ProgramData\ClaudeCode\managed-settings.json` on Windows) — the same file
+`C:\Program Files\ClaudeCode\managed-settings.json` on Windows) — the same file
 your real employer may already use, so placement **refuses to overwrite any file
 the lab did not place** (tracked by a sidecar `.lab-managed` marker) and prompts
 before writing. There is **no `--yes`**; a non-interactive shell aborts having
 changed nothing, and permission errors fail loud with the privileged command to
 run by hand.
 
-Place it via `setup.sh --managed` (runs after the normal setup steps) or
+Place it via `setup.sh --scope managed` (runs after the normal setup steps) or
 directly:
 
 ```sh
