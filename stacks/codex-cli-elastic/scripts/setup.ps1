@@ -60,7 +60,9 @@ Write-Host '[setup] 3/3 - Kibana saved objects'
 if ($Managed) {
     Write-Host ''
     Write-Host '[setup] managed-config placement (interactive, opt-in)'
-    & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') -Stack 'codex-cli-elastic' -Endpoint $OtlpEndpoint
+    & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') -Stack 'codex-cli-elastic' `
+        -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
 }
+
 
 

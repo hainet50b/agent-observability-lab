@@ -1044,6 +1044,36 @@ subsection — that the <code>[otel]</code>/telemetry asymmetry (default-only on
 on Claude) and the Windows weak-boundary note land the way you intend.</p>
 </section>
 
+<section>
+  <h2>managed fix: endpoints — honour the no-<code>/v1</code> invariant</h2>
+
+  <h3>Judgement points</h3>
+  <ul>
+    <li>Replaced the single <code>--endpoint</code>/<code>-Endpoint</code> (a base the agent split into <code>/v1/logs|traces|metrics</code>) with three full per-signal flags: <code>--logs-endpoint</code>/<code>--traces-endpoint</code>/<code>--metrics-endpoint</code> (and <code>-LogsEndpoint</code>/<code>-TracesEndpoint</code>/<code>-MetricsEndpoint</code>). The stacks' <code>setup.sh</code>/<code>setup.ps1</code> now build the <code>/v1/*</code> URLs from <code>otlp_endpoint</code> and pass them in — exactly the render-otel / setup-telemetry contract, and what SPEC.md "no <code>/v1/&lt;signal&gt;</code> path construction in the agent" requires.</li>
+    <li>The provenance marker still needs a single <code>endpoint=</code> field. With no base passed any more, I record the <strong>logs endpoint</strong> as the representative (a full URL that uniquely identifies the backend; no base reconstruction, which would itself be path surgery in the agent). The next open task (ownership key) keys the overwrite guard on this field, so a single stable value is what it wants.</li>
+    <li>shellcheck flagged the two new core globals (<code>mc_traces_endpoint</code>/<code>mc_metrics_endpoint</code>) as SC2034 — they are assigned in the core's arg parser but consumed in the façades. Added <code>SC2034</code> to the core's existing <code>disable</code> directive, matching how the adapters already suppress it for <code>mc_agent</code>.</li>
+    <li>Updated the two stack READMEs' "directly" invocation examples (sh + PowerShell) to the three-flag form. The fix-task preamble forbids editing SPEC/CONVENTIONS but is silent on READMEs; a documented command that no longer parses is a correctness defect, so I kept them truthful. The primary path (<code>setup.sh --managed</code>) is unchanged and still builds the URLs for the user.</li>
+  </ul>
+
+  <h3>Unresolved / workarounds</h3>
+  <ul>
+    <li>Per the task, placement was <strong>not</strong> executed against the host (non-TTY abort guarantees nothing is placed in an automated run); correctness of the new flag plumbing is by inspection plus the static gates.</li>
+  </ul>
+
+  <h3>Next PRD suggestions</h3>
+  <ul>
+    <li>The README teardown examples still pass <code>--stack</code>; the open "ownership key" task drops <code>--stack</code> entirely, so those lines (and the setup <code>--stack</code> args) will need a follow-up pass when that task lands.</li>
+  </ul>
+
+  <h3>Change summary</h3>
+  <p>The managed-config placement scripts no longer take a base OTLP endpoint they slice into <code>/v1</code> paths; callers now hand them the three full per-signal URLs, matching how the rest of the lab wires telemetry endpoints.</p>
+
+  <h3>Review highlights</h3>
+  <ul>
+    <li>Confirm the choice to record the <em>logs</em> endpoint as the marker's representative <code>endpoint=</code> value is acceptable ahead of the ownership-key task that will key the overwrite guard on it.</li>
+  </ul>
+</section>
+
 <script>window.scrollTo(0, document.body.scrollHeight);</script>
 </body>
 </html>

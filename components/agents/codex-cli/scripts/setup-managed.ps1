@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Stack,
-    [Parameter(Mandatory = $true)][string]$Endpoint
+    [Parameter(Mandatory = $true)][string]$LogsEndpoint,
+    [Parameter(Mandatory = $true)][string]$TracesEndpoint,
+    [Parameter(Mandatory = $true)][string]$MetricsEndpoint
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,9 +22,9 @@ foreach ($t in @($managedTemplate, $requirementsTemplate)) {
 $hooksDir = Join-Path $ComponentDir 'hooks'
 
 $managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) `
-    -replace '@@OTLP_LOGS_ENDPOINT@@', "$Endpoint/v1/logs" `
-    -replace '@@OTLP_TRACES_ENDPOINT@@', "$Endpoint/v1/traces" `
-    -replace '@@OTLP_METRICS_ENDPOINT@@', "$Endpoint/v1/metrics"
+    -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
+    -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
+    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint
 
 $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
     -replace '@@MANAGED_DIR@@', $hooksDir `
@@ -36,10 +38,11 @@ $script:McSourceRequirements = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($script:McSourceManagedConfig, $managedRendered, [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText($script:McSourceRequirements, $requirementsRendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Stack $Stack -Endpoint $Endpoint
+    Invoke-McPlace -Stack $Stack -Endpoint $LogsEndpoint
 }
 finally {
     Remove-Item -LiteralPath $script:McSourceManagedConfig -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:McSourceRequirements -Force -ErrorAction SilentlyContinue
 }
+
 

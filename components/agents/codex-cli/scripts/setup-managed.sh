@@ -9,7 +9,9 @@ COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/lib/managed-config-adapter.sh"
 
 mc_parse_args "$@"
-[ -n "$mc_endpoint" ] || mc_die "--endpoint <otlp-base> is required (e.g. http://localhost:8200)"
+[ -n "$mc_logs_endpoint" ] || mc_die "--logs-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/logs)"
+[ -n "$mc_traces_endpoint" ] || mc_die "--traces-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/traces)"
+[ -n "$mc_metrics_endpoint" ] || mc_die "--metrics-endpoint is required (full OTLP URL, e.g. http://localhost:8200/v1/metrics)"
 
 templates="$COMPONENT_DIR/templates"
 managed_template="$templates/managed_config.template.toml"
@@ -25,9 +27,9 @@ mc_source_requirements=$(mktemp) || mc_die "could not create temp file"
 trap 'rm -f "$mc_source_managed_config" "$mc_source_requirements"' EXIT
 
 sed \
-  -e "s#@@OTLP_LOGS_ENDPOINT@@#$mc_endpoint/v1/logs#" \
-  -e "s#@@OTLP_TRACES_ENDPOINT@@#$mc_endpoint/v1/traces#" \
-  -e "s#@@OTLP_METRICS_ENDPOINT@@#$mc_endpoint/v1/metrics#" \
+  -e "s#@@OTLP_LOGS_ENDPOINT@@#$mc_logs_endpoint#" \
+  -e "s#@@OTLP_TRACES_ENDPOINT@@#$mc_traces_endpoint#" \
+  -e "s#@@OTLP_METRICS_ENDPOINT@@#$mc_metrics_endpoint#" \
   "$managed_template" >"$mc_source_managed_config" || mc_die "failed to render $managed_template"
 
 sed \

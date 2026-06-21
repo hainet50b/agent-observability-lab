@@ -51,5 +51,8 @@ echo "[setup] 3/3 — Kibana saved objects"
 if [ "$managed" -eq 1 ]; then
   echo
   echo "[setup] managed-config placement (interactive, opt-in)"
-  "$components_dir/agents/codex-cli/scripts/setup-managed.sh" --stack codex-cli-elastic --endpoint "$otlp_endpoint"
+  "$components_dir/agents/codex-cli/scripts/setup-managed.sh" --stack codex-cli-elastic \
+    --logs-endpoint "$otlp_endpoint/v1/logs" \
+    --traces-endpoint "$otlp_endpoint/v1/traces" \
+    --metrics-endpoint "$otlp_endpoint/v1/metrics"
 fi

@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Stack,
-    [Parameter(Mandatory = $true)][string]$Endpoint
+    [Parameter(Mandatory = $true)][string]$LogsEndpoint,
+    [Parameter(Mandatory = $true)][string]$TracesEndpoint,
+    [Parameter(Mandatory = $true)][string]$MetricsEndpoint
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,17 +16,18 @@ $template = Join-Path (Join-Path $ComponentDir 'templates') 'managed-settings.te
 if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { McFail "template not found: $template" }
 
 $rendered = (Get-Content -Raw -LiteralPath $template) `
-    -replace '@@OTLP_LOGS_ENDPOINT@@', "$Endpoint/v1/logs" `
-    -replace '@@OTLP_TRACES_ENDPOINT@@', "$Endpoint/v1/traces" `
-    -replace '@@OTLP_METRICS_ENDPOINT@@', "$Endpoint/v1/metrics" `
+    -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
+    -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
+    -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
     -replace '@@OTLP_HEADERS@@', ''
 
 $script:McSource = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($script:McSource, $rendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Stack $Stack -Endpoint $Endpoint
+    Invoke-McPlace -Stack $Stack -Endpoint $LogsEndpoint
 }
 finally {
     Remove-Item -LiteralPath $script:McSource -Force -ErrorAction SilentlyContinue
 }
+
 

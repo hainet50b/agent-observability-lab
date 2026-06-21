@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
+# shellcheck disable=SC2034,SC2154
 
 set -u
 
 mc_marker_suffix='.lab-managed'
 mc_failed=0
 mc_stack=''
-mc_endpoint=''
+mc_logs_endpoint=''
+mc_traces_endpoint=''
+mc_metrics_endpoint=''
 
 mc_log() { printf '[managed-config] %s\n' "$*" >&2; }
 
@@ -36,9 +38,19 @@ mc_parse_args() {
       mc_stack=$2
       shift 2
       ;;
-    --endpoint)
-      [ "$#" -ge 2 ] || mc_die "--endpoint needs a value"
-      mc_endpoint=$2
+    --logs-endpoint)
+      [ "$#" -ge 2 ] || mc_die "--logs-endpoint needs a value"
+      mc_logs_endpoint=$2
+      shift 2
+      ;;
+    --traces-endpoint)
+      [ "$#" -ge 2 ] || mc_die "--traces-endpoint needs a value"
+      mc_traces_endpoint=$2
+      shift 2
+      ;;
+    --metrics-endpoint)
+      [ "$#" -ge 2 ] || mc_die "--metrics-endpoint needs a value"
+      mc_metrics_endpoint=$2
       shift 2
       ;;
     *) mc_die "unknown argument: $1" ;;
@@ -103,7 +115,7 @@ mc_write_marker() {
   local marker=$1 target=$2 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf 'agent=%s\nstack=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$mc_agent" "$mc_stack" "$mc_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null ||
+    "$mc_agent" "$mc_stack" "$mc_logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null ||
     mc_die "placed $target but could not write provenance marker $marker — remove $target manually"
 }
 

@@ -205,13 +205,17 @@ Place it via `setup.sh --managed` (runs after the normal setup steps) or
 directly:
 
 ```sh
-../../components/agents/claude-code/scripts/setup-managed.sh \
-  --stack claude-code-elastic --endpoint http://localhost:8200
+../../components/agents/claude-code/scripts/setup-managed.sh --stack claude-code-elastic \
+  --logs-endpoint http://localhost:8200/v1/logs \
+  --traces-endpoint http://localhost:8200/v1/traces \
+  --metrics-endpoint http://localhost:8200/v1/metrics
 ```
 
 ```powershell
-..\..\components\agents\claude-code\scripts\setup-managed.ps1 `
-  -Stack claude-code-elastic -Endpoint http://localhost:8200
+..\..\components\agents\claude-code\scripts\setup-managed.ps1 -Stack claude-code-elastic `
+  -LogsEndpoint http://localhost:8200/v1/logs `
+  -TracesEndpoint http://localhost:8200/v1/traces `
+  -MetricsEndpoint http://localhost:8200/v1/metrics
 ```
 
 Remove it (restores the host, removes only the lab-placed file + its marker):
