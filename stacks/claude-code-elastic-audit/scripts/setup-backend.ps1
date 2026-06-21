@@ -65,8 +65,8 @@ function Wait-Ready {
 }
 
 Write-Host '[backend] 1/3 - wait for backend'
-Wait-Ready -Name 'Elasticsearch' -Url "$EsUrl/_cluster/health" | Indent
-Wait-Ready -Name 'Kibana' -Url "$KibanaUrl/api/status" | Indent
+Wait-Ready -Name 'Elasticsearch' -Url "$EsUrl/_cluster/health" 6>&1 | Indent
+Wait-Ready -Name 'Kibana' -Url "$KibanaUrl/api/status" 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[backend] 2/3 - Agent Audit data streams'
