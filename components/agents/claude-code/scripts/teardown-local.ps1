@@ -35,3 +35,9 @@ if ($hooksOwned -and (Test-Path -LiteralPath $hooksDir)) {
 }
 
 if ($failed) { Write-CpFatal 'one or more files were refused (see above); nothing foreign was removed' }
+
+$agentHome = Join-Path $TargetDir '.claude'
+if ((Test-Path -LiteralPath $agentHome) -and -not (Get-ChildItem -LiteralPath $agentHome -Force)) {
+    Remove-Item -LiteralPath $agentHome -Force
+    Write-CpLog "removed empty $agentHome"
+}

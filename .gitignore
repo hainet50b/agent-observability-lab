@@ -9,5 +9,6 @@
 
 # Bare `.mcp.json` would over-ignore committable project MCP configs — scope to the generated Claude-stack ones.
 /stacks/claude-code-*/.mcp.json
+/stacks/claude-code-*/.mcp.json.managed
 
 # reports/ is intentionally tracked (Ralph's HTML history) — do not add it here.

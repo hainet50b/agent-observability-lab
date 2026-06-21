@@ -37,3 +37,7 @@ if [ "$hooks_owned" -eq 1 ] && [ -d "$target/.claude/hooks" ]; then
 fi
 
 [ "$failed" -eq 0 ] || config_place::die "one or more files were refused (see above); nothing foreign was removed"
+
+if rmdir "$target/.claude" 2>/dev/null; then
+  config_place::log "removed empty $target/.claude"
+fi
