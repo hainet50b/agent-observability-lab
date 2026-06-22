@@ -3,6 +3,7 @@ param(
     [string]$LogsEndpoint,
     [string]$TracesEndpoint,
     [string]$MetricsEndpoint,
+    [string]$OtlpApiKey = '',
     [switch]$WithHooks,
     [string]$EsUrl,
     [string]$EsApiKey = '',
@@ -40,11 +41,12 @@ $cfg = Get-Content -Raw -LiteralPath $template | ConvertFrom-Json
 if ($WithTelemetry) {
     $otelTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'otel.template.json'
     if (-not (Test-Path -LiteralPath $otelTemplate -PathType Leaf)) { Write-McFatal "template not found: $otelTemplate" }
+    $otlpHeaders = if ($OtlpApiKey) { "Authorization=ApiKey $OtlpApiKey" } else { '' }
     $otelEnv = ((Get-Content -Raw -LiteralPath $otelTemplate) `
             -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
             -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
             -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
-            -replace '@@OTLP_HEADERS@@', '' | ConvertFrom-Json).env
+            -replace '@@OTLP_HEADERS@@', $otlpHeaders | ConvertFrom-Json).env
     if ($otelEnv.OTEL_EXPORTER_OTLP_HEADERS -eq '') {
         $otelEnv.PSObject.Properties.Remove('OTEL_EXPORTER_OTLP_HEADERS')
     }

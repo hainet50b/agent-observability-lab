@@ -32,11 +32,13 @@ trap 'rm -f "$rendered_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' 
 if [ "$with_telemetry" -eq 1 ]; then
   otel_template="$component_dir/templates/otel.template.json"
   [ -f "$otel_template" ] || managed_config::die "template not found: $otel_template"
+  otlp_headers=""
+  [ -n "$otlp_api_key" ] && otlp_headers="Authorization=ApiKey $otlp_api_key"
   otel_env=$(sed \
     -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
     -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
     -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
-    -e "s#@@OTLP_HEADERS@@##" \
+    -e "s#@@OTLP_HEADERS@@#$otlp_headers#" \
     "$otel_template" |
     jq '.env | if .OTEL_EXPORTER_OTLP_HEADERS == "" then del(.OTEL_EXPORTER_OTLP_HEADERS) else . end') ||
     managed_config::die "failed to render $otel_template"

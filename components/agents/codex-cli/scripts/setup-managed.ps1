@@ -3,6 +3,7 @@ param(
     [string]$LogsEndpoint,
     [string]$TracesEndpoint,
     [string]$MetricsEndpoint,
+    [string]$OtlpApiKey = '',
     [switch]$WithHooks,
     [string]$EsUrl,
     [string]$EsApiKey = '',
@@ -45,11 +46,12 @@ if ($WithTelemetry) {
     foreach ($t in @($managedTemplate, $otelTemplate)) {
         if (-not (Test-Path -LiteralPath $t -PathType Leaf)) { Write-McFatal "template not found: $t" }
     }
+    $otlpHeaders = if ($OtlpApiKey) { " Authorization = `"ApiKey $OtlpApiKey`" " } else { '' }
     $otelRendered = (Get-Content -Raw -LiteralPath $otelTemplate) `
         -replace '@@OTLP_LOGS_ENDPOINT@@', $LogsEndpoint `
         -replace '@@OTLP_TRACES_ENDPOINT@@', $TracesEndpoint `
         -replace '@@OTLP_METRICS_ENDPOINT@@', $MetricsEndpoint `
-        -replace '@@OTLP_HEADERS@@', ''
+        -replace '@@OTLP_HEADERS@@', $otlpHeaders
     $otelSection = ($otelRendered -split "`n" | Select-Object -Skip ([array]::IndexOf(($otelRendered -split "`n"), '[otel]'))) -join "`n"
     $managedRendered = (Get-Content -Raw -LiteralPath $managedTemplate) + "`n" + $otelSection
     $script:McWithTelemetry = $true

@@ -39,6 +39,8 @@ if [ "$with_telemetry" -eq 1 ]; then
   for t in "$managed_template" "$otel_template"; do
     [ -f "$t" ] || managed_config::die "template not found: $t"
   done
+  otlp_headers=""
+  [ -n "$otlp_api_key" ] && otlp_headers=" Authorization = \"ApiKey $otlp_api_key\" "
   {
     cat "$managed_template"
     printf '\n'
@@ -46,7 +48,7 @@ if [ "$with_telemetry" -eq 1 ]; then
       -e "s#@@OTLP_LOGS_ENDPOINT@@#$logs_endpoint#" \
       -e "s#@@OTLP_TRACES_ENDPOINT@@#$traces_endpoint#" \
       -e "s#@@OTLP_METRICS_ENDPOINT@@#$metrics_endpoint#" \
-      -e "s#@@OTLP_HEADERS@@##" \
+      -e "s#@@OTLP_HEADERS@@#$otlp_headers#" \
       "$otel_template" | sed -n '/^\[otel\]/,$p'
   } >"$managed_config_source" || managed_config::die "failed to render $managed_template"
 fi

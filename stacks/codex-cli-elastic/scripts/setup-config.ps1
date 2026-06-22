@@ -88,7 +88,8 @@ switch ($Scope) {
         }
         else {
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/setup-managed.ps1') `
-                -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics"
+                -LogsEndpoint "$OtlpEndpoint/v1/logs" -TracesEndpoint "$OtlpEndpoint/v1/traces" -MetricsEndpoint "$OtlpEndpoint/v1/metrics" `
+                -OtlpApiKey $OtlpApiKey
         }
     }
     default {

@@ -58,6 +58,11 @@ managed_config::parse_args() {
       metrics_endpoint=$2
       shift 2
       ;;
+    --otlp-api-key)
+      [ "$#" -ge 2 ] || managed_config::die "--otlp-api-key needs a value"
+      otlp_api_key=$2
+      shift 2
+      ;;
     --es-url)
       [ "$#" -ge 2 ] || managed_config::die "--es-url needs a value"
       es_url=$2

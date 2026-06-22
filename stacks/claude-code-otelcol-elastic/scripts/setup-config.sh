@@ -96,7 +96,8 @@ managed)
     "$components_dir/agents/claude-code/scripts/setup-managed.sh" \
       --logs-endpoint "$otlp_endpoint/v1/logs" \
       --traces-endpoint "$otlp_endpoint/v1/traces" \
-      --metrics-endpoint "$otlp_endpoint/v1/metrics"
+      --metrics-endpoint "$otlp_endpoint/v1/metrics" \
+      --otlp-api-key "$OTLP_API_KEY"
   fi
   ;;
 *)
