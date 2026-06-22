@@ -65,10 +65,10 @@ Retention is split per concern so each can age independently — the lab gives e
 
 | Policy | Scope | Component template | Attached to |
 |---|---|---|---|
-| `logs-agent_audit.user_prompt` | audit user-prompt stream | `logs-agent_audit.user_prompt@lifecycle` | `logs-agent_audit.user_prompt` template |
-| `logs-agent_audit.tool_call` | audit tool-call stream | `logs-agent_audit.tool_call@lifecycle` | `logs-agent_audit.tool_call` template |
-| `telemetry.claude_code` | Claude Code telemetry (logs+metrics+traces) | `telemetry.claude_code@lifecycle` | the 3 per-agent claude-code templates |
-| `telemetry.codex_cli_rs` | Codex telemetry (logs+metrics+traces) | `telemetry.codex_cli_rs@lifecycle` | the 3 per-agent codex templates |
+| `logs-agent_audit.user_prompt-policy` | audit user-prompt stream | `logs-agent_audit.user_prompt@lifecycle` | `logs-agent_audit.user_prompt` template |
+| `logs-agent_audit.tool_call-policy` | audit tool-call stream | `logs-agent_audit.tool_call@lifecycle` | `logs-agent_audit.tool_call` template |
+| `telemetry.claude_code-policy` | Claude Code telemetry (logs+metrics+traces) | `telemetry.claude_code@lifecycle` | the 3 per-agent claude-code templates |
+| `telemetry.codex_cli_rs-policy` | Codex telemetry (logs+metrics+traces) | `telemetry.codex_cli_rs@lifecycle` | the 3 per-agent codex templates |
 
 Telemetry is split **per agent**, not per signal — one policy covers an agent's logs/metrics/traces. A per-signal split is deferred: it would only add policies, not restructure anything.
 

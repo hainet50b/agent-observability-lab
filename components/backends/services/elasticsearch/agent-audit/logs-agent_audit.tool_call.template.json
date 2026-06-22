@@ -2,9 +2,5 @@
   "index_patterns": ["logs-agent_audit.tool_call-*"],
   "data_stream": {},
   "priority": 200,
-  "composed_of": ["logs-agent_audit.tool_call@mappings", "logs-agent_audit.tool_call@lifecycle"],
-  "_meta": {
-    "description": "Thin composition (mappings + lifecycle) for agent-audit tool-call records.",
-    "managed_by": "agent-observability-lab"
-  }
+  "composed_of": ["logs-agent_audit.tool_call@mappings", "logs-agent_audit.tool_call@lifecycle"]
 }

@@ -75,9 +75,5 @@
         }
       }
     }
-  },
-  "_meta": {
-    "description": "Strict mapping for agent-audit tool-call records.",
-    "managed_by": "agent-observability-lab"
   }
 }

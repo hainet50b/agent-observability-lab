@@ -32,7 +32,7 @@ The audit data streams are provisioned (strict templates + data streams) and vie
 
 | Asset | File | Loaded into |
 |---|---|---|
-| ILM policy | `logs-agent_audit.<s>.ilm.json` | `_ilm/policy/logs-agent_audit.<s>` |
+| ILM policy | `logs-agent_audit.<s>-policy.ilm.json` | `_ilm/policy/logs-agent_audit.<s>-policy` |
 | lifecycle component template | `logs-agent_audit.<s>@lifecycle.component.json` | `_component_template/…@lifecycle` (sets `index.lifecycle.name` only) |
 | mappings component template | `logs-agent_audit.<s>@mappings.component.json` | `_component_template/…@mappings` (strict mappings) |
 | index template | `logs-agent_audit.<s>.template.json` | `_index_template/…` — thin `composed_of: [@mappings, @lifecycle]` |

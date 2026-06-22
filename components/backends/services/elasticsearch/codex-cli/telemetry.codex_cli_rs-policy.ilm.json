@@ -1,9 +1,5 @@
 {
   "policy": {
-    "_meta": {
-      "description": "Hot → delete at 3 days for the agent-audit user-prompt stream.",
-      "managed_by": "agent-observability-lab"
-    },
     "phases": {
       "hot": {
         "actions": {

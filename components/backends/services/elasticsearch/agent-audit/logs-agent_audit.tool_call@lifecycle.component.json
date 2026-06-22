@@ -1,11 +1,7 @@
 {
   "template": {
     "settings": {
-      "index.lifecycle.name": "logs-agent_audit.tool_call"
+      "index.lifecycle.name": "logs-agent_audit.tool_call-policy"
     }
-  },
-  "_meta": {
-    "description": "Attaches the logs-agent_audit.tool_call ILM policy.",
-    "managed_by": "agent-observability-lab"
   }
 }

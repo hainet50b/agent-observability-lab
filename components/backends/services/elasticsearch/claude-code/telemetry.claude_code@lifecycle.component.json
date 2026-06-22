@@ -1,11 +1,7 @@
 {
   "template": {
     "settings": {
-      "index.lifecycle.name": "telemetry.claude_code"
+      "index.lifecycle.name": "telemetry.claude_code-policy"
     }
-  },
-  "_meta": {
-    "description": "Attaches the telemetry.claude_code ILM policy (composed last so it overrides APM's default lifecycle).",
-    "managed_by": "agent-observability-lab"
   }
 }

@@ -58,9 +58,5 @@
         }
       }
     }
-  },
-  "_meta": {
-    "description": "Strict mapping for agent-audit user-prompt records.",
-    "managed_by": "agent-observability-lab"
   }
 }

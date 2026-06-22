@@ -28,9 +28,5 @@
         "final_pipeline": "traces-apm@pipeline"
       }
     }
-  },
-  "_meta": {
-    "description": "Per-agent traces index template: APM traces-apm components verbatim + Claude Code ILM lifecycle.",
-    "managed_by": "agent-observability-lab"
   }
 }

@@ -29,9 +29,5 @@
         "final_pipeline": "metrics-apm@pipeline"
       }
     }
-  },
-  "_meta": {
-    "description": "Per-agent metrics index template: APM metrics-apm.app components verbatim + Claude Code ILM lifecycle.",
-    "managed_by": "agent-observability-lab"
   }
 }

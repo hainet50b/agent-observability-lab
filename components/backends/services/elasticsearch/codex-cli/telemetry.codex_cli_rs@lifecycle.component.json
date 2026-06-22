@@ -1,11 +1,7 @@
 {
   "template": {
     "settings": {
-      "index.lifecycle.name": "telemetry.codex_cli_rs"
+      "index.lifecycle.name": "telemetry.codex_cli_rs-policy"
     }
-  },
-  "_meta": {
-    "description": "Attaches the telemetry.codex_cli_rs ILM policy (composed last so it overrides APM's default lifecycle).",
-    "managed_by": "agent-observability-lab"
   }
 }
