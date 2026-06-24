@@ -28,7 +28,11 @@ awk_org='function liftstr(str,key,   kk,p,ii,nn,c,out){
     print liftstr(obj,"title") }'
 
 derive_runtime_identity() {
-  ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+  _ns=$(date -u +%N 2>/dev/null)
+  case $_ns in
+  '' | *[!0-9]*) ts=$(date -u +%Y-%m-%dT%H:%M:%SZ) ;;
+  *) ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ) ;;
+  esac
 
   user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
   user_id=$(whoami 2>/dev/null || echo "")
