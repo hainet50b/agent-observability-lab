@@ -1,5 +1,3 @@
 # Generated key material — never commit.
-# Private keys must never leave the center; public certs are distributed
-# out-of-band via the config bundle, not tracked in the repo.
 /private/
 /recipients/
