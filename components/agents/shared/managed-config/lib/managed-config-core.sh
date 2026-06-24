@@ -157,12 +157,15 @@ managed_config::show_content() {
 }
 
 managed_config::install_file() {
-  local source=$1 target=$2 dir
+  local source=$1 target=$2 dir mode
   dir=$(dirname -- "$target")
   mkdir -p "$dir" 2>/dev/null ||
     managed_config::die "cannot create $dir — rerun with privileges, e.g.: sudo mkdir -p '$dir'"
   cp "$source" "$target" 2>/dev/null ||
     managed_config::die "cannot write $target (permission denied?) — install it manually with elevated privileges, e.g.: sudo cp '$source' '$target'"
+  if [ -x "$source" ]; then mode=755; else mode=644; fi
+  chmod "$mode" "$target" 2>/dev/null ||
+    managed_config::die "cannot set mode $mode on $target — set it manually, e.g.: sudo chmod $mode '$target'"
 }
 
 managed_config::write_marker() {
