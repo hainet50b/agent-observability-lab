@@ -3,6 +3,11 @@
 
 set -u
 
+# source the edge sealing helper from this lib dir (defines seal::body)
+_audit_lib_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)
+# shellcheck source=/dev/null
+[ -f "$_audit_lib_dir/seal.sh" ] && . "$_audit_lib_dir/seal.sh"
+
 default_timeout_ms=1000
 
 stream=""
@@ -153,6 +158,26 @@ awk_esc='BEGIN{ s=ENVIRON["RAW"];
   printf "%s", s }'
 json::escape() { RAW=$1 awk "$awk_esc"; }
 
+awk_unesc='BEGIN{ s=ENVIRON["ESC"]; n=length(s); i=1; out="";
+  while(i<=n){ ch=substr(s,i,1);
+    if(ch=="\\" && i<n){ nx=substr(s,i+1,1);
+      if(nx=="n"){ out=out "\n"; i+=2; continue }
+      if(nx=="t"){ out=out "\t"; i+=2; continue }
+      if(nx=="r"){ out=out "\r"; i+=2; continue }
+      if(nx=="b"){ out=out sprintf("%c",8); i+=2; continue }
+      if(nx=="f"){ out=out sprintf("%c",12); i+=2; continue }
+      if(nx=="/"){ out=out "/"; i+=2; continue }
+      if(nx=="\""){ out=out "\""; i+=2; continue }
+      if(nx=="\\"){ out=out "\\"; i+=2; continue }
+      if(nx=="u"){ out=out "\\u" substr(s,i+2,4); i+=6; continue }
+      out=out nx; i+=2; continue
+    }
+    out=out ch; i++ }
+  printf "%s", out }'
+# Reverse JSON string escaping for the seal input so decrypt yields raw text.
+# \uXXXX is passed through literally (rare control chars only).
+json::unescape() { ESC=$1 LC_ALL=C LANG=C awk "$awk_unesc" </dev/null; }
+
 jv_esc() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf 'null'; fi; }
 jv_raw() { if [ -n "$1" ]; then printf '"%s"' "$(json::escape "$1")"; else printf 'null'; fi; }
 
@@ -164,6 +189,9 @@ load_delivery_config() {
   api_key=$(cfg_get elasticsearch.api_key)
   timeout_ms=$(cfg_get elasticsearch.timeout_ms)
   data_stream=$(cfg_get "elasticsearch.data_stream.$stream")
+  seal_recipients_file=$(cfg_get seal.recipients_file)
+  seal_key_id=$(cfg_get seal.key_id)
+  seal_compress_min_bytes=$(cfg_get seal.compress_min_bytes)
   if [ -z "$es_url" ] || [ -z "$data_stream" ]; then
     log "config missing elasticsearch.url / data_stream.$stream — skipping"
     done0
@@ -217,13 +245,26 @@ read_hook_payload() {
 }
 
 build_user_prompt_record() {
+  enc_text=null
+  seal_kid=null
   case "$content" in
   plaintext) prompt_text=$(jv_esc "$escaped_prompt") ;;
   redacted) prompt_text='"[REDACTED]"' ;;
+  encrypted)
+    prompt_text='"[ENCRYPTED]"'
+    seal_body_bytes=$(json::unescape "$escaped_prompt" | wc -c | awk '{print $1}')
+    sealed=$(json::unescape "$escaped_prompt" | seal::body "$seal_recipients_file" "${seal_compress_min_bytes:-0}" "$seal_body_bytes")
+    if [ -n "$sealed" ]; then
+      enc_text=$(printf '"%s"' "$sealed")
+      seal_kid=$(jv_esc "$seal_key_id")
+    else
+      log "seal failed (user_prompt) — metadata-only"
+    fi
+    ;;
   *) prompt_text=null ;;
   esac
 
-  record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"user_prompt":{"text":%s,"encrypted_text":null,"length":%s}}}' \
+  record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"seal":{"key_id":%s},"user_prompt":{"text":%s,"encrypted_text":%s,"length":%s}}}' \
     "$ts" "$ts" \
     "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
@@ -231,12 +272,16 @@ build_user_prompt_record() {
     "$(jv_esc "$account_id")" "$(jv_esc "$account_name")" "$(jv_esc "$account_email")" \
     "$(jv_esc "$organization_id")" "$(jv_esc "$organization_name")" \
     "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
-    "$prompt_text" "$prompt_length")
+    "$seal_kid" \
+    "$prompt_text" "$enc_text" "$prompt_length")
 }
 
 build_tool_call_record() {
   input_text=null
   output_text=null
+  input_enc=null
+  output_enc=null
+  seal_kid=null
   case "$content" in
   plaintext)
     [ -n "$input_raw" ] && input_text=$(printf '"%s"' "$(json::escape "$input_raw")")
@@ -246,9 +291,33 @@ build_tool_call_record() {
     [ -n "$input_raw" ] && input_text='"[REDACTED]"'
     [ -n "$output_raw" ] && output_text='"[REDACTED]"'
     ;;
+  encrypted)
+    if [ -n "$input_raw" ]; then
+      input_text='"[ENCRYPTED]"'
+      _ib=$(printf '%s' "$input_raw" | wc -c | awk '{print $1}')
+      _s=$(printf '%s' "$input_raw" | seal::body "$seal_recipients_file" "${seal_compress_min_bytes:-0}" "$_ib")
+      if [ -n "$_s" ]; then
+        input_enc=$(printf '"%s"' "$_s")
+        seal_kid=$(jv_esc "$seal_key_id")
+      else
+        log "seal failed (tool_call input) — metadata-only"
+      fi
+    fi
+    if [ -n "$output_raw" ]; then
+      output_text='"[ENCRYPTED]"'
+      _ob=$(printf '%s' "$output_raw" | wc -c | awk '{print $1}')
+      _s=$(printf '%s' "$output_raw" | seal::body "$seal_recipients_file" "${seal_compress_min_bytes:-0}" "$_ob")
+      if [ -n "$_s" ]; then
+        output_enc=$(printf '"%s"' "$_s")
+        seal_kid=$(jv_esc "$seal_key_id")
+      else
+        log "seal failed (tool_call output) — metadata-only"
+      fi
+    fi
+    ;;
   esac
 
-  record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":null,"length":%s},"output":{"text":%s,"encrypted_text":null,"length":%s}}}}' \
+  record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"seal":{"key_id":%s},"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":%s,"length":%s},"output":{"text":%s,"encrypted_text":%s,"length":%s}}}}' \
     "$ts" "$ts" \
     "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
@@ -256,9 +325,10 @@ build_tool_call_record() {
     "$(jv_esc "$account_id")" "$(jv_esc "$account_name")" "$(jv_esc "$account_email")" \
     "$(jv_esc "$organization_id")" "$(jv_esc "$organization_name")" \
     "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
+    "$seal_kid" \
     "$(jv_esc "$tool_name")" "$(jv_esc "$call_id")" \
-    "$input_text" "$input_length" \
-    "$output_text" "$output_length")
+    "$input_text" "$input_enc" "$input_length" \
+    "$output_text" "$output_enc" "$output_length")
 }
 
 build_audit_document() {
@@ -289,6 +359,7 @@ deliver_document() {
 
   case "$http_code" in
   2*) log "indexed 1 audit document -> $es_target (HTTP $http_code)" ;;
+  400) log "index rejected (HTTP 400 — mapping? doc not stored) — session unaffected" ;;
   *) log "index returned HTTP $http_code (audit doc not stored) — session unaffected" ;;
   esac
   done0
