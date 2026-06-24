@@ -47,10 +47,15 @@
             },
             "conversation_id": { "type": "keyword" },
             "turn_id":         { "type": "keyword" },
+            "seal": {
+              "properties": {
+                "key_id": { "type": "keyword" }
+              }
+            },
             "user_prompt": {
               "properties": {
-                "text":           { "type": "text" },
-                "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
+                "text":           { "type": "wildcard" },
+                "encrypted_text": { "type": "binary" },
                 "length":         { "type": "long" }
               }
             }

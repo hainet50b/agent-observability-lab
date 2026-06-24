@@ -47,6 +47,11 @@
             },
             "conversation_id": { "type": "keyword" },
             "turn_id":         { "type": "keyword" },
+            "seal": {
+              "properties": {
+                "key_id": { "type": "keyword" }
+              }
+            },
             "tool_call": {
               "properties": {
                 "tool": {
@@ -58,14 +63,14 @@
                 "input": {
                   "properties": {
                     "text":           { "type": "wildcard" },
-                    "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
+                    "encrypted_text": { "type": "binary" },
                     "length":         { "type": "long" }
                   }
                 },
                 "output": {
                   "properties": {
                     "text":           { "type": "wildcard" },
-                    "encrypted_text": { "type": "keyword", "index": false, "doc_values": false },
+                    "encrypted_text": { "type": "binary" },
                     "length":         { "type": "long" }
                   }
                 }
