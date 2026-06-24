@@ -1,5 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
+# dot-source the edge sealing helper from this lib dir (defines Protect-Body)
+$sealLib = Join-Path $PSScriptRoot 'seal.ps1'
+if (Test-Path -LiteralPath $sealLib) { . $sealLib }
+
 $DefaultTimeoutMs = 1000
 
 function Log($Message) {
@@ -51,6 +55,9 @@ function Import-DeliveryConfig($Stream) {
         $script:apiKey = $cfg['elasticsearch.api_key']
         $timeoutMs = $cfg['elasticsearch.timeout_ms']
         $script:dataStream = $cfg["elasticsearch.data_stream.$Stream"]
+        $script:sealRecipientsFile = $cfg['seal.recipients_file']
+        $script:sealKeyId = $cfg['seal.key_id']
+        $script:sealCompressMinBytes = $cfg['seal.compress_min_bytes']
         if (-not $script:esUrl -or -not $script:dataStream) {
             Log "config missing elasticsearch.url / data_stream.$Stream — skipping"; exit 0
         }
@@ -111,7 +118,16 @@ function Build-AuditDocument($Stream) {
                 $promptField = switch ($script:content) {
                     'plaintext' { $script:promptText }
                     'redacted' { '[REDACTED]' }
+                    'encrypted' { '[ENCRYPTED]' }
                     default { $null }
+                }
+                $encField = $null
+                $sealKid = $null
+                if ($script:content -eq 'encrypted') {
+                    $cmin = 0; if ($script:sealCompressMinBytes -match '^\d+$') { $cmin = [int]$script:sealCompressMinBytes }
+                    $sealed = Protect-Body -RecipientsFile $script:sealRecipientsFile -CompressMinBytes $cmin -Body $script:promptText
+                    if ($null -ne $sealed) { $encField = $sealed; $sealKid = $script:sealKeyId }
+                    else { Log 'seal failed (user_prompt) — metadata-only' }
                 }
                 $script:record = [ordered]@{
                     '@timestamp' = $identity.ts
@@ -122,17 +138,34 @@ function Build-AuditDocument($Stream) {
                         agent           = $agent
                         conversation_id = $script:sessionId
                         turn_id         = $script:turnId
-                        user_prompt     = [ordered]@{ text = $promptField; encrypted_text = $null; length = $script:promptLength }
+                        seal            = [ordered]@{ key_id = $sealKid }
+                        user_prompt     = [ordered]@{ text = $promptField; encrypted_text = $encField; length = $script:promptLength }
                     }
                 }
             }
             'tool_call' {
-                $inputField = if ($script:content -eq 'plaintext') { $script:inputText }
-                elseif ($script:content -eq 'redacted' -and $null -ne $script:inputText) { '[REDACTED]' }
-                else { $null }
-                $outputField = if ($script:content -eq 'plaintext') { $script:outputText }
-                elseif ($script:content -eq 'redacted' -and $null -ne $script:outputText) { '[REDACTED]' }
-                else { $null }
+                $inputField = $null; $outputField = $null
+                $inputEnc = $null; $outputEnc = $null; $sealKid = $null
+                switch ($script:content) {
+                    'plaintext' { $inputField = $script:inputText; $outputField = $script:outputText }
+                    'redacted' {
+                        if ($null -ne $script:inputText) { $inputField = '[REDACTED]' }
+                        if ($null -ne $script:outputText) { $outputField = '[REDACTED]' }
+                    }
+                    'encrypted' {
+                        $cmin = 0; if ($script:sealCompressMinBytes -match '^\d+$') { $cmin = [int]$script:sealCompressMinBytes }
+                        if ($null -ne $script:inputText) {
+                            $inputField = '[ENCRYPTED]'
+                            $s = Protect-Body -RecipientsFile $script:sealRecipientsFile -CompressMinBytes $cmin -Body $script:inputText
+                            if ($null -ne $s) { $inputEnc = $s; $sealKid = $script:sealKeyId } else { Log 'seal failed (tool_call input) — metadata-only' }
+                        }
+                        if ($null -ne $script:outputText) {
+                            $outputField = '[ENCRYPTED]'
+                            $s = Protect-Body -RecipientsFile $script:sealRecipientsFile -CompressMinBytes $cmin -Body $script:outputText
+                            if ($null -ne $s) { $outputEnc = $s; $sealKid = $script:sealKeyId } else { Log 'seal failed (tool_call output) — metadata-only' }
+                        }
+                    }
+                }
                 $script:record = [ordered]@{
                     '@timestamp' = $identity.ts
                     event        = [ordered]@{ action = 'tool-call'; created = $identity.ts; dataset = 'agent_audit.tool_call'; kind = 'event' }
@@ -142,10 +175,11 @@ function Build-AuditDocument($Stream) {
                         agent           = $agent
                         conversation_id = $script:sessionId
                         turn_id         = $script:turnId
+                        seal            = [ordered]@{ key_id = $sealKid }
                         tool_call       = [ordered]@{
                             tool   = [ordered]@{ name = $script:toolName; call_id = $script:callId }
-                            input  = [ordered]@{ text = $inputField; encrypted_text = $null; length = $script:inputLength }
-                            output = [ordered]@{ text = $outputField; encrypted_text = $null; length = $script:outputLength }
+                            input  = [ordered]@{ text = $inputField; encrypted_text = $inputEnc; length = $script:inputLength }
+                            output = [ordered]@{ text = $outputField; encrypted_text = $outputEnc; length = $script:outputLength }
                         }
                     }
                 }
