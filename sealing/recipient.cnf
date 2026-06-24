@@ -1,0 +1,12 @@
+[req]
+distinguished_name = dn
+x509_extensions    = v3
+prompt             = no
+
+[dn]
+CN = agent-audit-recipient-${ENV::SEAL_EPOCH}
+
+[v3]
+keyUsage = critical, keyEncipherment
+extendedKeyUsage = 1.3.6.1.4.1.311.80.1
+subjectKeyIdentifier = hash

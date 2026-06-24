@@ -153,9 +153,11 @@ printf '%s' "$encrypted_text" | base64 -d \
 ```
 sealing/
   README.md                      # this file
-  .gitignore                     # ignore private.key, recipients/ (planned)
+  .gitignore                     # ignore private/ and recipients/ (generated key material)
+  recipient.cnf                  # OpenSSL recipe for the recipient cert (epoch via $ENV::SEAL_EPOCH)
   scripts/
-    new-recipient.sh / .ps1      # issue an epoch keypair (planned)
+    new-recipient.sh             # issue an epoch keypair
     decrypt.sh                   # base64 -> DER -> openssl cms -decrypt, try each epoch key (planned)
-  recipients/                    # generated PUBLIC certs staged for distribution (planned; private keys never here)
+  recipients/<epoch>/            # generated PUBLIC certs (recipient.pem / .cer), staged for distribution
+  private/<epoch>/               # generated PRIVATE key (private.key) — guarded at the center, never distributed
 ```
