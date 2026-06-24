@@ -98,14 +98,28 @@ awk_get='BEGIN{
 }'
 json::string_field() { JSON=$1 KEY=$2 awk "$awk_get"; }
 
-awk_strlen='BEGIN{
+awk_ord='function is_cont(ch,  v){ v=index(ord,ch); return (v>=128 && v<192) }
+BEGIN{ ord=""; for(_k=1;_k<256;_k++) ord=ord sprintf("%c",_k); }'
+
+awk_strlen=$awk_ord'
+BEGIN{
   s=ENVIRON["ESC"]; n=length(s); i=1; c=0;
   while(i<=n){ ch=substr(s,i,1);
     if(ch=="\\"){ nx=substr(s,i+1,1); if(nx=="u"){i+=6}else{i+=2} c++; continue }
-    i++; c++ }
+    i++;
+    while(i<=n && is_cont(substr(s,i,1))) i++;
+    c++ }
   printf "%d", c
 }'
-json::char_count() { ESC=$1 awk "$awk_strlen"; }
+json::char_count() { ESC=$1 LC_ALL=C LANG=C awk "$awk_strlen" </dev/null; }
+
+awk_codepoint=$awk_ord'
+BEGIN{
+  s=ENVIRON["RAW"]; n=length(s); c=0;
+  for(i=1;i<=n;i++){ if(!is_cont(substr(s,i,1))) c++ }
+  printf "%d", c
+}'
+json::codepoint_count() { RAW=$1 LC_ALL=C LANG=C awk "$awk_codepoint" </dev/null; }
 
 awk_get_raw='BEGIN{
   s=ENVIRON["JSON"]; k="\"" ENVIRON["KEY"] "\":";
@@ -192,8 +206,8 @@ read_hook_payload() {
     turn_id=$(json::string_field "$payload" turn_id)
     input_raw=$(json::raw_value "$payload" tool_input)
     output_raw=$(json::raw_value "$payload" tool_response)
-    input_length=${#input_raw}
-    output_length=${#output_raw}
+    input_length=$(json::codepoint_count "$input_raw")
+    output_length=$(json::codepoint_count "$output_raw")
     ;;
   *)
     log "unknown stream '$stream' — skipping"

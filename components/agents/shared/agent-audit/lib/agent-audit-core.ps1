@@ -16,6 +16,16 @@ function ConvertTo-JsonText($Value) {
     return ($Value | ConvertTo-Json -Compress -Depth 50)
 }
 
+function Measure-CodePoint($Value) {
+    if ($null -eq $Value) { return 0 }
+    $s = [string]$Value
+    $count = 0
+    foreach ($c in $s.ToCharArray()) {
+        if (-not [System.Char]::IsLowSurrogate($c)) { $count++ }
+    }
+    return $count
+}
+
 function Assert-Stream($Stream) {
     if ($Stream -ne 'user_prompt' -and $Stream -ne 'tool_call') {
         Log 'no valid -Stream <user_prompt|tool_call> provided — skipping'; exit 0
@@ -58,6 +68,7 @@ function Assert-StreamEnabled($Stream) {
 
 function Read-HookPayload($Stream) {
     try {
+        try { [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false) } catch {}
         $raw = [Console]::In.ReadToEnd()
         if (-not $raw) { Log 'empty stdin — nothing to capture'; exit 0 }
         try { $script:rawObj = $raw | ConvertFrom-Json }
@@ -66,7 +77,7 @@ function Read-HookPayload($Stream) {
             'user_prompt' {
                 $script:promptText = [string]$script:rawObj.prompt
                 if (-not $script:promptText) { Log 'no prompt in payload — nothing to capture'; exit 0 }
-                $script:promptLength = $script:promptText.Length
+                $script:promptLength = Measure-CodePoint $script:promptText
                 $script:sessionId = NullIfEmpty $script:rawObj.session_id
                 $script:turnId = NullIfEmpty $script:rawObj.turn_id
             }
@@ -77,8 +88,8 @@ function Read-HookPayload($Stream) {
                 $script:turnId = NullIfEmpty $script:rawObj.turn_id
                 $script:inputText = ConvertTo-JsonText $script:rawObj.tool_input
                 $script:outputText = ConvertTo-JsonText $script:rawObj.tool_response
-                $script:inputLength = if ($null -ne $script:inputText) { ([string]$script:inputText).Length } else { 0 }
-                $script:outputLength = if ($null -ne $script:outputText) { ([string]$script:outputText).Length } else { 0 }
+                $script:inputLength = if ($null -ne $script:inputText) { Measure-CodePoint $script:inputText } else { 0 }
+                $script:outputLength = if ($null -ne $script:outputText) { Measure-CodePoint $script:outputText } else { 0 }
             }
             default { Log "unknown stream '$Stream' — skipping"; exit 0 }
         }
