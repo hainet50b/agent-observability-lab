@@ -27,7 +27,7 @@ flowchart LR
   end
   subgraph edge["Edges — laptops (script-only)"]
     nix["Linux / macOS<br/>openssl cms"]
-    win["Windows<br/>Protect-CmsMessage"]
+    win["Windows<br/>.NET EnvelopedCms"]
   end
 
   cnf --> priv
@@ -87,29 +87,36 @@ openssl x509 -in recipient.pem -outform DER -out recipient.cer
 
 ## 4. Seal paths differ by OS — but they converge to one stored form and one decrypt path
 
-Each edge seals with whatever ships on its OS, producing a *different on-the-wire
-shape*. The edge then **normalizes to a single canonical field**, so the center always
-decrypts the same way. Normalization is at seal time, never a branch at decrypt time.
+Each OS seals with its own tool, but both emit **DER directly** and converge on one
+canonical field — single-line `base64(DER)` — so the center always decrypts the same way.
 
 ```mermaid
 flowchart TD
   body["plaintext body"]
   body --> framed["framed = tag byte + body<br/>(tag 0x00 raw / 0x01 gzip; gzip if large)"]
   framed --> snix["Linux / macOS<br/>openssl cms -encrypt ... -outform DER"]
-  framed --> swin["Windows<br/>Protect-CmsMessage -To recipient.cer"]
+  framed --> swin["Windows (PS 5.1+)<br/>.NET EnvelopedCms (in-memory)"]
   snix --> der["DER CMS bytes"]
-  swin --> pemcms["PEM CMS<br/>BEGIN CMS header + newlines"]
-  pemcms -->|"strip PEM armor, base64-decode"| der
-  der -->|"base64, then strip newlines"| field["encrypted_text<br/>base64(DER), single line"]
+  swin --> der
+  der -->|"base64 -A (single line)"| field["encrypted_text<br/>base64(DER), single line"]
   field -->|"base64 -d"| der2["DER CMS bytes"]
   der2 -->|"openssl cms -decrypt -inform DER"| plain["recovered plaintext"]
+
+  swinX["Windows alt: Protect-CmsMessage<br/>✗ not used — would need a plaintext temp file"]
+  framed -.->|"not used"| swinX
+
+  classDef unused fill:#ececec,stroke:#aab,stroke-dasharray:5 3,color:#888;
+  class swinX unused
 ```
 
-Why single-line `base64(DER)` is the canonical form (not PEM): PEM carries header lines
-and embedded newlines, and a single stray newline in the field trips the `dynamic:strict`
-mapping, which the fail-open hook silently drops. So the field must be newline-free; the
-Windows edge converts its PEM CMS back to the same DER bytes, then base64s them
-single-line — converging with the openssl route.
+The field must be newline-free: a single stray newline trips the `dynamic:strict` mapping,
+which the fail-open hook silently drops.
+
+The Windows edge uses **.NET `EnvelopedCms`** (the `System.Security` assembly, present on
+stock Windows including PS 5.1 — no developer tools), not `Protect-CmsMessage`. The cmdlet
+used in the hands-on walkthrough can only seal a *string* or a *file path*, so sealing the
+binary framing through it would force a **plaintext temp file on disk**. `EnvelopedCms`
+seals the bytes in memory and returns DER, avoiding both — verified on PS 5.1 and 7.
 
 ### OS matrix
 
@@ -117,11 +124,11 @@ single-line — converging with the openssl route.
 | --- | --- | --- | --- | --- |
 | Linux | `openssl` 3.x, `cms` subcommand | `recipient.pem` (PEM) | DER | — |
 | macOS | stock `/usr/bin/openssl` (LibreSSL) | `recipient.pem` (PEM), from file | DER | use `cms`, **not** `smime`; RSA recipient only (LibreSSL `cms` mishandles EC) |
-| Windows | PowerShell `Protect-CmsMessage` | `recipient.cer` (**DER**) | PEM CMS | cert must carry the Document-Encryption EKU; host verified on PS 7.6.3 — **re-confirm on PS 5.1** (fleet target) |
+| Windows | .NET `EnvelopedCms` (`System.Security`) | `recipient.cer` (DER) | DER | `Protect-CmsMessage` not used (binary framing would need a plaintext temp file); verified on PS 5.1 and 7 |
 
 Key asymmetry to remember: **encoding matters only on the seal side** (it reads the
-public cert; openssl=PEM, Windows=DER). **Decryption is driven by `private.key`** — the
-`-recip` cert there is only a selector, so its encoding is irrelevant.
+public cert). **Decryption is driven by `private.key`** — the `-recip` cert there is only a
+selector, so its encoding is irrelevant.
 
 ---
 
@@ -134,11 +141,13 @@ public cert; openssl=PEM, Windows=DER). **Decryption is driven by `private.key`*
   | base64 | tr -d '\n'                 # -> encrypted_text value
 
 # --- SEAL: Windows edge (public key only) ---
-# Protect-CmsMessage -To .\recipient.cer -Path .\framed.bin   # emits PEM CMS;
-# then: strip '-----' lines and join -> base64(DER) single line
+# .NET EnvelopedCms in PowerShell — in-memory, emits DER directly. See seal.ps1.
 
-# --- NORMALIZE a PEM CMS to the canonical field (proves equivalence) ---
-grep -v -- '-----' sealed.pem | tr -d '\n'        # == base64(DER)
+# --- LEARNING ASIDE: Protect-CmsMessage (NOT used by the edge) ---
+# Protect-CmsMessage -To .\recipient.cer -Path .\framed.bin   # emits PEM CMS;
+# strip the armor to recover the same base64(DER):
+#   grep -v -- '-----' sealed.pem | tr -d '\n'   # == base64(DER)
+# Avoided in production because -Path puts plaintext on disk.
 
 # --- DECRYPT: center (uniform, regardless of which edge sealed it) ---
 printf '%s' "$encrypted_text" | base64 -d \
@@ -157,7 +166,7 @@ sealing/
   recipient.cnf                  # OpenSSL recipe for the recipient cert (epoch via $ENV::SEAL_EPOCH)
   scripts/
     new-recipient.sh             # issue an epoch keypair
-    decrypt.sh                   # base64 -> DER -> openssl cms -decrypt, try each epoch key (planned)
+    decrypt.sh                   # base64 -> DER -> openssl cms -decrypt, try each epoch key
   recipients/<epoch>/            # generated PUBLIC certs (recipient.pem / .cer), staged for distribution
   private/<epoch>/               # generated PRIVATE key (private.key) — guarded at the center, never distributed
 ```
