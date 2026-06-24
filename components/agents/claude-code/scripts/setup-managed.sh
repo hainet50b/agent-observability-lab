@@ -66,8 +66,8 @@ if [ "$with_hooks" -eq 1 ]; then
   hook_template="$component_dir/templates/hook.template.json"
   [ -f "$hook_template" ] || managed_config::die "hook template not found: $hook_template"
   hooks_json=$(jq \
-    --arg up "$entry_target --stream user_prompt --config $conf_target" \
-    --arg tc "$entry_target --stream tool_call --config $conf_target" \
+    --arg up "'$entry_target' --stream user_prompt --config '$conf_target'" \
+    --arg tc "'$entry_target' --stream tool_call --config '$conf_target'" \
     '.hooks.UserPromptSubmit[0].hooks[0].command = $up
      | .hooks.PostToolUse[0].hooks[0].command = $tc
      | .hooks' "$hook_template") || managed_config::die "could not build hooks block"

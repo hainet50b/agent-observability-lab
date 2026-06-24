@@ -37,8 +37,8 @@ chmod +x "$hooks_dst/agent-audit.sh"
 ENTRY="$hooks_dst/agent-audit.sh"
 
 conf="$target_abs/.claude/agent-audit.conf"
-user_prompt_cmd="$ENTRY --stream user_prompt --config $conf"
-tool_call_cmd="$ENTRY --stream tool_call --config $conf"
+user_prompt_cmd="'$ENTRY' --stream user_prompt --config '$conf'"
+tool_call_cmd="'$ENTRY' --stream tool_call --config '$conf'"
 
 hooks_block=$(mktemp)
 tmp=$(mktemp)
