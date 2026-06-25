@@ -22,7 +22,7 @@ function Resolve-SealRecipient {
         exit 2
     }
     $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new((Resolve-Path -LiteralPath $src).Path)
-    $cn = $cert.Subject -replace '.*CN=agent-audit-recipient-([^,]+).*', '$1'
+    $cn = if ($cert.Subject -match 'CN\s*=\s*agent-audit-recipient-([^,/]+)') { $Matches[1].Trim() } else { '' }
     if ($cn -ne $Epoch) {
         [Console]::Error.WriteLine("FAIL: recipient cert CN epoch $cn != seal.epoch $Epoch ($src)")
         exit 2
