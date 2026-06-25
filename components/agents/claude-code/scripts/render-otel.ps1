@@ -38,7 +38,7 @@ else {
 }
 $merged | Add-Member -NotePropertyName 'env' -NotePropertyValue $envBlock -Force
 
-$tmp = New-TemporaryFile
+$tmp = [System.IO.Path]::GetTempFileName()
 try {
     ($merged | ConvertTo-Json -Depth 10) |
         Set-Content -LiteralPath $tmp -Encoding utf8

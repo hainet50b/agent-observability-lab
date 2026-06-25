@@ -57,7 +57,7 @@ else {
 }
 $merged | Add-Member -NotePropertyName 'hooks' -NotePropertyValue $hooks -Force
 
-$tmp = New-TemporaryFile
+$tmp = [System.IO.Path]::GetTempFileName()
 try {
     ($merged | ConvertTo-Json -Depth 12) |
         Set-Content -LiteralPath $tmp -Encoding utf8

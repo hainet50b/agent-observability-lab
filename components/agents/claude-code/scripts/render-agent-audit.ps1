@@ -42,7 +42,7 @@ $content = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@SEAL_RECIPIENTS_FILE@@', $SealRecipientsFile `
     -replace '@@SEAL_KEY_ID@@', $SealKeyId
 
-$tmp = New-TemporaryFile
+$tmp = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($tmp, $content, [System.Text.UTF8Encoding]::new($false))
     Set-CpFile 'agent-audit' 'claude-code' $Marker $tmp $config

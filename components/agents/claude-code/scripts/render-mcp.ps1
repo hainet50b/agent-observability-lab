@@ -20,7 +20,7 @@ $out = Join-Path $TargetDir '.mcp.json'
 $cfg = Get-Content -Raw -LiteralPath $Template | ConvertFrom-Json
 $cfg.PSObject.Properties.Remove('_comment')
 
-$tmp = New-TemporaryFile
+$tmp = [System.IO.Path]::GetTempFileName()
 try {
     ($cfg | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $tmp -Encoding utf8
     Set-CpFile 'mcp' 'claude-code' $Endpoint $tmp $out
