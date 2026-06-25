@@ -78,6 +78,7 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
     },
     "conversation_id": "...",
     "turn_id": "...",
+    "seal": { "key_id": null },
     "user_prompt": {
       "text": "...",
       "encrypted_text": null,
@@ -93,7 +94,7 @@ Field ownership:
 - ECS user fields: `user.id` and `user.name` identify the workstation/business login identity on a best-effort basis. `user.id` is the domain-qualified login (`whoami`: `DOMAIN\user` on Windows, the bare login on POSIX where no domain source exists) and `user.name` is the short login name. `user.email` is not used because it is not available consistently from local hook scripts across platforms. Access to the audit data stream is restricted instead. See [Identity derivation](#identity-derivation).
 - ECS host fields: `host.name` and `host.hostname` are populated on a best-effort basis per runtime.
 - Custom audit fields: `agent_audit.*`.
-- `agent_audit.user_prompt.text` carries plaintext in the lab and is searchable. Production-oriented audit flows may set it to `null` and populate `agent_audit.user_prompt.encrypted_text` with application-encrypted prompt content instead.
+- `agent_audit.user_prompt.text` carries plaintext in the lab and is searchable; `content=encrypted` instead sets it to `[ENCRYPTED]` and seals the body into `agent_audit.user_prompt.encrypted_text` (see [Sealing](#sealing)).
 - `agent_audit.agent.*` describes the AI agent application, not the ECS collecting agent.
 - `agent_audit.agent.account.*` describes the AI agent provider account when available; it is read from the agent's local credential store (for Codex CLI, `$CODEX_HOME/auth.json` — see [Identity derivation](#identity-derivation)).
 - `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it, and is read from the same local credential store (see [Identity derivation](#identity-derivation)).
@@ -119,6 +120,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
     },
     "conversation_id": "...",
     "turn_id": "...",
+    "seal": { "key_id": null },
     "tool_call": {
       "tool":   { "name": "...", "call_id": "..." },
       "input":  { "text": "...", "encrypted_text": null, "length": 123 },
@@ -133,7 +135,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 - `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
 - `agent_audit.tool_call.tool.name` ← the hook's `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP tool-result span's `call_id` — `codex.tool_result` for Codex CLI).
 - `agent_audit.tool_call.input` ← `tool_input`, `.output` ← `tool_response`. Both Codex fields are heterogeneous JSON (an object for MCP tools; a string or object for shell tools), so the sender **serializes each to a JSON string** into `.text`, with `.length` the character count. The strict mapping then sees one scalar per side, not the tool's arbitrary nested keys.
-- `capture.tool_call.content = plaintext` populates `.text`; `redacted` writes a `[REDACTED]` marker; `encrypted` nulls it and reserves `.encrypted_text` — all keep the true `.length`, set per stream (the same gate as the prompt body — see [Delivery and authorization](#delivery-and-authorization)).
+- `capture.tool_call.content = plaintext` populates `.text`; `redacted` writes a `[REDACTED]` marker; `encrypted` sets it to `[ENCRYPTED]` and seals the body into `.encrypted_text` (see [Sealing](#sealing)) — all keep the true `.length`, set per stream (the same gate as the prompt body — see [Delivery and authorization](#delivery-and-authorization)).
 - No success / exit field — Codex's `tool_response` is opaque and not reliably parseable across tools.
 - Source is the agent's `PostToolUse` hook **only** (it fires after completion with input + output). `conversation_id` ← `session_id`, `turn_id` ← `turn_id`; `cwd` / `transcript_path` / `permission_mode` are dropped (not in the schema; the mapping is strict). Both Codex CLI's and Claude Code's `PostToolUse` payloads carry `tool_use_id` and `turn_id`, so the tool-call document populates `tool.call_id` and `turn_id` for **both** agents — unlike Claude Code's turn-less `UserPromptSubmit`, whose user-prompt document always has `turn_id: null` (see [Identity derivation](#identity-derivation)).
 
@@ -156,16 +158,16 @@ Mappings are **strict** by default — an unexpected field fails indexing rather
 
 | Field(s) | Type | Note |
 |---|---|---|
-| `user.id` / `.name`, `host.name` / `.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id` / `.turn_id` | `keyword` | where applicable |
-| `agent_audit.user_prompt.text` | `text` | searchable; natural-language prompt body |
-| `agent_audit.user_prompt.encrypted_text` | `keyword`, `index: false` | stored, not searchable |
+| `user.id` / `.name`, `host.name` / `.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id` / `.turn_id`, `agent_audit.seal.key_id` | `keyword` | where applicable; `seal.key_id` is the recipient epoch or `null` |
+| `agent_audit.user_prompt.text` | **`wildcard`** | holds the prompt, `[REDACTED]`, or `[ENCRYPTED]`; substring/regexp |
+| `agent_audit.user_prompt.encrypted_text` | **`binary`** | base64 CMS; stored, not searchable |
 | `agent_audit.user_prompt.length` | `long` | |
 | `agent_audit.tool_call.tool.name` / `.call_id` | `keyword` | |
 | `agent_audit.tool_call.input.text` / `.output.text` | **`wildcard`** | not `keyword` (a tool output over Lucene's ~32 KB term limit rejects the whole doc) and not `text` (the need is substring/regexp over machine-generated JSON, not word relevance) |
-| `agent_audit.tool_call.input.encrypted_text` / `.output.encrypted_text` | `keyword`, `index: false` | |
+| `agent_audit.tool_call.input.encrypted_text` / `.output.encrypted_text` | **`binary`** | base64 CMS; stored, not searchable |
 | `agent_audit.tool_call.input.length` / `.output.length` | `long` | |
 
-Mapping follows data nature, so the two body fields differ deliberately: the prompt stays `text` (natural language), tool I/O is `wildcard` (machine JSON). Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is later sealed or capped.
+Both `.text` body fields are `wildcard` — substring/regexp over machine-generated tool JSON, and a prompt body that may be large or carry an `[ENCRYPTED]` / `[REDACTED]` marker, each indexed without risking Lucene's ~32 KB term limit; the sealed bodies are `binary` (opaque base64 CMS, not searchable). Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is sealed or capped.
 
 Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
 
@@ -195,6 +197,11 @@ capture.user_prompt.content=plaintext
 capture.tool_call.enabled=true
 capture.tool_call.content=plaintext
 
+# seal: applies when content=encrypted (empty recipients_file = off)
+seal.recipients_file=
+seal.key_id=
+seal.compress_min_bytes=1024
+
 # elasticsearch: url/api_key/timeout_ms shared; data_stream is per stream
 elasticsearch.url=https://...
 elasticsearch.api_key=
@@ -205,11 +212,25 @@ elasticsearch.data_stream.tool_call=logs-agent_audit.tool_call-default
 
 The rendered values have a single source of truth in the stack's `setup.conf` (see [`config-deployment.md`](config-deployment.md)). The **audit posture, delivery endpoint, and timeout** are **required** `agent_audit.*` keys there — `agent_audit.elasticsearch.url`, `agent_audit.elasticsearch.timeout_ms`, and `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}` — read fail-fast by the audit `setup-config.{sh,ps1}` (missing or empty → the script aborts; there is **no** fallback to the control-plane `elasticsearch.url`, so the audit delivery endpoint is configured independently of the MCP/backend endpoint). The **`elasticsearch.api_key`** is a secret and is the one rendered value that is **not** in `setup.conf`: it is read from a gitignored `setup.local.conf` (copied from the committed `setup.local.conf.example`) if present, and is **empty with no error** when that file or the key is absent — the local demo backend has security disabled, so an empty key is the working default. The `elasticsearch.data_stream.*` lines are **not** `setup.conf` keys: they are backend-coupled and stay **fixed in the template**.
 
-Two layers are kept distinct: `capture.<stream>.*` is the **backend-agnostic capture posture** (whether to capture the stream, and how its body is stored), while `elasticsearch.*` is the **backend** — a shared connection plus a per-stream `data_stream` mapping. `content` is a per-stream enum: `plaintext` populates the body's `.text`; `redacted` puts a fixed `[REDACTED]` marker in `.text` (the true `.length` is still recorded and `.encrypted_text` stays `null`) so the delivery path — identity, routing, strict mapping, landing — can be verified without exposing prompt / tool content; `encrypted` sets `.text` to `null` and populates `.encrypted_text` (the reserved, `index:false` body field — encryption itself is not yet built). When built, the intended scheme is **public-key sealing with CMS / PKCS#7 enveloped-data**: only a distributable **public cert** ships to each endpoint (the sole secret is the investigator's private key, held centrally), and CMS needs **zero extra tooling** across OSes — `openssl cms` on Linux/macOS, `Protect-CmsMessage` (PowerShell built-in) on Windows — fitting the hooks' zero-dependency constraint and the repo's `.sh`/`.ps1` per-OS pattern. `plaintext` is the lab default; `enabled = false` skips capture for that stream entirely.
+Two layers are kept distinct: `capture.<stream>.*` is the **backend-agnostic capture posture** (whether to capture the stream, and how its body is stored), while `elasticsearch.*` is the **backend** — a shared connection plus a per-stream `data_stream` mapping. `content` is a per-stream enum: `plaintext` populates the body's `.text`; `redacted` puts a fixed `[REDACTED]` marker in `.text` (the true `.length` is still recorded and `.encrypted_text` stays `null`) so the delivery path — identity, routing, strict mapping, landing — can be verified without exposing prompt / tool content; `encrypted` sets `.text` to `[ENCRYPTED]` and seals the body into `.encrypted_text` (the reserved, `index:false` body field) — see [Sealing](#sealing). `plaintext` is the lab default; `enabled = false` skips capture for that stream entirely. Edge sealing is opt-in via two **optional** `setup.conf` keys — `agent_audit.seal.epoch` and an optional `agent_audit.seal.recipients_file` override; absent/empty = off.
 
 **The config path is injected, not discovered.** The capture hooks take the config location as an explicit `--config <abs path>` argument (`-Config` on Windows); `render-hooks` substitutes the stack's absolute `agent-audit.conf` path into the hook `command` it writes to `config.toml`. A shipped hook does **no** ambient discovery — it never infers its config from the working directory, `CODEX_HOME`, or `$HOME`. This keeps delivery deterministic regardless of how Codex was launched, and prevents a stray project-local `.codex/agent-audit.conf` from silently redirecting or disabling audit (discovery → injection; see [`threat-model.md`](threat-model.md)). With no `--config`, the hook fail-open-skips. (`CODEX_HOME` is still consulted for the agent's own `auth.json` — the provider-identity source — which is the agent's credential store, not our config.)
 
 If delivery later grows structured (encryption parameters, lists of redaction patterns) or moves into a distributed helper binary, the format may move to a structured one (TOML/JSON) at that point — today's flat `.conf` is dictated solely by the zero-dependency shell-parsing constraint. Keep each hook's config read behind a small seam so a future format/parser swap stays local; the schema above is the format-agnostic source of truth.
+
+## Sealing
+
+When a stream's `content=encrypted`, the hook seals the body (the user prompt text, or each tool-call input/output) with **CMS / PKCS#7 enveloped-data** before it leaves the edge, so Elasticsearch holds only ciphertext plus cleartext metadata. Each message gets a fresh AES-256 content key RSA-wrapped to the recipient's public cert; a 1-byte framing tag *inside* the sealed payload records the body encoding (`0x00` raw, `0x01` gzip — gzip applied when the body reaches `seal.compress_min_bytes`), and the DER output is base64'd into `encrypted_text`. `agent_audit.seal.key_id` carries the recipient **epoch** when a body was sealed and is `null` otherwise; the record shape is constant across all content modes (the `seal.key_id` field is always present, `encrypted_text` always reserved).
+
+**Central key lifecycle.** The only secret is the recipient **private key**, held centrally — it never ships. `sealing/scripts/new-recipient.sh` issues an epoch keypair (`recipients/<epoch>/recipient.pem` public, `private/<epoch>/private.key` secret; both gitignored), and only the public `recipient.pem` is distributed into edge bundles; `sealing/scripts/decrypt.sh` recovers a body centrally (by epoch, or trying all private keys). The cert CN encodes the epoch (`CN=agent-audit-recipient-<epoch>`), and the same PEM is read by both crypto backends: `openssl cms` on Linux/macOS, .NET `System.Security.Cryptography.Pkcs.EnvelopedCms` on Windows (built into stock PowerShell incl. 5.1 — **not** `Protect-CmsMessage`, which cannot seal binary without a plaintext temp file). Both produce interoperable CMS that `decrypt.sh` opens.
+
+**Opt-in resolution.** At setup `seal-resolve.{sh,ps1}` resolves `seal.epoch` to its public cert — the convention path `sealing/recipients/<epoch>/recipient.pem` or the `seal.recipients_file` override (a public `.pem`, rejected if under `sealing/private/`) — verifies the cert CN equals the epoch, and materializes it into the bundle as `recipient.pem`; the rendered conf's `seal.recipients_file` points at the placed cert (POSIX path for the `.sh` runtime, `C:/`-style forward-slash for the `.ps1` runtime) and `seal.key_id` is the epoch. `content=encrypted` with no epoch is a hard setup failure. The same resolved `(cert, key_id)` flows to every scope: local/project place it into the agent home, managed stages it under the host root.
+
+**Confidentiality fails closed (invariant).** Under `content=encrypted` the body's `.text` is set to `[ENCRYPTED]` *before* any sealing is attempted, so a seal failure degrades to **metadata-only** (`encrypted_text` and `seal.key_id` `null`) — plaintext is never emitted to Elasticsearch, logs, or stderr, and the hook still exits 0 (fail-open delivery). At runtime, once per invocation, the hook verifies the bundled cert's CN epoch equals the configured `seal.key_id`; a mismatch (a cert that drifted or was swapped after deploy) is treated as untrusted and also degrades to metadata-only, so a body is only ever sealed to the configured recipient or not at all. Empty epoch is off: no cert ships, the seal fields stay empty, and the crypto path is inert (the record keeps its constant shape with `seal.key_id` `null`).
+
+**OS bundle.** Each edge bundle ships only the runtime OS's hook scripts (`.sh` on Linux/macOS, `.ps1` on Windows); the non-matching shell's scripts are not copied. Codex's `config.toml` still lists both `command`/`commandWindows`, but its platform dispatch runs only the OS-matching one, so the other points at an absent-but-never-invoked path.
+
+**Body canonicalization.** For `tool_call`, the sealed bytes are not byte-identical across shells — the POSIX hook seals the raw captured JSON substring, while PowerShell seals a re-serialized (compacted) form. Both decrypt to equivalent JSON; the difference is inherited from how the plaintext `.text` is populated and predates sealing. `user_prompt` has no such difference (both seal the raw unescaped prompt text).
 
 ## Hook implementation contract
 
