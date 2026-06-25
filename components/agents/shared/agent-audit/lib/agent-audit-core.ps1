@@ -48,7 +48,12 @@ function Assert-Config($Config) {
 
 function Import-DeliveryConfig($Stream) {
     try {
-        $cfg = Get-Content -Raw -LiteralPath $script:configFile | ConvertFrom-StringData
+        $cfg = @{}
+        foreach ($line in Get-Content -LiteralPath $script:configFile) {
+            if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
+            $i = $line.IndexOf('=')
+            $cfg[$line.Substring(0, $i).Trim()] = $line.Substring($i + 1).Trim()
+        }
         $script:enabled = $cfg["capture.$Stream.enabled"]
         $script:content = $cfg["capture.$Stream.content"]
         $script:esUrl = $cfg['elasticsearch.url']
