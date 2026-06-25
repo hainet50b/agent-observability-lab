@@ -161,7 +161,55 @@ printf '%s' "$encrypted_text" | base64 -d \
 
 ---
 
-## 6. Planned layout (scaffolded incrementally)
+## 6. Size & compression characteristics
+
+A sealed field costs a **fixed ~565 B of DER overhead** (RSA-3072-wrapped AES key +
+IV + ASN.1 structure, independent of body size) plus the body itself, then ×4/3 for
+base64. The framing tag (§4) optionally gzips the body first (`seal.compress_min_bytes`
+gates this). Because gzip runs *before* encryption, a large prompt's stored
+`encrypted_text` can end up **smaller than the plaintext** — unusual for
+encrypt-then-base64, which normally only inflates.
+
+Measured on a realistic corpus (this repo's own shell/markdown source — mixed code,
+config, and prose; RSA-3072 recipient, AES-256-CBC, gzip -6). `b64 raw` / `b64 gz` are
+the stored `encrypted_text` character counts without / with the gzip framing path:
+
+| body | gz % | `b64 raw` | `b64 gz` | saved by gzip |
+| ---: | ---: | ---: | ---: | ---: |
+|  64 B | 128 % |    852 |   876 | **−3 %** |
+| 128 B | 102 % |    940 |   940 | **0 %** |
+| 256 B |  87 % |  1,112 | 1,048 | **+6 %** |
+| 512 B |  70 % |  1,456 | 1,240 | **+15 %** |
+|  1 kB |  54 % |  2,136 | 1,496 | **+30 %** |
+|  2 kB |  46 % |  3,504 | 2,008 | **+43 %** |
+|  4 kB |  36 % |  6,232 | 2,736 | **+56 %** |
+|  8 kB |  32 % | 11,696 | 4,228 | **+64 %** |
+| 16 kB |  29 % | 22,616 | 7,024 | **+69 %** |
+
+```
+saved by gzip on stored encrypted_text   (negative = gzip made it bigger)
+ 64 B ┤▏                             −3 %   gzip expands — never compress
+128 B ┤▏                              0 %   break-even
+256 B ┤██▍                          +6 %
+512 B ┤██████                      +15 %
+ 1 kB ┤████████████                +30 %
+ 2 kB ┤█████████████████▏          +43 %
+ 4 kB ┤██████████████████████▍     +56 %
+ 8 kB ┤█████████████████████████▌  +64 %
+16 kB ┤███████████████████████████▌+69 %
+      └────┬────┬────┬────┬────┬────┬
+          10   20   30   40   50   60 %
+```
+
+Savings rise with size because the fixed ~565 B overhead is amortized over a larger
+body. The **break-even is ~128–256 B** of realistic text: below ~128 B gzip cannot beat
+its own ~18 B header and the stored field grows (64 B → −3 %); incompressible bodies
+(random, already-base64) never benefit at any size. This is what `seal.compress_min_bytes`
+guards (template default 512 B).
+
+---
+
+## 7. Planned layout (scaffolded incrementally)
 
 ```
 sealing/

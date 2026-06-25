@@ -200,7 +200,7 @@ capture.tool_call.content=plaintext
 # seal: applies when content=encrypted (empty recipients_file = off)
 seal.recipients_file=
 seal.key_id=
-seal.compress_min_bytes=1024
+seal.compress_min_bytes=512
 
 # elasticsearch: url/api_key/timeout_ms shared; data_stream is per stream
 elasticsearch.url=https://...
