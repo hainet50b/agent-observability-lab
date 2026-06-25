@@ -5,8 +5,9 @@ content-sealing feature: key issuance and decryption.
 
 Sealing is **opt-in and off by default**. With no configuration, every `-audit` stack
 captures `content=plaintext` and has zero crypto dependencies. A stack opts in by
-setting `capture.<stream>.content=encrypted` and pointing `seal.recipients_file` at a
-distributed public recipient (see `SPEC/config-deployment.md` once written).
+setting `capture.<stream>.content=encrypted` and `seal.epoch=<epoch>`, which selects the
+recipient issued under `recipients/<epoch>/`. `seal.recipients_file` optionally overrides
+the cert path.
 
 ---
 
