@@ -18,12 +18,10 @@ flowchart LR
     cnf["recipient.cnf<br/>keygen recipe"]
     priv["private.key<br/>PEM · RSA-3072 · SECRET"]
     pem["recipient.pem<br/>PEM cert · public"]
-    cer["recipient.cer<br/>DER cert · public"]
     dec["decrypt<br/>(uses private.key)"]
   end
   subgraph bundle["Config bundle — config-place (local / project / managed)"]
     bpem["recipient.pem"]
-    bcer["recipient.cer"]
   end
   subgraph edge["Edges — laptops (script-only)"]
     nix["Linux / macOS<br/>openssl cms"]
@@ -32,11 +30,9 @@ flowchart LR
 
   cnf --> priv
   cnf --> pem
-  pem --> cer
   pem --> bpem
-  cer --> bcer
   bpem --> nix
-  bcer --> win
+  bpem --> win
   priv --> dec
 ```
 
@@ -52,13 +48,14 @@ compromised laptop yields only a public recipient — which can seal, never open
 | --- | --- | --- | --- | --- |
 | `recipient.cnf` | OpenSSL config (text) | keygen recipe (DN, keyUsage, EKU, SKI) | center | no |
 | `private.key` | PEM | RSA-3072 **private** key | **center only** | **never** |
-| `recipient.pem` | PEM (`-----BEGIN CERTIFICATE-----`) | public cert | center → bundle | yes — Linux / macOS edges |
-| `recipient.cer` | DER (binary) | public cert (same key as `.pem`) | center → bundle | yes — Windows edges |
+| `recipient.pem` | PEM (`-----BEGIN CERTIFICATE-----`) | public cert | center → bundle | yes — every edge (Linux / macOS / Windows) |
+| `recipient.cer` | DER (binary) | public cert (same key as `.pem`) | center | no — legacy, only for the Protect-CmsMessage aside (§5) |
 | `encrypted_text` | text: `base64(DER)`, single line | one sealed body | Elasticsearch field | n/a — this *is* the stored value |
 | `seal.key_id` | keyword (text) | rotation epoch tag (e.g. `2026Q3`) | Elasticsearch field, **cleartext** | n/a |
 
-`recipient.pem` and `recipient.cer` are the **same public key in two encodings** —
-PEM is `base64(DER)` wrapped in header lines; DER is the raw binary. See §3.
+The seal path uses **`recipient.pem` on every edge** — both `openssl cms` and .NET
+`EnvelopedCms` read PEM. `recipient.cer` is the same key in DER, kept only for the
+Protect-CmsMessage aside (§5); it is not distributed.
 
 ---
 
@@ -79,7 +76,8 @@ flowchart TD
 openssl req -x509 -newkey rsa:3072 -keyout private.key -nodes -days 1825 \
   -out recipient.pem -config recipient.cnf
 
-# PEM cert -> DER cert, for the Windows edge (Protect-CmsMessage -To wants DER, esp. on PS 5.1)
+# Optional: PEM -> DER, only for the Protect-CmsMessage aside (§5). The seal path uses
+# recipient.pem on every edge (EnvelopedCms reads PEM), so DER is not required.
 openssl x509 -in recipient.pem -outform DER -out recipient.cer
 ```
 
@@ -87,8 +85,9 @@ openssl x509 -in recipient.pem -outform DER -out recipient.cer
 
 ## 4. Seal paths differ by OS — but they converge to one stored form and one decrypt path
 
-Each OS seals with its own tool, but both emit **DER directly** and converge on one
-canonical field — single-line `base64(DER)` — so the center always decrypts the same way.
+Each OS seals with its own tool from the **same `recipient.pem`**, and both emit **DER
+directly**, converging on one canonical field — single-line `base64(DER)` — so the center
+always decrypts the same way.
 
 ```mermaid
 flowchart TD
@@ -119,7 +118,9 @@ The Windows edge uses **.NET `EnvelopedCms`** (the `System.Security` assembly, p
 stock Windows including PS 5.1 — no developer tools), not `Protect-CmsMessage`. The cmdlet
 used in the hands-on walkthrough can only seal a *string* or a *file path*, so sealing the
 binary framing through it would force a **plaintext temp file on disk**. `EnvelopedCms`
-seals the bytes in memory and returns DER, avoiding both — verified on PS 5.1 and 7.
+seals the bytes in memory and returns DER, avoiding both — verified on PS 5.1 and 7. It
+also **reads `recipient.pem` (PEM) directly**, so every edge uses the same PEM cert and the
+old per-OS DER (`recipient.cer`) need — which came from `Protect-CmsMessage` — no longer applies.
 
 ### OS matrix
 
@@ -127,7 +128,7 @@ seals the bytes in memory and returns DER, avoiding both — verified on PS 5.1 
 | --- | --- | --- | --- | --- |
 | Linux | `openssl` 3.x, `cms` subcommand | `recipient.pem` (PEM) | DER | — |
 | macOS | stock `/usr/bin/openssl` (LibreSSL) | `recipient.pem` (PEM), from file | DER | use `cms`, **not** `smime`; RSA recipient only (LibreSSL `cms` mishandles EC) |
-| Windows | .NET `EnvelopedCms` (`System.Security`) | `recipient.cer` (DER) | DER | `Protect-CmsMessage` not used (binary framing would need a plaintext temp file); verified on PS 5.1 and 7 |
+| Windows | .NET `EnvelopedCms` (`System.Security`) | `recipient.pem` (PEM) | DER | `EnvelopedCms` reads PEM (verified PS 5.1 & 7), so no DER needed; `Protect-CmsMessage` not used (would need a plaintext temp file) |
 
 Key asymmetry to remember: **encoding matters only on the seal side** (it reads the
 public cert). **Decryption is driven by `private.key`** — the `-recip` cert there is only a
@@ -170,6 +171,6 @@ sealing/
   scripts/
     new-recipient.sh             # issue an epoch keypair
     decrypt.sh                   # base64 -> DER -> openssl cms -decrypt, try each epoch key
-  recipients/<epoch>/            # generated PUBLIC certs (recipient.pem / .cer), staged for distribution
+  recipients/<epoch>/            # generated PUBLIC certs; recipient.pem is the seal cert (.cer is legacy)
   private/<epoch>/               # generated PRIVATE key (private.key) — guarded at the center, never distributed
 ```
