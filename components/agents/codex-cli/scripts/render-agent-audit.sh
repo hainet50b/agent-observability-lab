@@ -13,6 +13,8 @@ tool_call_content=${8:-}
 # stays the ES URL regardless); a caller sharing one home across concerns passes
 # a unified value so every bundle file carries the same marker.
 marker_endpoint=${9:-$es_url}
+seal_recipients_file=${10:-}
+seal_key_id=${11:-}
 
 if [ -z "$es_url" ] || [ -z "$target_dir" ] || [ -z "$timeout_ms" ] ||
   [ -z "$user_prompt_enabled" ] || [ -z "$user_prompt_content" ] ||
@@ -44,6 +46,8 @@ sed \
   -e "s#@@CAPTURE_USER_PROMPT_CONTENT@@#$user_prompt_content#" \
   -e "s#@@CAPTURE_TOOL_CALL_ENABLED@@#$tool_call_enabled#" \
   -e "s#@@CAPTURE_TOOL_CALL_CONTENT@@#$tool_call_content#" \
+  -e "s#@@SEAL_RECIPIENTS_FILE@@#$seal_recipients_file#" \
+  -e "s#@@SEAL_KEY_ID@@#$seal_key_id#" \
   "$template" >"$tmp"
 
 config_place::place_file 'agent-audit' 'codex-cli' "$marker_endpoint" "$tmp" "$config"

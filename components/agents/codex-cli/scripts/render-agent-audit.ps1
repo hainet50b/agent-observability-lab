@@ -8,7 +8,9 @@ param(
     [Parameter(Mandatory = $true)][string]$UserPromptContent,
     [Parameter(Mandatory = $true)][string]$ToolCallEnabled,
     [Parameter(Mandatory = $true)][string]$ToolCallContent,
-    [string]$MarkerEndpoint = ''
+    [string]$MarkerEndpoint = '',
+    [string]$SealRecipientsFile = '',
+    [string]$SealKeyId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,7 +39,9 @@ $content = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@CAPTURE_USER_PROMPT_ENABLED@@', $UserPromptEnabled `
     -replace '@@CAPTURE_USER_PROMPT_CONTENT@@', $UserPromptContent `
     -replace '@@CAPTURE_TOOL_CALL_ENABLED@@', $ToolCallEnabled `
-    -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent
+    -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent `
+    -replace '@@SEAL_RECIPIENTS_FILE@@', $SealRecipientsFile `
+    -replace '@@SEAL_KEY_ID@@', $SealKeyId
 
 $tmp = New-TemporaryFile
 try {

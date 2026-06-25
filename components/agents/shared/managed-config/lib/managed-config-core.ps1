@@ -184,7 +184,7 @@ function Remove-McManagedFile($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
-function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '') {
+function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '', $SealRecipientsFile = '', $SealKeyId = '') {
     $hooksSrc = Join-Path $ComponentDir 'hooks'
     $coreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
     $confTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
@@ -201,7 +201,9 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
         -replace '@@CAPTURE_USER_PROMPT_ENABLED@@', $UserPromptEnabled `
         -replace '@@CAPTURE_USER_PROMPT_CONTENT@@', $UserPromptContent `
         -replace '@@CAPTURE_TOOL_CALL_ENABLED@@', $ToolCallEnabled `
-        -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent
+        -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent `
+        -replace '@@SEAL_RECIPIENTS_FILE@@', $SealRecipientsFile `
+        -replace '@@SEAL_KEY_ID@@', $SealKeyId
     [System.IO.File]::WriteAllText((Join-Path $stage 'agent-audit.conf'), $conf, [System.Text.UTF8Encoding]::new($false))
     $script:McHooksStage = $stage
     return $stage

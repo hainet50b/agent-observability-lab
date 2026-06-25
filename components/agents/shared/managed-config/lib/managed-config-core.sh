@@ -250,6 +250,7 @@ managed_config::teardown_one() {
 managed_config::stage_hooks() {
   local component_dir=$1 es_url_val=$2 es_api_key_val=${3:-}
   local timeout_ms_val=${4:-} up_enabled_val=${5:-} up_content_val=${6:-} tc_enabled_val=${7:-} tc_content_val=${8:-}
+  local seal_recipients_file_val=${9:-} seal_key_id_val=${10:-}
   local hooks_src="$component_dir/hooks" core_src="$component_dir/../shared/agent-audit/lib"
   local conf_template="$component_dir/templates/agent-audit.template.conf"
   [ -f "$conf_template" ] || managed_config::die "conf template not found: $conf_template"
@@ -269,6 +270,8 @@ managed_config::stage_hooks() {
     -e "s#@@CAPTURE_USER_PROMPT_CONTENT@@#$up_content_val#" \
     -e "s#@@CAPTURE_TOOL_CALL_ENABLED@@#$tc_enabled_val#" \
     -e "s#@@CAPTURE_TOOL_CALL_CONTENT@@#$tc_content_val#" \
+    -e "s#@@SEAL_RECIPIENTS_FILE@@#$seal_recipients_file_val#" \
+    -e "s#@@SEAL_KEY_ID@@#$seal_key_id_val#" \
     "$conf_template" >"$hooks_stage/agent-audit.conf" ||
     managed_config::die "could not render agent-audit.conf"
   chmod +x "$hooks_stage/agent-audit.sh"
