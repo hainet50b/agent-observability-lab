@@ -192,6 +192,10 @@ load_delivery_config() {
   seal_recipients_file=$(cfg_get seal.recipients_file)
   seal_key_id=$(cfg_get seal.key_id)
   seal_compress_min_bytes=$(cfg_get seal.compress_min_bytes)
+  if [ "$content" = encrypted ] && ! seal::recipient_ok "$seal_recipients_file" "$seal_key_id"; then
+    log "recipient cert CN != seal.key_id ($seal_key_id) — metadata-only"
+    seal_recipients_file=""
+  fi
   if [ -z "$es_url" ] || [ -z "$data_stream" ]; then
     log "config missing elasticsearch.url / data_stream.$stream — skipping"
     done0

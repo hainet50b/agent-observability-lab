@@ -7,6 +7,18 @@
 
 SEAL_TIMEOUT_SECS=${SEAL_TIMEOUT_SECS:-2}
 
+seal::cn_epoch() {
+  openssl x509 -noout -subject -in "$1" 2>/dev/null |
+    sed -n 's/.*CN[[:space:]]*=[[:space:]]*agent-audit-recipient-\([^,/]*\).*/\1/p'
+}
+
+seal::recipient_ok() {
+  local recipients_file=$1 expected=$2
+  [ -n "$recipients_file" ] && [ -f "$recipients_file" ] || return 1
+  command -v openssl >/dev/null 2>&1 || return 1
+  [ "$(seal::cn_epoch "$recipients_file")" = "$expected" ]
+}
+
 seal::body() {
   local recipients_file=$1 compress_min_bytes=${2:-0} body_bytes=${3:-0}
   [ -n "$recipients_file" ] && [ -f "$recipients_file" ] || return 1

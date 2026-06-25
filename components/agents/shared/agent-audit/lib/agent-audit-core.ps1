@@ -58,6 +58,10 @@ function Import-DeliveryConfig($Stream) {
         $script:sealRecipientsFile = $cfg['seal.recipients_file']
         $script:sealKeyId = $cfg['seal.key_id']
         $script:sealCompressMinBytes = $cfg['seal.compress_min_bytes']
+        if ($script:content -eq 'encrypted' -and -not (Test-SealRecipient -RecipientsFile $script:sealRecipientsFile -Expected $script:sealKeyId)) {
+            Log "recipient cert CN != seal.key_id ($script:sealKeyId) — metadata-only"
+            $script:sealRecipientsFile = ''
+        }
         if (-not $script:esUrl -or -not $script:dataStream) {
             Log "config missing elasticsearch.url / data_stream.$Stream — skipping"; exit 0
         }

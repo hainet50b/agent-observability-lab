@@ -4,6 +4,17 @@
 # Mirrors seal.sh; no [Mandatory] so a missing param fails soft to $null, never throws.
 # Uses .NET EnvelopedCms (System.Security; stock Windows incl. PS 5.1), not Protect-CmsMessage.
 
+function Test-SealRecipient {
+    param([string]$RecipientsFile, [AllowEmptyString()][string]$Expected = '')
+    try {
+        if ([string]::IsNullOrEmpty($RecipientsFile) -or -not (Test-Path -LiteralPath $RecipientsFile)) { return $false }
+        $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($RecipientsFile)
+        $cn = if ($cert.Subject -match 'CN\s*=\s*agent-audit-recipient-([^,/]+)') { $Matches[1].Trim() } else { '' }
+        return ($cn -eq $Expected)
+    }
+    catch { return $false }
+}
+
 function Protect-Body {
     param(
         [string]$RecipientsFile,
