@@ -103,10 +103,13 @@ flowchart TD
   der2 -->|"openssl cms -decrypt -inform DER"| plain["recovered plaintext"]
 
   swinX["Windows alt: Protect-CmsMessage<br/>✗ not used — would need a plaintext temp file"]
+  pemAlt["PEM CMS<br/>armored base64"]
   framed -.->|"not used"| swinX
+  swinX -.->|"emits PEM CMS"| pemAlt
+  pemAlt -.->|"strip PEM armor"| der
 
   classDef unused fill:#ececec,stroke:#aab,stroke-dasharray:5 3,color:#888;
-  class swinX unused
+  class swinX,pemAlt unused
 ```
 
 The field must be newline-free: a single stray newline trips the `dynamic:strict` mapping,
