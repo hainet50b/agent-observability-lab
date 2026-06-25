@@ -36,6 +36,7 @@ config="$target_dir/.claude/agent-audit.conf"
   exit 1
 }
 
+mkdir -p "$target_dir/.claude"
 target_abs=$(cd -- "$target_dir" && pwd)
 placed_cert="$target_abs/.claude/recipient.pem"
 seal_recipients_conf=""

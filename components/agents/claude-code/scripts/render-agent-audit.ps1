@@ -31,6 +31,7 @@ $Marker = if ($MarkerEndpoint) { $MarkerEndpoint } else { $EsUrl }
 
 $config = Join-Path $TargetDir '.claude/agent-audit.conf'
 
+New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.claude') | Out-Null
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
 $placedCert = Join-Path $targetAbs '.claude/recipient.pem'
 $sealRecipientsConf = if ($SealRecipientsSrc) { ($placedCert -replace '\\', '/') } else { '' }

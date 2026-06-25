@@ -36,6 +36,7 @@ template="$component_dir/templates/agent-audit.template.conf"
   exit 1
 }
 
+mkdir -p "$target_dir/.codex"
 target_abs=$(cd -- "$target_dir" && pwd)
 placed_cert="$target_abs/.codex/recipient.pem"
 seal_recipients_conf=""

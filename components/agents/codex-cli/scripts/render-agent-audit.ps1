@@ -32,6 +32,7 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     exit 1
 }
 
+New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.codex') | Out-Null
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
 $placedCert = Join-Path $targetAbs '.codex/recipient.pem'
 $sealRecipientsConf = if ($SealRecipientsSrc) { ($placedCert -replace '\\', '/') } else { '' }
