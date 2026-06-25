@@ -61,9 +61,11 @@ if [ "$with_hooks" -eq 1 ]; then
   [ -n "$es_url" ] || managed_config::die "--with-hooks requires --es-url (audit hooks need the ES endpoint)"
   managed_config::detect_os
   hooks_ref="$(managed_config::managed_root "$os")/hooks"
+  cert_target="$hooks_ref/recipient.pem"
   managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key" \
     "$timeout_ms" "$capture_user_prompt_enabled" "$capture_user_prompt_content" \
-    "$capture_tool_call_enabled" "$capture_tool_call_content"
+    "$capture_tool_call_enabled" "$capture_tool_call_content" \
+    "$seal_recipients_src" "$seal_key_id" "$cert_target"
   # Audit-only deploy has no OTLP logs endpoint; key the marker/ownership on the audit
   # ES url so place()/teardown() and the provenance marker stay meaningful.
   [ -n "$logs_endpoint" ] || logs_endpoint=$es_url

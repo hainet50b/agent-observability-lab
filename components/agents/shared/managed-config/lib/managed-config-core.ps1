@@ -184,7 +184,7 @@ function Remove-McManagedFile($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
-function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '', $SealRecipientsFile = '', $SealKeyId = '') {
+function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '', $SealRecipientsSrc = '', $SealKeyId = '', $SealRecipientsTarget = '') {
     $hooksSrc = Join-Path $ComponentDir 'hooks'
     $coreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
     $confTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
@@ -194,6 +194,12 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
     Copy-Item -LiteralPath (Join-Path $hooksSrc 'agent-audit.sh'), (Join-Path $hooksSrc 'agent-audit.ps1') -Destination $stage -Force
     Copy-Item -LiteralPath (Join-Path $hooksSrc 'lib/adapter.sh'), (Join-Path $hooksSrc 'lib/adapter.ps1') -Destination (Join-Path $stage 'lib') -Force
     Copy-Item -LiteralPath (Join-Path $coreSrc 'agent-audit-core.sh'), (Join-Path $coreSrc 'agent-audit-core.ps1') -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $coreSrc 'seal.sh'), (Join-Path $coreSrc 'seal.ps1') -Destination (Join-Path $stage 'lib') -Force
+    $sealRecipientsConf = ''
+    if ($SealRecipientsSrc) {
+        Copy-Item -LiteralPath $SealRecipientsSrc -Destination (Join-Path $stage 'recipient.pem') -Force
+        $sealRecipientsConf = $SealRecipientsTarget
+    }
     $conf = (Get-Content -Raw -LiteralPath $confTemplate) `
         -replace '@@ES_URL@@', $EsUrl `
         -replace '@@ES_API_KEY@@', $EsApiKey `
@@ -202,7 +208,7 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
         -replace '@@CAPTURE_USER_PROMPT_CONTENT@@', $UserPromptContent `
         -replace '@@CAPTURE_TOOL_CALL_ENABLED@@', $ToolCallEnabled `
         -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent `
-        -replace '@@SEAL_RECIPIENTS_FILE@@', $SealRecipientsFile `
+        -replace '@@SEAL_RECIPIENTS_FILE@@', $sealRecipientsConf `
         -replace '@@SEAL_KEY_ID@@', $SealKeyId
     [System.IO.File]::WriteAllText((Join-Path $stage 'agent-audit.conf'), $conf, [System.Text.UTF8Encoding]::new($false))
     $script:McHooksStage = $stage
@@ -210,10 +216,14 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
 }
 
 function Get-McHookManifestItem($HooksTarget) {
-    foreach ($rel in @('agent-audit.sh', 'agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.sh', 'lib/adapter.ps1', 'lib/agent-audit-core.sh', 'lib/agent-audit-core.ps1')) {
+    foreach ($rel in @('agent-audit.sh', 'agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.sh', 'lib/adapter.ps1', 'lib/agent-audit-core.sh', 'lib/agent-audit-core.ps1', 'lib/seal.sh', 'lib/seal.ps1')) {
         # teardown has no staging dir (McHooksStage empty); Source is unused there, and Join-Path rejects an empty -Path.
         $src = if ($script:McHooksStage) { Join-Path $script:McHooksStage $rel } else { '' }
         [pscustomobject]@{ Key = "hook:$rel"; Source = $src; Target = (Join-Path $HooksTarget $rel) }
+    }
+    if ((-not $script:McHooksStage) -or (Test-Path -LiteralPath (Join-Path $script:McHooksStage 'recipient.pem') -PathType Leaf)) {
+        $src = if ($script:McHooksStage) { Join-Path $script:McHooksStage 'recipient.pem' } else { '' }
+        [pscustomobject]@{ Key = 'hook:recipient.pem'; Source = $src; Target = (Join-Path $HooksTarget 'recipient.pem') }
     }
 }
 

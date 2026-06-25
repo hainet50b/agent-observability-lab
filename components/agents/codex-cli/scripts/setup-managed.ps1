@@ -11,7 +11,9 @@ param(
     [string]$UserPromptEnabled = '',
     [string]$UserPromptContent = '',
     [string]$ToolCallEnabled = '',
-    [string]$ToolCallContent = ''
+    [string]$ToolCallContent = '',
+    [string]$SealRecipientsSrc = '',
+    [string]$SealKeyId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,7 +68,8 @@ if ($WithHooks) {
     if (-not $EsUrl) { Write-McFatal '-WithHooks requires -EsUrl (audit hooks need the ES endpoint)' }
     $os = Get-McPlatform
     $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
-    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent | Out-Null
+    $certTarget = (Join-Path $hooksRef 'recipient.pem') -replace '\\', '/'
+    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent $SealRecipientsSrc $SealKeyId $certTarget | Out-Null
     $script:McWithHooks = $true
     # Codex picks windows_managed_dir on Windows and managed_dir on non-Windows, with no
     # fallback (hook_config.rs: managed_dir_for_current_platform). This .ps1 runs on Windows,

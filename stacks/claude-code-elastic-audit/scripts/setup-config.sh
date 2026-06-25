@@ -121,7 +121,8 @@ managed)
     "$components_dir/agents/claude-code/scripts/setup-managed.sh" --with-hooks --es-url "$AUDIT_ES_URL" --es-api-key "$AUDIT_API_KEY" \
       --timeout-ms "$AUDIT_TIMEOUT_MS" \
       --capture-user-prompt-enabled "$AUDIT_UP_ENABLED" --capture-user-prompt-content "$AUDIT_UP_CONTENT" \
-      --capture-tool-call-enabled "$AUDIT_TC_ENABLED" --capture-tool-call-content "$AUDIT_TC_CONTENT"
+      --capture-tool-call-enabled "$AUDIT_TC_ENABLED" --capture-tool-call-content "$AUDIT_TC_CONTENT" \
+      --seal-recipients-src "$SEAL_SRC" --seal-key-id "$SEAL_KEY_ID"
   fi
   ;;
 *)

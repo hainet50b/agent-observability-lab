@@ -11,7 +11,9 @@ param(
     [string]$UserPromptEnabled = '',
     [string]$UserPromptContent = '',
     [string]$ToolCallEnabled = '',
-    [string]$ToolCallContent = ''
+    [string]$ToolCallContent = '',
+    [string]$SealRecipientsSrc = '',
+    [string]$SealKeyId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,7 +67,8 @@ if ($WithHooks) {
     if (-not $EsUrl) { Write-McFatal '--with-hooks requires -EsUrl (audit hooks need the ES endpoint)' }
     $os = Get-McPlatform
     $hooksTarget = Join-Path (Get-McManagedRoot $os) 'hooks'
-    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent | Out-Null
+    $certTarget = (Join-Path $hooksTarget 'recipient.pem') -replace '\\', '/'
+    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent $SealRecipientsSrc $SealKeyId $certTarget | Out-Null
     $entryTarget = Join-Path $hooksTarget 'agent-audit.ps1'
     $confTarget = Join-Path $hooksTarget 'agent-audit.conf'
     $hookTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'hook.template.json'

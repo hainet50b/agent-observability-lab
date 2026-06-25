@@ -124,7 +124,8 @@ switch ($Scope) {
                 -UserPromptEnabled $Conf['agent_audit.capture.user_prompt.enabled'] `
                 -UserPromptContent $Conf['agent_audit.capture.user_prompt.content'] `
                 -ToolCallEnabled $Conf['agent_audit.capture.tool_call.enabled'] `
-                -ToolCallContent $Conf['agent_audit.capture.tool_call.content']
+                -ToolCallContent $Conf['agent_audit.capture.tool_call.content'] `
+                -SealRecipientsSrc $SealSrc -SealKeyId $SealKeyId
         }
     }
     default {
