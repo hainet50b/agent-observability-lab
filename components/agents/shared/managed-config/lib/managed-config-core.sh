@@ -269,13 +269,13 @@ managed_config::stage_hooks() {
   [ -f "$conf_template" ] || managed_config::die "conf template not found: $conf_template"
   hooks_stage=$(mktemp -d) || managed_config::die "could not create temp staging dir"
   mkdir -p "$hooks_stage/lib"
-  cp "$hooks_src/agent-audit.sh" "$hooks_src/agent-audit.ps1" "$hooks_stage/" ||
-    managed_config::die "could not stage hook entry scripts"
-  cp "$hooks_src/lib/adapter.sh" "$hooks_src/lib/adapter.ps1" "$hooks_stage/lib/" ||
+  cp "$hooks_src/agent-audit.sh" "$hooks_stage/" ||
+    managed_config::die "could not stage hook entry script"
+  cp "$hooks_src/lib/adapter.sh" "$hooks_stage/lib/" ||
     managed_config::die "could not stage hook adapter"
-  cp "$core_src/agent-audit-core.sh" "$core_src/agent-audit-core.ps1" "$hooks_stage/lib/" ||
+  cp "$core_src/agent-audit-core.sh" "$hooks_stage/lib/" ||
     managed_config::die "could not stage hook core"
-  cp "$core_src/seal.sh" "$core_src/seal.ps1" "$hooks_stage/lib/" ||
+  cp "$core_src/seal.sh" "$hooks_stage/lib/" ||
     managed_config::die "could not stage seal helper"
   [ -n "$seal_src" ] && {
     cp "$seal_src" "$hooks_stage/recipient.pem" ||
@@ -299,9 +299,8 @@ managed_config::stage_hooks() {
 
 managed_config::hook_manifest_lines() {
   local hooks_target=$1 rel
-  for rel in agent-audit.sh agent-audit.ps1 agent-audit.conf \
-    lib/adapter.sh lib/adapter.ps1 lib/agent-audit-core.sh lib/agent-audit-core.ps1 \
-    lib/seal.sh lib/seal.ps1; do
+  for rel in agent-audit.sh agent-audit.conf \
+    lib/adapter.sh lib/agent-audit-core.sh lib/seal.sh; do
     printf '%s\t%s\t%s\n' "hook:$rel" "$hooks_stage/$rel" "$hooks_target/$rel"
   done
   if [ -z "$hooks_stage" ] || [ -f "$hooks_stage/recipient.pem" ]; then

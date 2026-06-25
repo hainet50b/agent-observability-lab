@@ -191,10 +191,10 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
     if (-not (Test-Path -LiteralPath $confTemplate -PathType Leaf)) { Write-McFatal "conf template not found: $confTemplate" }
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ('mc-hooks-' + [System.IO.Path]::GetRandomFileName())
     New-Item -ItemType Directory -Force -Path (Join-Path $stage 'lib') | Out-Null
-    Copy-Item -LiteralPath (Join-Path $hooksSrc 'agent-audit.sh'), (Join-Path $hooksSrc 'agent-audit.ps1') -Destination $stage -Force
-    Copy-Item -LiteralPath (Join-Path $hooksSrc 'lib/adapter.sh'), (Join-Path $hooksSrc 'lib/adapter.ps1') -Destination (Join-Path $stage 'lib') -Force
-    Copy-Item -LiteralPath (Join-Path $coreSrc 'agent-audit-core.sh'), (Join-Path $coreSrc 'agent-audit-core.ps1') -Destination (Join-Path $stage 'lib') -Force
-    Copy-Item -LiteralPath (Join-Path $coreSrc 'seal.sh'), (Join-Path $coreSrc 'seal.ps1') -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $hooksSrc 'agent-audit.ps1') -Destination $stage -Force
+    Copy-Item -LiteralPath (Join-Path $hooksSrc 'lib/adapter.ps1') -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $coreSrc 'agent-audit-core.ps1') -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $coreSrc 'seal.ps1') -Destination (Join-Path $stage 'lib') -Force
     $sealRecipientsConf = ''
     if ($SealRecipientsSrc) {
         Copy-Item -LiteralPath $SealRecipientsSrc -Destination (Join-Path $stage 'recipient.pem') -Force
@@ -216,7 +216,7 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
 }
 
 function Get-McHookManifestItem($HooksTarget) {
-    foreach ($rel in @('agent-audit.sh', 'agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.sh', 'lib/adapter.ps1', 'lib/agent-audit-core.sh', 'lib/agent-audit-core.ps1', 'lib/seal.sh', 'lib/seal.ps1')) {
+    foreach ($rel in @('agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.ps1', 'lib/agent-audit-core.ps1', 'lib/seal.ps1')) {
         # teardown has no staging dir (McHooksStage empty); Source is unused there, and Join-Path rejects an empty -Path.
         $src = if ($script:McHooksStage) { Join-Path $script:McHooksStage $rel } else { '' }
         [pscustomobject]@{ Key = "hook:$rel"; Source = $src; Target = (Join-Path $HooksTarget $rel) }

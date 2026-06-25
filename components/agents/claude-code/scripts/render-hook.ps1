@@ -26,10 +26,10 @@ $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
 
 $hooksDst = Join-Path $targetAbs '.claude/hooks'
 New-Item -ItemType Directory -Force -Path (Join-Path $hooksDst 'lib') | Out-Null
-Copy-Item -LiteralPath (Join-Path $HooksSrc 'agent-audit.sh'), (Join-Path $HooksSrc 'agent-audit.ps1') -Destination $hooksDst -Force
-Copy-Item -LiteralPath (Join-Path $HooksSrc 'lib/adapter.sh'), (Join-Path $HooksSrc 'lib/adapter.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
-Copy-Item -LiteralPath (Join-Path $CoreSrc 'agent-audit-core.sh'), (Join-Path $CoreSrc 'agent-audit-core.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
-Copy-Item -LiteralPath (Join-Path $CoreSrc 'seal.sh'), (Join-Path $CoreSrc 'seal.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
+Copy-Item -LiteralPath (Join-Path $HooksSrc 'agent-audit.ps1') -Destination $hooksDst -Force
+Copy-Item -LiteralPath (Join-Path $HooksSrc 'lib/adapter.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
+Copy-Item -LiteralPath (Join-Path $CoreSrc 'agent-audit-core.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
+Copy-Item -LiteralPath (Join-Path $CoreSrc 'seal.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
 $entryAbs = Join-Path $hooksDst 'agent-audit.ps1'
 $conf = Join-Path $targetAbs '.claude/agent-audit.conf'
 

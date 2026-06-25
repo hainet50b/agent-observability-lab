@@ -20,12 +20,10 @@ template="$component_dir/templates/hooks.template.toml"
 # shellcheck source=/dev/null
 . "$component_dir/../shared/config-place/lib/config-place-core.sh"
 
-for hook in "$hooks_src/agent-audit.sh" "$hooks_src/agent-audit.ps1"; do
-  [ -f "$hook" ] || {
-    echo "FAIL: hook not found: $hook" >&2
-    exit 1
-  }
-done
+[ -f "$hooks_src/agent-audit.sh" ] || {
+  echo "FAIL: hook not found: $hooks_src/agent-audit.sh" >&2
+  exit 1
+}
 [ -f "$template" ] || {
   echo "FAIL: template not found: $template" >&2
   exit 1
@@ -37,10 +35,10 @@ mkdir -p "$target_dir/.codex"
 target_abs=$(cd -- "$target_dir" && pwd)
 hooks_dst="$target_abs/.codex/hooks"
 mkdir -p "$hooks_dst/lib"
-cp "$hooks_src/agent-audit.sh" "$hooks_src/agent-audit.ps1" "$hooks_dst/"
-cp "$hooks_src/lib/adapter.sh" "$hooks_src/lib/adapter.ps1" "$hooks_dst/lib/"
-cp "$core_src/agent-audit-core.sh" "$core_src/agent-audit-core.ps1" "$hooks_dst/lib/"
-cp "$core_src/seal.sh" "$core_src/seal.ps1" "$hooks_dst/lib/"
+cp "$hooks_src/agent-audit.sh" "$hooks_dst/"
+cp "$hooks_src/lib/adapter.sh" "$hooks_dst/lib/"
+cp "$core_src/agent-audit-core.sh" "$hooks_dst/lib/"
+cp "$core_src/seal.sh" "$hooks_dst/lib/"
 chmod +x "$hooks_dst/agent-audit.sh"
 agent_audit_sh="$hooks_dst/agent-audit.sh"
 agent_audit_ps1="$hooks_dst/agent-audit.ps1"
