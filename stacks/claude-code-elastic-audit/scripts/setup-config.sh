@@ -43,6 +43,8 @@ while IFS='=' read -r key val; do
   agent_audit.capture.user_prompt.content) AUDIT_UP_CONTENT=$val ;;
   agent_audit.capture.tool_call.enabled) AUDIT_TC_ENABLED=$val ;;
   agent_audit.capture.tool_call.content) AUDIT_TC_CONTENT=$val ;;
+  agent_audit.seal.epoch) AUDIT_SEAL_EPOCH=$val ;;
+  agent_audit.seal.recipients_file) AUDIT_SEAL_RECIPIENTS_FILE=$val ;;
   esac
 done <"$config"
 for kv in \
@@ -57,6 +59,17 @@ for kv in \
     exit 2
   }
 done
+
+repo_root=$(cd -- "$script_dir/../../.." && pwd)
+# shellcheck source=/dev/null
+. "$components_dir/agents/shared/agent-audit/lib/seal-resolve.sh"
+seal_resolved=$(seal_resolve::resolve "$repo_root/sealing/recipients" \
+  "${AUDIT_SEAL_EPOCH:-}" "${AUDIT_SEAL_RECIPIENTS_FILE:-}" "$AUDIT_UP_CONTENT" "$AUDIT_TC_CONTENT")
+SEAL_SRC=${seal_resolved%%$'\t'*}
+SEAL_KEY_ID=${seal_resolved#*$'\t'}
+if [ -n "$SEAL_SRC" ]; then
+  SEAL_SRC=$(cd -- "$(dirname -- "$SEAL_SRC")" && pwd)/$(basename -- "$SEAL_SRC")
+fi
 
 # Optional secret overlay (gitignored): agent_audit.elasticsearch.api_key.
 # Absent file or key -> empty, no error.
@@ -81,7 +94,8 @@ local)
     "$components_dir/agents/claude-code/scripts/teardown-local.sh" "$target" "$AUDIT_ES_URL"
   else
     "$components_dir/agents/claude-code/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
-      "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
+      "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT" \
+      "$AUDIT_ES_URL" "$SEAL_SRC" "$SEAL_KEY_ID"
     "$components_dir/agents/claude-code/scripts/render-mcp.sh" "$target" "$AUDIT_ES_URL"
   fi
   ;;
@@ -94,7 +108,8 @@ project)
     "$components_dir/agents/claude-code/scripts/teardown-local.sh" "$target" "$AUDIT_ES_URL"
   else
     "$components_dir/agents/claude-code/scripts/setup-audit.sh" "$target" "$AUDIT_ES_URL" "$AUDIT_API_KEY" \
-      "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT"
+      "$AUDIT_TIMEOUT_MS" "$AUDIT_UP_ENABLED" "$AUDIT_UP_CONTENT" "$AUDIT_TC_ENABLED" "$AUDIT_TC_CONTENT" \
+      "$AUDIT_ES_URL" "$SEAL_SRC" "$SEAL_KEY_ID"
   fi
   ;;
 managed)

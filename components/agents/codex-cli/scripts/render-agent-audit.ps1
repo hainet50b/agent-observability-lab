@@ -9,7 +9,7 @@ param(
     [Parameter(Mandatory = $true)][string]$ToolCallEnabled,
     [Parameter(Mandatory = $true)][string]$ToolCallContent,
     [string]$MarkerEndpoint = '',
-    [string]$SealRecipientsFile = '',
+    [string]$SealRecipientsSrc = '',
     [string]$SealKeyId = ''
 )
 
@@ -32,6 +32,10 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     exit 1
 }
 
+$targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
+$placedCert = Join-Path $targetAbs '.codex/recipient.pem'
+$sealRecipientsConf = if ($SealRecipientsSrc) { ($placedCert -replace '\\', '/') } else { '' }
+
 $content = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@ES_URL@@', $EsUrl `
     -replace '@@ES_API_KEY@@', $ApiKey `
@@ -40,13 +44,16 @@ $content = (Get-Content -Raw -LiteralPath $Template) `
     -replace '@@CAPTURE_USER_PROMPT_CONTENT@@', $UserPromptContent `
     -replace '@@CAPTURE_TOOL_CALL_ENABLED@@', $ToolCallEnabled `
     -replace '@@CAPTURE_TOOL_CALL_CONTENT@@', $ToolCallContent `
-    -replace '@@SEAL_RECIPIENTS_FILE@@', $SealRecipientsFile `
+    -replace '@@SEAL_RECIPIENTS_FILE@@', $sealRecipientsConf `
     -replace '@@SEAL_KEY_ID@@', $SealKeyId
 
 $tmp = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($tmp, $content, [System.Text.UTF8Encoding]::new($false))
     Set-CpFile 'agent-audit' 'codex-cli' $Marker $tmp $config
+    if ($SealRecipientsSrc) {
+        Set-CpFile 'agent-audit' 'codex-cli' $Marker $SealRecipientsSrc $placedCert
+    }
     Set-CpSelfIgnore 'codex-cli' $Marker (Join-Path $TargetDir '.codex')
 }
 finally {

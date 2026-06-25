@@ -33,6 +33,7 @@ mkdir -p "$hooks_dst/lib"
 cp "$HOOKS_SRC/agent-audit.sh" "$HOOKS_SRC/agent-audit.ps1" "$hooks_dst/"
 cp "$HOOKS_SRC/lib/adapter.sh" "$HOOKS_SRC/lib/adapter.ps1" "$hooks_dst/lib/"
 cp "$CORE_SRC/agent-audit-core.sh" "$CORE_SRC/agent-audit-core.ps1" "$hooks_dst/lib/"
+cp "$CORE_SRC/seal.sh" "$CORE_SRC/seal.ps1" "$hooks_dst/lib/"
 chmod +x "$hooks_dst/agent-audit.sh"
 ENTRY="$hooks_dst/agent-audit.sh"
 

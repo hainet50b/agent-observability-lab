@@ -24,6 +24,7 @@ hooks_owned=0
 for key_target in \
   "settings:$settings" \
   "agent-audit:$target/.claude/agent-audit.conf" \
+  "agent-audit:$target/.claude/recipient.pem" \
   "mcp:$target/.mcp.json" \
   "gitignore:$target/.claude/.gitignore"; do
   key=${key_target%%:*}

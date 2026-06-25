@@ -8,7 +8,9 @@ param(
     [Parameter(Mandatory = $true)][string]$UserPromptContent,
     [Parameter(Mandatory = $true)][string]$ToolCallEnabled,
     [Parameter(Mandatory = $true)][string]$ToolCallContent,
-    [string]$MarkerEndpoint = ''
+    [string]$MarkerEndpoint = '',
+    [string]$SealRecipientsSrc = '',
+    [string]$SealKeyId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,4 +26,5 @@ $Marker = if ($MarkerEndpoint) { $MarkerEndpoint } else { $EsUrl }
 & (Join-Path $ScriptDir 'render-agent-audit.ps1') -EsUrl $EsUrl -TargetDir $TargetDir `
     -ApiKey $ApiKey -TimeoutMs $TimeoutMs `
     -UserPromptEnabled $UserPromptEnabled -UserPromptContent $UserPromptContent `
-    -ToolCallEnabled $ToolCallEnabled -ToolCallContent $ToolCallContent -MarkerEndpoint $Marker
+    -ToolCallEnabled $ToolCallEnabled -ToolCallContent $ToolCallContent -MarkerEndpoint $Marker `
+    -SealRecipientsSrc $SealRecipientsSrc -SealKeyId $SealKeyId

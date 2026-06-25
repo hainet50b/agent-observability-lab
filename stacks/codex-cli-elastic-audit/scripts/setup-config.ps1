@@ -59,6 +59,16 @@ if (Test-Path -LiteralPath $LocalConfig -PathType Leaf) {
     }
 }
 
+$RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../../..')).Path
+. (Join-Path $ComponentsDir 'agents/shared/agent-audit/lib/seal-resolve.ps1')
+$SealResolved = Resolve-SealRecipient -RecipientsRoot (Join-Path $RepoRoot 'sealing/recipients') `
+    -Epoch $Conf['agent_audit.seal.epoch'] -Override $Conf['agent_audit.seal.recipients_file'] `
+    -UpContent $Conf['agent_audit.capture.user_prompt.content'] `
+    -TcContent $Conf['agent_audit.capture.tool_call.content']
+$SealSrc = $SealResolved[0]
+$SealKeyId = $SealResolved[1]
+if ($SealSrc) { $SealSrc = (Resolve-Path -LiteralPath $SealSrc).Path }
+
 switch ($Scope) {
     'local' {
         if ($Target) {
@@ -76,7 +86,8 @@ switch ($Scope) {
                 -UserPromptEnabled $Conf['agent_audit.capture.user_prompt.enabled'] `
                 -UserPromptContent $Conf['agent_audit.capture.user_prompt.content'] `
                 -ToolCallEnabled $Conf['agent_audit.capture.tool_call.enabled'] `
-                -ToolCallContent $Conf['agent_audit.capture.tool_call.content']
+                -ToolCallContent $Conf['agent_audit.capture.tool_call.content'] `
+                -SealRecipientsSrc $SealSrc -SealKeyId $SealKeyId
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/render-mcp.ps1') -TargetDir $Target -Endpoint $Conf['agent_audit.elasticsearch.url']
             & (Join-Path $ComponentsDir 'agents/codex-cli/scripts/link-auth.ps1') -CodexHome (Join-Path $Target '.codex') -Endpoint $Conf['agent_audit.elasticsearch.url']
         }
@@ -96,7 +107,8 @@ switch ($Scope) {
                 -UserPromptEnabled $Conf['agent_audit.capture.user_prompt.enabled'] `
                 -UserPromptContent $Conf['agent_audit.capture.user_prompt.content'] `
                 -ToolCallEnabled $Conf['agent_audit.capture.tool_call.enabled'] `
-                -ToolCallContent $Conf['agent_audit.capture.tool_call.content']
+                -ToolCallContent $Conf['agent_audit.capture.tool_call.content'] `
+                -SealRecipientsSrc $SealSrc -SealKeyId $SealKeyId
         }
     }
     'managed' {

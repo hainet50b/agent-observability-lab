@@ -13,7 +13,7 @@ tool_call_content=${8:-}
 # stays the ES URL regardless); a caller sharing one home across concerns passes
 # a unified value so every bundle file carries the same marker.
 marker_endpoint=${9:-$es_url}
-seal_recipients_file=${10:-}
+seal_recipients_src=${10:-}
 seal_key_id=${11:-}
 
 if [ -z "$es_url" ] || [ -z "$target_dir" ] || [ -z "$timeout_ms" ] ||
@@ -36,6 +36,11 @@ template="$component_dir/templates/agent-audit.template.conf"
   exit 1
 }
 
+target_abs=$(cd -- "$target_dir" && pwd)
+placed_cert="$target_abs/.codex/recipient.pem"
+seal_recipients_conf=""
+[ -n "$seal_recipients_src" ] && seal_recipients_conf=$placed_cert
+
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 sed \
@@ -46,9 +51,11 @@ sed \
   -e "s#@@CAPTURE_USER_PROMPT_CONTENT@@#$user_prompt_content#" \
   -e "s#@@CAPTURE_TOOL_CALL_ENABLED@@#$tool_call_enabled#" \
   -e "s#@@CAPTURE_TOOL_CALL_CONTENT@@#$tool_call_content#" \
-  -e "s#@@SEAL_RECIPIENTS_FILE@@#$seal_recipients_file#" \
+  -e "s#@@SEAL_RECIPIENTS_FILE@@#$seal_recipients_conf#" \
   -e "s#@@SEAL_KEY_ID@@#$seal_key_id#" \
   "$template" >"$tmp"
 
 config_place::place_file 'agent-audit' 'codex-cli' "$marker_endpoint" "$tmp" "$config"
+[ -n "$seal_recipients_src" ] &&
+  config_place::place_file 'agent-audit' 'codex-cli' "$marker_endpoint" "$seal_recipients_src" "$placed_cert"
 config_place::place_self_ignore 'codex-cli' "$marker_endpoint" "$target_dir/.codex"
