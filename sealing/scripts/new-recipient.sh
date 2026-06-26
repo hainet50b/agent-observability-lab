@@ -6,8 +6,8 @@
 #            seal.key_id stored cleartext alongside every body sealed to it.
 #
 # Emits (relative to the sealing/ directory):
-#   recipients/<epoch>/recipient.pem   public cert, PEM  — Linux/macOS edges
-#   recipients/<epoch>/recipient.cer   public cert, DER  — Windows edges
+#   recipients/<epoch>/recipient.pem   public cert, PEM  — distributed to every edge (Linux/macOS/Windows)
+#   recipients/<epoch>/recipient.cer   public cert, DER  — legacy, not distributed (Protect-CmsMessage aside)
 #   private/<epoch>/private.key        PRIVATE key — guard at the center, never distribute
 
 set -euo pipefail
@@ -58,8 +58,8 @@ chmod 600 "$key_file" 2>/dev/null || true
 log ""
 log "issued epoch '$epoch':"
 log "  public  (distribute via the config bundle):"
-log "    $pem_file   # Linux/macOS edges"
-log "    $cer_file   # Windows edges"
+log "    $pem_file   # every edge (Linux/macOS/Windows)"
+log "    $cer_file   # legacy DER, not distributed"
 log "  private (guard at the center, NEVER distribute):"
 log "    $key_file"
 log ""
