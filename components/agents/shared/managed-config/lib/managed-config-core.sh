@@ -316,8 +316,12 @@ managed_config::place() {
   local manifest_lines
   manifest_lines=$(managed_config::manifest "$os" "$@")
   [ -n "$manifest_lines" ] || managed_config::die "manifest empty for os '$os' — nothing to place"
-  while IFS=$'\t' read -r key source target; do
-    [ -n "${key:-}" ] || continue
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key=${line%%$'\t'*}
+    rest=${line#*$'\t'}
+    source=${rest%%$'\t'*}
+    target=${rest##*$'\t'}
     managed_config::place_one "$key" "$source" "$target"
   done <<EOF
 $manifest_lines
@@ -332,8 +336,10 @@ managed_config::teardown() {
   local manifest_lines
   manifest_lines=$(managed_config::manifest "$os" "$@")
   [ -n "$manifest_lines" ] || managed_config::die "manifest empty for os '$os' — nothing to remove"
-  while IFS=$'\t' read -r key _ target; do
-    [ -n "${key:-}" ] || continue
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key=${line%%$'\t'*}
+    target=${line##*$'\t'}
     managed_config::teardown_one "$key" "$target"
   done <<EOF
 $manifest_lines
