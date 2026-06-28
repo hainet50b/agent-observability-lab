@@ -31,7 +31,7 @@ Copy-Item -LiteralPath (Join-Path $HooksSrc 'lib/adapter.ps1') -Destination (Joi
 Copy-Item -LiteralPath (Join-Path $CoreSrc 'agent-audit-core.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
 Copy-Item -LiteralPath (Join-Path $CoreSrc 'seal.ps1') -Destination (Join-Path $hooksDst 'lib') -Force
 $entryAbs = Join-Path $hooksDst 'agent-audit.ps1'
-$conf = Join-Path $targetAbs '.claude/agent-audit.conf'
+$conf = Join-Path $targetAbs '.claude/hooks/agent-audit.conf'
 
 # Exec form (command=powershell + args) is required on Windows: a command-string
 # hook runs via Git Bash, which can't execute a .ps1 and fail-opens (exit 127).

@@ -59,7 +59,7 @@ Kibana is then at <http://localhost:5601>. The two backend services (`aol-elasti
 `aol-kibana`) are the `elastic-audit` backend — the same local Elasticsearch as the
 telemetry stack, **minus APM Server**. `scripts/setup.sh` runs the post-up bootstrap in one
 shot — provisions the two Agent Audit data streams and their strict index templates, renders
-the hook delivery config to `.codex/agent-audit.conf` and registers the audit hooks as inline
+the hook delivery config to `.codex/hooks/agent-audit.conf` and registers the audit hooks as inline
 `[hooks]` in `.codex/config.toml` (both in this directory), and imports the Agent Audit Kibana
 **data views** and **saved searches**. Steps are idempotent / create-if-absent, so re-run it
 any time.
@@ -250,5 +250,5 @@ owns only agent-runtime config — the single audit-hook entry `hooks/agent-audi
 its per-agent `hooks/lib/adapter.{sh,ps1}` (the shared hook core lives once under
 `../../components/agents/shared/agent-audit/lib/`), the hook delivery-config template, and the
 render scripts. `setup-config` renders the delivery config into this directory's gitignored
-`.codex/agent-audit.conf` and registers the stack-local hooks as inline `[hooks]` (plus the
+`.codex/hooks/agent-audit.conf` and registers the stack-local hooks as inline `[hooks]` (plus the
 Elasticsearch MCP) in `.codex/config.toml`.

@@ -27,7 +27,7 @@ fi
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 COMPONENT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATE="$COMPONENT_DIR/templates/agent-audit.template.conf"
-config="$target_dir/.claude/agent-audit.conf"
+config="$target_dir/.claude/hooks/agent-audit.conf"
 # shellcheck source=/dev/null
 . "$COMPONENT_DIR/../shared/config-place/lib/config-place-core.sh"
 
@@ -36,9 +36,9 @@ config="$target_dir/.claude/agent-audit.conf"
   exit 1
 }
 
-mkdir -p "$target_dir/.claude"
+mkdir -p "$target_dir/.claude/hooks"
 target_abs=$(cd -- "$target_dir" && pwd)
-placed_cert="$target_abs/.claude/recipient.pem"
+placed_cert="$target_abs/.claude/hooks/recipient.pem"
 seal_recipients_conf=""
 [ -n "$seal_recipients_src" ] && seal_recipients_conf=$placed_cert
 

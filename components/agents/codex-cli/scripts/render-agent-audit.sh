@@ -23,7 +23,7 @@ if [ -z "$es_url" ] || [ -z "$target_dir" ] || [ -z "$timeout_ms" ] ||
   exit 2
 fi
 
-config="$target_dir/.codex/agent-audit.conf"
+config="$target_dir/.codex/hooks/agent-audit.conf"
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)
@@ -36,9 +36,9 @@ template="$component_dir/templates/agent-audit.template.conf"
   exit 1
 }
 
-mkdir -p "$target_dir/.codex"
+mkdir -p "$target_dir/.codex/hooks"
 target_abs=$(cd -- "$target_dir" && pwd)
-placed_cert="$target_abs/.codex/recipient.pem"
+placed_cert="$target_abs/.codex/hooks/recipient.pem"
 seal_recipients_conf=""
 [ -n "$seal_recipients_src" ] && seal_recipients_conf=$placed_cert
 

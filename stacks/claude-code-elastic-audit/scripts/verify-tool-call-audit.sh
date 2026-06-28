@@ -27,7 +27,7 @@ command -v jq >/dev/null 2>&1 || skip "jq not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
 [ -f "$SETTINGS" ] || skip "no .claude/settings.local.json — run scripts/setup.sh first"
-[ -f "$CLAUDE_HOME_DIR/agent-audit.conf" ] || skip "no .claude/agent-audit.conf — run scripts/setup.sh first"
+[ -f "$CLAUDE_HOME_DIR/hooks/agent-audit.conf" ] || skip "no .claude/hooks/agent-audit.conf — run scripts/setup.sh first"
 jq -e '.hooks.PostToolUse' "$SETTINGS" >/dev/null 2>&1 ||
   fail "no hooks.PostToolUse registered in .claude/settings.local.json"
 

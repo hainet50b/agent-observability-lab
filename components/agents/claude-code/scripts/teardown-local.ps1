@@ -20,8 +20,8 @@ if ((Test-Path -LiteralPath $settingsMarker -PathType Leaf) -and
 
 $targets = @(
     @{ Key = 'settings'; Target = $settings },
-    @{ Key = 'agent-audit'; Target = (Join-Path $TargetDir '.claude/agent-audit.conf') },
-    @{ Key = 'agent-audit'; Target = (Join-Path $TargetDir '.claude/recipient.pem') },
+    @{ Key = 'agent-audit'; Target = (Join-Path $TargetDir '.claude/hooks/agent-audit.conf') },
+    @{ Key = 'agent-audit'; Target = (Join-Path $TargetDir '.claude/hooks/recipient.pem') },
     @{ Key = 'mcp'; Target = (Join-Path $TargetDir '.mcp.json') },
     @{ Key = 'gitignore'; Target = (Join-Path $TargetDir '.claude/.gitignore') }
 )

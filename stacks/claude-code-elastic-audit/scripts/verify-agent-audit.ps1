@@ -24,7 +24,7 @@ try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not r
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
 if (-not (Test-Path -LiteralPath $Settings)) { Skip 'no .claude/settings.local.json — run scripts/setup.ps1 first' }
-if (-not (Test-Path -LiteralPath (Join-Path $ClaudeHome 'agent-audit.conf'))) { Skip 'no .claude/agent-audit.conf — run scripts/setup.ps1 first' }
+if (-not (Test-Path -LiteralPath (Join-Path $ClaudeHome 'hooks/agent-audit.conf'))) { Skip 'no .claude/hooks/agent-audit.conf — run scripts/setup.ps1 first' }
 if (-not ((Get-Content -Raw -LiteralPath $Settings | ConvertFrom-Json).hooks.UserPromptSubmit)) {
     Fail 'no hooks.UserPromptSubmit registered in .claude/settings.local.json'
 }

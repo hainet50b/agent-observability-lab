@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $config = Join-Path $TargetDir '.codex/config.toml'
-$AgentAuditConf = Join-Path (Join-Path $TargetDir '.codex') 'agent-audit.conf'
+$AgentAuditConf = Join-Path (Join-Path $TargetDir '.codex/hooks') 'agent-audit.conf'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir

@@ -26,7 +26,7 @@ command -v jq >/dev/null 2>&1 || skip "jq not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
 [ -f "$CODEX_HOME_DIR/config.toml" ] || skip "no .codex/config.toml — run scripts/setup.sh first"
-[ -f "$CODEX_HOME_DIR/agent-audit.conf" ] || skip "no .codex/agent-audit.conf — run scripts/setup.sh first"
+[ -f "$CODEX_HOME_DIR/hooks/agent-audit.conf" ] || skip "no .codex/hooks/agent-audit.conf — run scripts/setup.sh first"
 grep -qF '[[hooks.PostToolUse]]' "$CODEX_HOME_DIR/config.toml" ||
   fail "no [[hooks.PostToolUse]] registered in .codex/config.toml"
 
@@ -67,7 +67,7 @@ payload=$(jq -nc --arg cid "$cid" '{
   permission_mode: "auto"
 }')
 
-printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --stream tool_call --config "$CODEX_HOME_DIR/agent-audit.conf" || true
+printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --stream tool_call --config "$CODEX_HOME_DIR/hooks/agent-audit.conf" || true
 
 es_count_cid() {
   curl -s "$ES_URL/$DATA_STREAM/_count?ignore_unavailable=true&allow_no_indices=true" \

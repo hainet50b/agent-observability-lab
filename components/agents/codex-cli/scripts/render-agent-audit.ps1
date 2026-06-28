@@ -20,7 +20,7 @@ $ErrorActionPreference = 'Stop'
 # a unified value so every bundle file carries the same marker.
 $Marker = if ($MarkerEndpoint) { $MarkerEndpoint } else { $EsUrl }
 
-$config = Join-Path $TargetDir '.codex/agent-audit.conf'
+$config = Join-Path $TargetDir '.codex/hooks/agent-audit.conf'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $ComponentDir = Split-Path -Parent $ScriptDir
@@ -32,9 +32,9 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
     exit 1
 }
 
-New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.codex') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.codex/hooks') | Out-Null
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
-$placedCert = Join-Path $targetAbs '.codex/recipient.pem'
+$placedCert = Join-Path $targetAbs '.codex/hooks/recipient.pem'
 $sealRecipientsConf = if ($SealRecipientsSrc) { ($placedCert -replace '\\', '/') } else { '' }
 
 $content = (Get-Content -Raw -LiteralPath $Template) `

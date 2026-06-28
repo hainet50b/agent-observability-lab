@@ -29,11 +29,11 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
 # a unified value so every bundle file carries the same marker.
 $Marker = if ($MarkerEndpoint) { $MarkerEndpoint } else { $EsUrl }
 
-$config = Join-Path $TargetDir '.claude/agent-audit.conf'
+$config = Join-Path $TargetDir '.claude/hooks/agent-audit.conf'
 
-New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.claude') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $TargetDir '.claude/hooks') | Out-Null
 $targetAbs = (Resolve-Path -LiteralPath $TargetDir).Path
-$placedCert = Join-Path $targetAbs '.claude/recipient.pem'
+$placedCert = Join-Path $targetAbs '.claude/hooks/recipient.pem'
 $sealRecipientsConf = if ($SealRecipientsSrc) { ($placedCert -replace '\\', '/') } else { '' }
 
 $content = (Get-Content -Raw -LiteralPath $Template) `

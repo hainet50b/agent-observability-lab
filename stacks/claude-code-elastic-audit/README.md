@@ -63,7 +63,7 @@ Kibana is then at <http://localhost:5601>. The two backend services (`aol-elasti
 telemetry stack, **minus APM Server**. `scripts/setup.sh` runs the post-up bootstrap in one
 shot — provisions the Agent Audit data streams and their strict index templates, registers
 the `UserPromptSubmit` + `PostToolUse` hooks in `.claude/settings.local.json`, renders the
-hook delivery config to `.claude/agent-audit.conf`, writes the Elasticsearch MCP to
+hook delivery config to `.claude/hooks/agent-audit.conf`, writes the Elasticsearch MCP to
 `.mcp.json` (all in this directory), and imports the Agent Audit Kibana **data views** and
 **saved searches**. Steps are idempotent / create-if-absent, so re-run it any time.
 
@@ -244,5 +244,5 @@ audit-hook entry `hooks/agent-audit.{sh,ps1}` over its per-agent `hooks/lib/adap
 hook delivery-config template, and the render scripts (`render-hook`, `render-agent-audit`,
 `render-mcp`). `setup-config` registers the hooks in this directory's gitignored
 `.claude/settings.local.json` (each command pointed at the absolute `agent-audit.conf` via
-`--config`), renders the delivery config into `.claude/agent-audit.conf`, and writes
+`--config`), renders the delivery config into `.claude/hooks/agent-audit.conf`, and writes
 `.mcp.json`.

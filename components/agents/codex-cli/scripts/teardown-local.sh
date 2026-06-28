@@ -23,8 +23,8 @@ hooks_owned=0
 
 for key_target in \
   "config:$config" \
-  "agent-audit:$target/.codex/agent-audit.conf" \
-  "agent-audit:$target/.codex/recipient.pem" \
+  "agent-audit:$target/.codex/hooks/agent-audit.conf" \
+  "agent-audit:$target/.codex/hooks/recipient.pem" \
   "auth:$target/.codex/auth.json" \
   "gitignore:$target/.codex/.gitignore"; do
   key=${key_target%%:*}

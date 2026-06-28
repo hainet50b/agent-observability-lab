@@ -10,7 +10,7 @@ if [ -z "$target_dir" ] || [ -z "$endpoint" ]; then
 fi
 
 config="$target_dir/.codex/config.toml"
-agent_audit_conf="$target_dir/.codex/agent-audit.conf"
+agent_audit_conf="$target_dir/.codex/hooks/agent-audit.conf"
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 component_dir=$(cd -- "$script_dir/.." && pwd)

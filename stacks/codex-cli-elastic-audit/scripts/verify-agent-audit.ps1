@@ -23,7 +23,7 @@ try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not r
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
 if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml — run scripts/setup.ps1 first' }
-if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'agent-audit.conf'))) { Skip 'no .codex/agent-audit.conf — run scripts/setup.ps1 first' }
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'hooks/agent-audit.conf'))) { Skip 'no .codex/hooks/agent-audit.conf — run scripts/setup.ps1 first' }
 if (-not (Select-String -SimpleMatch -Quiet -Pattern '[[hooks.UserPromptSubmit]]' -LiteralPath (Join-Path $CodexHome 'config.toml'))) {
     Fail 'no [[hooks.UserPromptSubmit]] registered in .codex/config.toml'
 }
