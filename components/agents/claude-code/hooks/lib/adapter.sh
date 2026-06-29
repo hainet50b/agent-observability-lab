@@ -6,10 +6,10 @@ agent_name='claude-code'
 CLAUDE_CONFIG=${CLAUDE_CONFIG:-$HOME/.claude.json}
 
 derive_runtime_identity() {
-  _ns=$(date -u +%N 2>/dev/null)
-  case $_ns in
-  '' | *[!0-9]*) ts=$(date -u +%Y-%m-%dT%H:%M:%SZ) ;;
-  *) ts=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ) ;;
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  _ms=$(date -u +%3N 2>/dev/null)
+  case $_ms in
+  [0-9][0-9][0-9]) ts="${ts%Z}.${_ms}Z" ;;
   esac
 
   user_name=${USER:-${USERNAME:-$(id -un 2>/dev/null || echo "")}}
