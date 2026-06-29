@@ -19,13 +19,20 @@ seal::recipient_ok() {
   [ "$(seal::cn_epoch "$recipients_file")" = "$expected" ]
 }
 
+seal::encrypt() {
+  local recipients_file=$1
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$SEAL_TIMEOUT_SECS" \
+      openssl cms -encrypt -aes256 -recip "$recipients_file" -binary -outform DER
+  else
+    openssl cms -encrypt -aes256 -recip "$recipients_file" -binary -outform DER
+  fi
+}
+
 seal::body() {
   local recipients_file=$1 compress_min_bytes=${2:-0} body_bytes=${3:-0}
   [ -n "$recipients_file" ] && [ -f "$recipients_file" ] || return 1
   command -v openssl >/dev/null 2>&1 || return 1
-
-  local -a runner=()
-  command -v timeout >/dev/null 2>&1 && runner=(timeout "$SEAL_TIMEOUT_SECS")
 
   local out
   if [ "$compress_min_bytes" -gt 0 ] && [ "$body_bytes" -ge "$compress_min_bytes" ] && command -v gzip >/dev/null 2>&1; then
@@ -35,7 +42,7 @@ seal::body() {
         printf '\x01'
         gzip -c
       } |
-        "${runner[@]}" openssl cms -encrypt -aes256 -recip "$recipients_file" -binary -outform DER |
+        seal::encrypt "$recipients_file" |
         openssl base64 -A
     ) || return 1
   else
@@ -45,7 +52,7 @@ seal::body() {
         printf '\x00'
         cat
       } |
-        "${runner[@]}" openssl cms -encrypt -aes256 -recip "$recipients_file" -binary -outform DER |
+        seal::encrypt "$recipients_file" |
         openssl base64 -A
     ) || return 1
   fi
