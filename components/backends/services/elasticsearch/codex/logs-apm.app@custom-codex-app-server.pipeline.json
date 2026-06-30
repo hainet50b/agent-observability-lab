@@ -1,5 +1,5 @@
 {
-  "description": "Codex Desktop / app-server (service.name codex-app-server) app-logs forwarder: dispatched by the logs-apm.app@custom router, forwards to the shared logs-apm.app@custom-codex logic so Desktop redacts/drops identically to the CLI.",
+  "description": "Codex Desktop (codex-app-server) app-logs forwarder → logs-apm.app@custom-codex.",
   "processors": [
     { "pipeline": { "name": "logs-apm.app@custom-codex" } }
   ]

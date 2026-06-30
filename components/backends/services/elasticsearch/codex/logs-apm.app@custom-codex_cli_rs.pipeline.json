@@ -1,5 +1,5 @@
 {
-  "description": "Codex CLI (service.name codex_cli_rs) app-logs forwarder: dispatched by the logs-apm.app@custom router, forwards to the shared logs-apm.app@custom-codex logic so every Codex surface redacts/drops identically.",
+  "description": "Codex CLI (codex_cli_rs) app-logs forwarder → logs-apm.app@custom-codex.",
   "processors": [
     { "pipeline": { "name": "logs-apm.app@custom-codex" } }
   ]

@@ -1,5 +1,5 @@
 {
-  "description": "Codex traces logic shared by every Codex surface: drops streaming spans. Reached via the per-service.name forwarders, each of which first reroutes to its own per-surface namespace and then calls this for the common drop.",
+  "description": "Shared Codex traces logic: drop streaming spans.",
   "processors": [
     { "drop": { "if": "ctx.span?.name == 'receiving' || ctx.span?.name == 'handle_responses'" } }
   ]

@@ -1,5 +1,5 @@
 {
-  "description": "Codex CLI (service.name codex_cli_rs) traces forwarder: first calls the shared traces-apm@custom-codex for the common streaming-span drop, then reroutes survivors to its per-surface namespace agents_codex_cli_rs. reroute is terminal, so it must come last (a drop after it would be skipped).",
+  "description": "Codex CLI (codex_cli_rs) traces forwarder: shared drop, then reroute to agents_codex_cli_rs (reroute last — it is terminal).",
   "processors": [
     { "pipeline": { "name": "traces-apm@custom-codex" } },
     { "reroute": { "namespace": "agents_codex_cli_rs" } }
