@@ -1,6 +1,6 @@
 {
   "index_patterns": [
-    "metrics-apm.app.codex_cli_rs-*"
+    "metrics-apm.app.codex_*-*"
   ],
   "priority": 250,
   "data_stream": {},
