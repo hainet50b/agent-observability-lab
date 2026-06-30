@@ -224,8 +224,8 @@ See [Verify the pipeline](#verify-the-pipeline) below.
 
 ### 4. See the telemetry
 
-The Codex **data views** — **Codex CLI — Metrics**, **Codex CLI — Events**, and **Codex CLI
-— Traces** — plus the curated saved searches are imported by `scripts/setup.sh` (step 1).
+The Codex **data views** — **Codex — Metrics**, **Codex — Events**, and **Codex —
+Traces** — plus the curated saved searches are imported by `scripts/setup.sh` (step 1).
 Open Discover, pick a data view from the selector or open a saved search from the Open menu.
 (A dashboard is still deferred — see [What's deferred](#whats-deferred); the Traces view and
 traces-based searches stay empty until a Codex session emits spans after trace routing is
@@ -271,7 +271,7 @@ endpoints with `ES_URL` / `APM_OTLP_URL`.
 | --- | --- | --- |
 | `metrics-apm.app.codex_cli_rs-default` / `logs-apm.app.codex_cli_rs-default` | per-service data streams | emitted `service.name` is `codex_cli_rs` |
 | `traces-apm-agents_codex_cli_rs` | per-agent trace data stream | spans isolated by the ingest pipelines |
-| Data views | Codex CLI — Metrics / Events / Traces | imported by `setup.sh` |
+| Data views | Codex — Metrics / Events / Traces | imported by `setup.sh` |
 | Saved searches | curated Codex searches | exclude the per-delta `codex.websocket_event` wrappers at query time |
 | APM service | `codex_cli_rs` | listed once telemetry arrives |
 
