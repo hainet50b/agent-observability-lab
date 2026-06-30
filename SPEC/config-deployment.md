@@ -28,7 +28,7 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 
 - **`local`** — user-scope deployment to the **stack's own directory**. Full bundle **including** the Elasticsearch MCP. For a Codex stack it also links the user's `~/.codex/auth.json` into the relocated `CODEX_HOME` (`link-auth`, a `local`-only convenience: symlink, or copy with a staleness warning; no-op if the source is absent or the target exists), so the provider-identity source is present without a fresh `codex login`. (Claude has no auth-link.)
 - **`project`** — user-scope deployment into an arbitrary directory (a user's real project, to see what telemetry/audit their everyday work would emit). Full bundle **except** the MCP — a local-only lab-exploration convenience, not injected into foreign projects, keeping their footprint minimal.
-- **`managed`** — org-enforced placement at machine-global system paths, highest precedence. The **deploy-only, human-gated, never-overwrite** model in `SPEC/claude-code-managed-config.md` and `SPEC/codex-cli-managed-config.md` "Placement in this lab" (interactive, no `--yes`, non-TTY aborts, fail-loud, sidecar provenance marker, mandatory teardown). Dangerous and manual by design. A managed deploy can carry **telemetry, hooks, or both** — see [Managed materialize](#managed-materialize).
+- **`managed`** — org-enforced placement at machine-global system paths, highest precedence. The **deploy-only, human-gated, never-overwrite** model in `SPEC/claude-code-managed-config.md` and `SPEC/codex-managed-config.md` "Placement in this lab" (interactive, no `--yes`, non-TTY aborts, fail-loud, sidecar provenance marker, mandatory teardown). Dangerous and manual by design. A managed deploy can carry **telemetry, hooks, or both** — see [Managed materialize](#managed-materialize).
 
 ## Placement is marker-aware and fail-if-foreign — across all scopes
 
@@ -71,9 +71,9 @@ Each stack's `setup.conf` is the single source for the values the setup scripts 
 | Plane | Key(s) | Stacks |
 |---|---|---|
 | **Control plane** | `elasticsearch.url`, `kibana.url` — endpoints `setup-backend` waits on / loads assets into. **The Elasticsearch MCP reuses `elasticsearch.url`** (no separate MCP key) | all |
-| **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | `claude-code-elastic`, `codex-cli-elastic` |
+| **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | `claude-code-elastic`, `codex-elastic` |
 | | `telemetry.otel_collector.endpoint` (`:4318`) | `claude-code-otelcol-elastic` |
-| **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | `claude-code-elastic-audit`, `codex-cli-elastic-audit` |
+| **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | `claude-code-elastic-audit`, `codex-elastic-audit` |
 
 `setup-config` builds the three `/v1/{logs,traces,metrics}` URLs from the telemetry OTLP base. The data-plane key names the actual backing service rather than a generic `otlp` (the architecture is already exposed via the control-plane `elasticsearch.url` / `kibana.url`). Audit details: see [`agent-audit.md`](agent-audit.md).
 

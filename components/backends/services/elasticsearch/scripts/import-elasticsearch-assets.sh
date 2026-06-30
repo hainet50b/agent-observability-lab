@@ -19,7 +19,7 @@ fail() {
 command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq >/dev/null 2>&1 || skip "jq not found"
 
-[ "$#" -ge 1 ] || fail "usage: import-elasticsearch-assets.sh <concern>... (e.g. shared codex-cli)"
+[ "$#" -ge 1 ] || fail "usage: import-elasticsearch-assets.sh <concern>... (e.g. shared codex)"
 
 apply_ilm() {
   name=$1 file=$2

@@ -8,7 +8,7 @@ telemetry that agent happens to emit. A new agent is onboarded by **mapping its
 telemetry onto this model** — not by enumerating its event types. This doc is
 that model; the per-agent field detail lives in the telemetry references
 ([`claude-code-telemetry.md`](claude-code-telemetry.md),
-[`codex-cli-telemetry.md`](codex-cli-telemetry.md)) and the exact columns live in
+[`codex-telemetry.md`](codex-telemetry.md)) and the exact columns live in
 the NDJSON and the PRD tasks that ship each search.
 
 ## The model

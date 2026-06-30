@@ -1,0 +1,4 @@
+name: codex-elastic
+
+include:
+  - ../../components/backends/elastic/docker-compose.yml

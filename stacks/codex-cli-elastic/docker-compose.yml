@@ -1,4 +1,0 @@
-name: codex-cli-elastic
-
-include:
-  - ../../components/backends/elastic/docker-compose.yml

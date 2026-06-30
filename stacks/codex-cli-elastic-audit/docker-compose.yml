@@ -1,4 +1,0 @@
-name: codex-cli-elastic-audit
-
-include:
-  - ../../components/backends/elastic-audit/docker-compose.yml

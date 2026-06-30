@@ -26,7 +26,7 @@ logs-agent_audit.tool_call-default
 
 ## Where this runs
 
-The audit data streams are provisioned (strict templates + data streams) and viewed (cross-agent Kibana data views / saved searches) by the **`elastic-audit`** backend — Elasticsearch + Kibana, **no APM Server**, since audit is a direct hook → Elasticsearch write that never uses the OTLP / APM path. It is composed by `<agent>-elastic-audit` stacks (e.g. `codex-cli-elastic-audit`), separate from the telemetry backend (`elastic` / `codex-cli-elastic`): same local Elasticsearch technology, but a separate compose project, separate volumes, and a separate agent home (whose `.codex` carries `config.toml` — the inline `[hooks]` registrations plus the Elasticsearch MCP — and `agent-audit.conf`, but no `[otel]` config). The split keeps each stack's load-bearing set legible; the two stacks are alternatives, not run simultaneously.
+The audit data streams are provisioned (strict templates + data streams) and viewed (cross-agent Kibana data views / saved searches) by the **`elastic-audit`** backend — Elasticsearch + Kibana, **no APM Server**, since audit is a direct hook → Elasticsearch write that never uses the OTLP / APM path. It is composed by `<agent>-elastic-audit` stacks (e.g. `codex-elastic-audit`), separate from the telemetry backend (`elastic` / `codex-elastic`): same local Elasticsearch technology, but a separate compose project, separate volumes, and a separate agent home (whose `.codex` carries `config.toml` — the inline `[hooks]` registrations plus the Elasticsearch MCP — and `agent-audit.conf`, but no `[otel]` config). The split keeps each stack's load-bearing set legible; the two stacks are alternatives, not run simultaneously.
 
 **Asset inventory** (cross-agent, per stream `<s>` ∈ {`user_prompt`, `tool_call`}). ES assets live in `backends/services/elasticsearch/agent-audit/`, Kibana assets in `backends/services/kibana/agent-audit/` — the service component of the runtime that consumes each (see `SPEC.md` "Placement rule"):
 
@@ -65,7 +65,7 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
   "agent_audit": {
     "agent": {
       "provider": "openai",
-      "name": "codex-cli",
+      "name": "codex",
       "account": {
         "id": "...",
         "name": "...",
@@ -104,7 +104,7 @@ Field ownership:
 
 ## Tool call documents
 
-Tool call audit documents in `logs-agent_audit.tool_call-default` record one tool invocation each, captured from the agent's `PostToolUse` hook (which carries both the tool input and its result — Codex CLI and Claude Code both fire it). The canonical shape below shows the Codex provider constants; the only per-agent difference is `agent_audit.agent.provider` / `.name` (`openai` / `codex-cli` for Codex CLI, `anthropic` / `claude-code` for Claude Code):
+Tool call audit documents in `logs-agent_audit.tool_call-default` record one tool invocation each, captured from the agent's `PostToolUse` hook (which carries both the tool input and its result — Codex CLI and Claude Code both fire it). The canonical shape below shows the Codex provider constants; the only per-agent difference is `agent_audit.agent.provider` / `.name` (`openai` / `codex` for Codex, `anthropic` / `claude-code` for Claude Code):
 
 ```json
 {
@@ -114,7 +114,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
   "host": { "name": "...", "hostname": "..." },
   "agent_audit": {
     "agent": {
-      "provider": "openai", "name": "codex-cli",
+      "provider": "openai", "name": "codex",
       "account": { "id": "...", "name": "...", "email": "..." },
       "organization": { "id": "...", "name": "..." }
     },

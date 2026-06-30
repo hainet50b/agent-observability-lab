@@ -25,8 +25,8 @@ Five stacks — three telemetry, two audit. Pick one, follow its README: `docker
 | --- | --- | --- | --- | --- | --- |
 | [`claude-code-elastic`](stacks/claude-code-elastic/) | Claude Code | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |
 | [`claude-code-otelcol-elastic`](stacks/claude-code-otelcol-elastic/) | Claude Code | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.otel_collector.endpoint` (via local Collector) | 9200 / 5601 / 8200 / 4317 / 4318 |
-| [`codex-cli-elastic`](stacks/codex-cli-elastic/) | Codex CLI | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |
+| [`codex-elastic`](stacks/codex-elastic/) | Codex | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |
 | [`claude-code-elastic-audit`](stacks/claude-code-elastic-audit/) | Claude Code | audit | Elasticsearch + Kibana | `agent_audit.*` (direct hook → ES) | 9200 / 5601 |
-| [`codex-cli-elastic-audit`](stacks/codex-cli-elastic-audit/) | Codex CLI | audit | Elasticsearch + Kibana | `agent_audit.*` (direct hook → ES) | 9200 / 5601 |
+| [`codex-elastic-audit`](stacks/codex-elastic-audit/) | Codex | audit | Elasticsearch + Kibana | `agent_audit.*` (direct hook → ES) | 9200 / 5601 |
 
 All five reuse the same fixed `aol-*` container names and host ports — run only one at a time. How config is deployed across the `local` / `project` / `managed` scopes is shared: see [`SPEC/config-deployment.md`](SPEC/config-deployment.md).
