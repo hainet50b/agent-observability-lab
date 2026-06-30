@@ -12,7 +12,7 @@ function Get-CodexProviderIdentity($CodexHome) {
     try {
         $authFile = Join-Path $CodexHome 'auth.json'
         if (-not (Test-Path -LiteralPath $authFile)) { return $r }
-        $auth = Get-Content -Raw -LiteralPath $authFile | ConvertFrom-Json
+        $auth = [System.IO.File]::ReadAllText($authFile) | ConvertFrom-Json
         $r.account_id = $auth.tokens.account_id
         $idToken = $auth.tokens.id_token
         if ($idToken) {

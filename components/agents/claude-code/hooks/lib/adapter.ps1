@@ -15,7 +15,7 @@ function Get-RuntimeIdentity {
     $accountId = $null; $accountName = $null; $accountEmail = $null; $organizationId = $null; $organizationName = $null
     if (Test-Path -LiteralPath $claudeConfig -PathType Leaf) {
         try {
-            $oauth = (Get-Content -Raw -LiteralPath $claudeConfig | ConvertFrom-Json).oauthAccount
+            $oauth = ([System.IO.File]::ReadAllText($claudeConfig) | ConvertFrom-Json).oauthAccount
             if ($oauth) {
                 $accountId = NullIfEmpty $oauth.accountUuid
                 $accountName = NullIfEmpty $oauth.displayName
