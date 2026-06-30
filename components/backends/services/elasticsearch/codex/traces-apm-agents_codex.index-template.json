@@ -1,6 +1,6 @@
 {
   "index_patterns": [
-    "traces-apm-agents_codex_cli_rs*"
+    "traces-apm-agents_codex_*"
   ],
   "priority": 250,
   "data_stream": {},

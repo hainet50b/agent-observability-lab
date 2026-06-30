@@ -1,0 +1,7 @@
+{
+  "description": "Codex Desktop / app-server (service.name codex-app-server) traces forwarder: first calls the shared traces-apm@custom-codex for the common streaming-span drop, then reroutes survivors to its per-surface namespace agents_codex_app_server. reroute is terminal, so it must come last (a drop after it would be skipped).",
+  "processors": [
+    { "pipeline": { "name": "traces-apm@custom-codex" } },
+    { "reroute": { "namespace": "agents_codex_app_server" } }
+  ]
+}
