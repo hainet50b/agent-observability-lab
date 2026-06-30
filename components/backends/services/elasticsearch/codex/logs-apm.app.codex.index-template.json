@@ -1,6 +1,6 @@
 {
   "index_patterns": [
-    "logs-apm.app.codex_cli_rs-*"
+    "logs-apm.app.codex_*-*"
   ],
   "priority": 250,
   "data_stream": {},
@@ -14,7 +14,7 @@
     "logs@custom",
     "logs-apm.app@custom",
     "ecs@mappings",
-    "telemetry.codex_cli_rs@lifecycle"
+    "telemetry.codex@lifecycle"
   ],
   "ignore_missing_component_templates": [
     "logs@custom",

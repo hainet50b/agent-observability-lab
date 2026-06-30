@@ -1,7 +1,0 @@
-{
-  "template": {
-    "settings": {
-      "index.lifecycle.name": "telemetry.codex_cli_rs-policy"
-    }
-  }
-}

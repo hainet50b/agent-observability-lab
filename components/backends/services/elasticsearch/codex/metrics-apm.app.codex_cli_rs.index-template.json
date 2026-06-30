@@ -15,7 +15,7 @@
     "metrics@custom",
     "metrics-apm.app@custom",
     "ecs@mappings",
-    "telemetry.codex_cli_rs@lifecycle"
+    "telemetry.codex@lifecycle"
   ],
   "ignore_missing_component_templates": [
     "metrics@custom",

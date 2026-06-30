@@ -1,0 +1,9 @@
+{
+  "description": "Codex app-logs logic shared by every Codex surface (codex_cli_rs, codex-app-server): drops streaming-delta events and redacts tool I/O and prompt text. Reached via the per-service.name forwarders (logs-apm.app@custom-<service.name>) so all surfaces apply identical handling.",
+  "processors": [
+    { "drop": { "if": "ctx.labels?.event_kind == 'response.output_text.delta' || ctx.labels?.event_kind == 'response.function_call_arguments.delta' || ctx.labels?.event_kind == 'response.custom_tool_call_input.delta'" } },
+    { "set": { "field": "labels.arguments", "value": "[REDACTED]", "override": true, "if": "ctx.labels?.arguments != null" } },
+    { "set": { "field": "labels.output", "value": "[REDACTED]", "override": true, "if": "ctx.labels?.output != null" } },
+    { "set": { "field": "labels.prompt", "value": "[REDACTED]", "override": true, "if": "ctx.labels?.prompt != null" } }
+  ]
+}

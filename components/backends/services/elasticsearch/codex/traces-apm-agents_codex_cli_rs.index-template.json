@@ -14,7 +14,7 @@
     "traces@custom",
     "traces-apm@custom",
     "ecs@mappings",
-    "telemetry.codex_cli_rs@lifecycle"
+    "telemetry.codex@lifecycle"
   ],
   "ignore_missing_component_templates": [
     "traces@custom",
