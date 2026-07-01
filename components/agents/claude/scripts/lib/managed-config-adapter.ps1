@@ -4,7 +4,7 @@ function Get-McManagedRoot($Os) {
     switch ($Os) {
         'windows' { 'C:\Program Files\ClaudeCode' }
         'macos' { '/Library/Application Support/ClaudeCode' }
-        'linux' { '/etc/claude' }
+        'linux' { '/etc/claude-code' }
         default { Write-McFatal "no Claude managed-settings path for os '$Os'" }
     }
 }

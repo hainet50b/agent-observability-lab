@@ -198,7 +198,7 @@ path (the same file your real employer may already use):
 
 | OS | Path |
 | --- | --- |
-| Linux/WSL | `/etc/claude/managed-settings.json` |
+| Linux/WSL | `/etc/claude-code/managed-settings.json` |
 | macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
 | Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
 

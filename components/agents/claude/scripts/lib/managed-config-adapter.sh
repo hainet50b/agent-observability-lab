@@ -6,7 +6,7 @@ agent='claude'
 managed_config::managed_root() {
   case $1 in
   macos) printf '%s' '/Library/Application Support/ClaudeCode' ;;
-  linux) printf '%s' '/etc/claude' ;;
+  linux) printf '%s' '/etc/claude-code' ;;
   *) managed_config::die "no Claude managed-settings path for os '$1'" ;;
   esac
 }
