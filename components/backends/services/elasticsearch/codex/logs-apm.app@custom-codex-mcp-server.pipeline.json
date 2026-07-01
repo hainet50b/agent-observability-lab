@@ -1,0 +1,6 @@
+{
+  "description": "Codex MCP-server (codex-mcp-server) app-logs forwarder → logs-apm.app@custom-codex.",
+  "processors": [
+    { "pipeline": { "name": "logs-apm.app@custom-codex" } }
+  ]
+}

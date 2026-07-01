@@ -1,0 +1,7 @@
+{
+  "description": "Codex MCP-server (codex-mcp-server) traces forwarder: shared drop, then reroute to agents_codex_mcp_server (reroute last — it is terminal).",
+  "processors": [
+    { "pipeline": { "name": "traces-apm@custom-codex" } },
+    { "reroute": { "namespace": "agents_codex_mcp_server" } }
+  ]
+}
