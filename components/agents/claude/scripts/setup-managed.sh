@@ -46,9 +46,6 @@ if [ "$with_telemetry" -eq 1 ]; then
     managed_config::die "failed to render $template"
 else
   cp "$template" "$rendered_source" || managed_config::die "failed to stage $template"
-  # Audit-only deploy has no logs endpoint; key the marker/ownership on the audit
-  # ES url instead so place()/teardown() and the provenance marker are meaningful.
-  logs_endpoint=$es_url
 fi
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
@@ -79,4 +76,6 @@ if [ "$with_hooks" -eq 1 ]; then
   mv "$tmp" "$rendered_source"
 fi
 
+# shellcheck disable=SC2034  # read by managed_config::place across the source=/dev/null boundary
+marker_endpoint="telemetry=$logs_endpoint;audit=$es_url"
 managed_config::place "$rendered_source"

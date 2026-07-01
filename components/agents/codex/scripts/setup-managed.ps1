@@ -84,7 +84,7 @@ if ($WithHooks) {
     $requirementsRendered = $requirementsRendered + "`n" + $hooksRendered
 }
 
-$markerEndpoint = if ($WithTelemetry) { $LogsEndpoint } else { $EsUrl }
+$markerEndpoint = "telemetry=$LogsEndpoint;audit=$EsUrl"
 
 $managedSource = [System.IO.Path]::GetTempFileName()
 $requirementsSource = [System.IO.Path]::GetTempFileName()

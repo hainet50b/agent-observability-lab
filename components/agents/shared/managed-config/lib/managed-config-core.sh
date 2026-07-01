@@ -9,6 +9,7 @@ confirm_all=0
 logs_endpoint=''
 traces_endpoint=''
 metrics_endpoint=''
+marker_endpoint=''
 es_url=''
 es_api_key=''
 timeout_ms=''
@@ -184,7 +185,7 @@ managed_config::write_marker() {
   local marker=$1 target=$2 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   printf 'agent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$agent" "$logs_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
+    "$agent" "$marker_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
 }
 
 managed_config::place_one() {
@@ -211,10 +212,10 @@ managed_config::place_one() {
     return 0
   fi
 
-  local marker_endpoint
-  marker_endpoint=$(managed_config::marker_field "$marker" endpoint)
-  if [ "$marker_endpoint" != "$logs_endpoint" ]; then
-    managed_config::log "$key: REFUSED — this host already enforces $marker_endpoint; run teardown first."
+  local existing_endpoint
+  existing_endpoint=$(managed_config::marker_field "$marker" endpoint)
+  if [ "$existing_endpoint" != "$marker_endpoint" ]; then
+    managed_config::log "$key: REFUSED — this host already enforces $existing_endpoint; run teardown first."
     failed=1
     return 0
   fi
@@ -248,10 +249,10 @@ managed_config::teardown_one() {
     return 0
   fi
 
-  local marker_agent marker_endpoint
+  local marker_agent existing_endpoint
   marker_agent=$(managed_config::marker_field "$marker" agent)
-  marker_endpoint=$(managed_config::marker_field "$marker" endpoint)
-  managed_config::confirm "Remove managed $key at $target (agent='$marker_agent' endpoint='$marker_endpoint')?" || return 0
+  existing_endpoint=$(managed_config::marker_field "$marker" endpoint)
+  managed_config::confirm "Remove managed $key at $target (agent='$marker_agent' endpoint='$existing_endpoint')?" || return 0
   rm -f "$target" 2>/dev/null ||
     managed_config::die "cannot remove $target (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '$target'"
   rm -f "$marker" 2>/dev/null ||
@@ -310,7 +311,7 @@ managed_config::hook_manifest_lines() {
 
 managed_config::place() {
   managed_config::require_adapter
-  [ -n "$logs_endpoint" ] || managed_config::die "no endpoint provided"
+  [ -n "$marker_endpoint" ] || managed_config::die "no endpoint provided"
   managed_config::detect_os
   managed_config::require_tty
   local manifest_lines

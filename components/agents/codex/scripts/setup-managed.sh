@@ -66,9 +66,6 @@ if [ "$with_hooks" -eq 1 ]; then
     "$timeout_ms" "$capture_user_prompt_enabled" "$capture_user_prompt_content" \
     "$capture_tool_call_enabled" "$capture_tool_call_content" \
     "$seal_recipients_src" "$seal_key_id" "$cert_target"
-  # Audit-only deploy has no OTLP logs endpoint; key the marker/ownership on the audit
-  # ES url so place()/teardown() and the provenance marker stay meaningful.
-  [ -n "$logs_endpoint" ] || logs_endpoint=$es_url
   # Codex picks managed_dir on non-Windows and windows_managed_dir on Windows, with no
   # fallback (hook_config.rs: managed_dir_for_current_platform). The .sh runs on macOS/Linux,
   # so emit managed_dir only and drop the windows_managed_dir line.
@@ -84,4 +81,6 @@ if [ "$with_hooks" -eq 1 ]; then
     "$hooks_template" >>"$requirements_source" || managed_config::die "failed to render $hooks_template"
 fi
 
+# shellcheck disable=SC2034  # read by managed_config::place across the source=/dev/null boundary
+marker_endpoint="telemetry=$logs_endpoint;audit=$es_url"
 managed_config::place "$requirements_source" "$managed_config_source"

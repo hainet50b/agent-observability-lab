@@ -56,9 +56,7 @@ if ($WithTelemetry) {
 }
 $rendered = $cfg | ConvertTo-Json -Depth 10
 
-# Audit-only deploy has no logs endpoint; key the marker/ownership on the audit ES
-# url so Invoke-McPlace and the provenance marker are meaningful.
-$markerEndpoint = if ($WithTelemetry) { $LogsEndpoint } else { $EsUrl }
+$markerEndpoint = "telemetry=$LogsEndpoint;audit=$EsUrl"
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
 # materializing the hook bundle beside managed-settings.json and adding an
