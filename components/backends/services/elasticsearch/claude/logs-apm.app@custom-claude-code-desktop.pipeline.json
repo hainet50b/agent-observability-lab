@@ -1,0 +1,6 @@
+{
+  "description": "Claude Desktop (service.name claude-code-desktop) app-logs forwarder → logs-apm.app@custom-claude, so Desktop redacts/drops identically to the CLI.",
+  "processors": [
+    { "pipeline": { "name": "logs-apm.app@custom-claude" } }
+  ]
+}

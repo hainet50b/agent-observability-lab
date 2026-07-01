@@ -1,0 +1,8 @@
+{
+  "description": "Shared Claude app-logs logic: drop raw-API-body / tool-output events; redact prompt text and field-drop tool args. Forced regardless of the client OTEL_LOG_* gates. Reached via the per-service.name forwarders so every Claude surface is handled identically.",
+  "processors": [
+    { "drop": { "if": "ctx.message == 'claude_code.api_request_body' || ctx.message == 'claude_code.api_response_body' || ctx.message == 'tool.output'" } },
+    { "set": { "field": "labels.prompt", "value": "<REDACTED>", "override": true, "if": "ctx.labels?.prompt != null" } },
+    { "remove": { "field": ["labels.tool_input", "labels.tool_parameters"], "ignore_missing": true } }
+  ]
+}
