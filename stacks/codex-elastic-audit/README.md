@@ -112,8 +112,12 @@ timeout) to the local audit data streams. Lab mode stores the captured text in *
 for searchability; production-oriented deployments should use encrypted content and
 restricted read access.
 
-> **Entrypoint matters.** The hooks fire from the interactive `codex` REPL. The audit path is
-> independent of telemetry, so it works even though this stack emits no OTLP.
+> **Entrypoint matters.** The hooks fire from the interactive `codex` REPL. For a **one-shot**
+> run add `exec` (same `CODEX_HOME`), e.g. `CODEX_HOME="$PWD/.codex" codex exec --full-auto "run: echo hello"`
+> — but non-managed hooks are **skipped until trusted**, and `exec` can't prompt, so either trust
+> them once with `/hooks` in the REPL or pass `--dangerously-bypass-hook-trust` for the run
+> (managed-scope hooks are trusted by policy and need neither). The audit path is independent of
+> telemetry, so it works even though this stack emits no OTLP.
 
 **Deploy this audit bundle into another scope.** `setup-config` deploys the same
 self-contained bundle (hook entry + shared core + adapter all materialized) to a

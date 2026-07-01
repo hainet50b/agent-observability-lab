@@ -98,6 +98,8 @@ env CODEX_HOME="$PWD/.codex" codex
 $env:CODEX_HOME = "$PWD\.codex"; codex
 ```
 
+For a **one-shot** run, add `exec` (same `CODEX_HOME`): `CODEX_HOME="$PWD/.codex" codex exec "list the files here"` — telemetry still flushes on exit.
+
 Why `CODEX_HOME` and not a repo-local config: **Codex ignores `[otel]` keys in a
 project-local `.codex/config.toml`** (telemetry is honoured only as *user-level* config) and
 prints a startup warning. `CODEX_HOME=<dir>` relocates Codex's whole home so

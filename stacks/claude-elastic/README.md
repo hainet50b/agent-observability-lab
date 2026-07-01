@@ -154,6 +154,8 @@ $env:OTEL_LOG_RAW_API_BODIES = "0"   # full Messages API request/response bodies
 # $env:OTEL_LOG_RAW_API_BODIES = "file:<dir>"   # file mode: untruncated bodies on disk (gitignored), events carry body_ref
 ```
 
+With those set, launch `claude` from any directory; a **one-shot** `claude -p "summarize this repo"` emits the same metrics/events (flushed on exit).
+
 **Option B — `settings.json` `env` block.**
 
 ```json

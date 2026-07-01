@@ -112,7 +112,8 @@ scripts/smoke-test.sh
 directory with the telemetry `env` (pointed at the **Collector** on `:4318`) **and** the
 prompt-audit hook — so just run **`claude` from `stacks/claude-otelcol-elastic/`**
 and both telemetry and prompt auditing are on, no manual setup. (Project settings load
-only from the launch directory.) The options below are alternatives.
+only from the launch directory.) A **one-shot** `claude -p "list files here"` works too
+(telemetry + prompt audit). The options below are alternatives.
 
 The telemetry vars configure **`claude`** itself, not the stack. The only difference from
 `claude-elastic` is the endpoint: point `OTEL_EXPORTER_OTLP_ENDPOINT` at the

@@ -94,6 +94,10 @@ Because Claude Code loads project settings from the launch directory, just run `
 claude
 ```
 
+For a **one-shot** run, `claude -p "…"` fires the hooks too; pre-allow a tool so `PostToolUse`
+actually runs, e.g. `claude -p "run: echo hello" --allowedTools Bash` (a prompt with no tool call
+yields only the `user_prompt` audit).
+
 The first launch prompts to trust the project-scoped Elasticsearch MCP server (interactive
 approval — deliberately not pre-approved). Provider identity (`agent_audit.agent.account.*`
 / `organization.*`) is read locally from your `~/.claude.json` `oauthAccount`; without an
