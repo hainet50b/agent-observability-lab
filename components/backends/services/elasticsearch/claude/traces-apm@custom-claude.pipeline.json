@@ -1,0 +1,6 @@
+{
+  "description": "Shared Claude traces logic: redact the interaction-root user prompt (forced, regardless of OTEL_LOG_USER_PROMPTS). Reached via the per-service.name forwarders, each of which calls this for the common redact, then reroutes to its own per-surface namespace last (reroute is terminal).",
+  "processors": [
+    { "set": { "field": "labels.user_prompt", "value": "<REDACTED>", "override": true, "if": "ctx.labels?.user_prompt != null" } }
+  ]
+}
