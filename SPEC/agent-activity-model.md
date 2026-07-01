@@ -71,9 +71,9 @@ model the same activities.**
 - **Object kind:** aggregates are ES|QL saved Discover sessions; raw views are
   data-view + filter-pill objects with an empty query bar.
 - **Trailer / spine:** every raw view ends with `trace.id` (click-through).
-- **Identity ("who") is not a column in these views** — it belongs to the audit
-  concern ([`agent-audit.md`](agent-audit.md)), not the telemetry views. Both
-  agents lead with `@timestamp`. (Claude Code's earlier convention of leading
-  every view with `labels.user_email` is retired in the Codex-aligned rebuild;
-  the kept searches drop it as each is reworked.)
+- **Identity ("who") leads every event/logs-based view** — `labels.user_email`
+  as the first column after `@timestamp`, the audit "who" axis. **Traces-based
+  views omit it**: Codex trace spans carry no identity field (`labels.user_email`
+  is absent from the traces data view), so it cannot be a column there — the gap
+  is inherent to what the agent emits on spans, not a choice.
 - **Description:** one concise line per search, no boilerplate.
