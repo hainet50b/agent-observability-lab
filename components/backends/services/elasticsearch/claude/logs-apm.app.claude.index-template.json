@@ -1,6 +1,6 @@
 {
   "index_patterns": [
-    "logs-apm.app.claude_code-*"
+    "logs-apm.app.claude_code*-*"
   ],
   "priority": 250,
   "data_stream": {},

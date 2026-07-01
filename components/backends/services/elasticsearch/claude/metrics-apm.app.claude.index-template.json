@@ -1,6 +1,6 @@
 {
   "index_patterns": [
-    "metrics-apm.app.claude_code-*"
+    "metrics-apm.app.claude_code*-*"
   ],
   "priority": 250,
   "data_stream": {},
