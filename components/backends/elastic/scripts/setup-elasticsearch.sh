@@ -4,7 +4,7 @@ set -euo pipefail
 : "${ES_URL:?must be set by the stack}"
 
 [ "$#" -ge 1 ] || {
-  echo "usage: setup-elasticsearch.sh <agent-source>... (e.g. claude-code)" >&2
+  echo "usage: setup-elasticsearch.sh <agent-source>... (e.g. claude)" >&2
   exit 1
 }
 

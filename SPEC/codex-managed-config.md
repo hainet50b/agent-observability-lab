@@ -7,7 +7,7 @@ stacks' `setup-config --scope managed` (`--with-hooks`); the shared placement
 model is owned by [`config-deployment.md`](config-deployment.md). It is
 **Codex-specific**: Claude Code has no
 `config.toml` / `requirements.toml` — its org-enforcement surface is
-`managed-settings.json` ([`claude-code-managed-config.md`](claude-code-managed-config.md)),
+`managed-settings.json` ([`claude-managed-config.md`](claude-managed-config.md)),
 so the mechanics here do **not** carry over (only the *idea* does).
 
 Upstream docs (read these for the authoritative key list — this file is the
@@ -159,4 +159,4 @@ What a deployed managed layer enforces is **agent-specific and must be stated in
 
 This shapes what each managed combination materializes: the audit stacks' hooks-only deploy (`--with-hooks`, no OTLP endpoints) places **only `requirements.toml`** — pinning `[features].hooks = true`, `allow_managed_hooks_only = false`, the `managed_dir` / `windows_managed_dir`, and the hook tables — and **no `managed_config.toml`** (with no telemetry that file would be just a comment). A combined telemetry+hooks deploy adds `managed_config.toml` `[otel]`. The full matrix is in [`config-deployment.md`](config-deployment.md) "Managed materialize".
 
-A **claude-code counterpart** uses `managed-settings.json` — a different mechanism that, unlike Codex's `[otel]`, **can** enforce telemetry; it is documented separately (see the intro) and shares this same deploy-only, human-gated, never-overwrite placement model.
+A **claude counterpart** uses `managed-settings.json` — a different mechanism that, unlike Codex's `[otel]`, **can** enforce telemetry; it is documented separately (see the intro) and shares this same deploy-only, human-gated, never-overwrite placement model.

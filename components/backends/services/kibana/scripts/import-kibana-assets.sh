@@ -47,7 +47,7 @@ import_dir() {
   done
 }
 
-[ "$#" -ge 1 ] || fail "usage: import-kibana-assets.sh <source>... (e.g. claude-code)"
+[ "$#" -ge 1 ] || fail "usage: import-kibana-assets.sh <source>... (e.g. claude)"
 
 echo "[import] importing Kibana saved objects into $KIBANA_URL…"
 

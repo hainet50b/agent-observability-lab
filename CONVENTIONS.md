@@ -73,7 +73,7 @@ Subject line: present-imperative, ≤ 72 characters. Body optional and free-form
 
 ## File and Identifier Naming
 
-- Stack directories under `stacks/` are **kebab-case** and name the agent + backend they exercise (e.g. `claude-code-elastic`).
+- Stack directories under `stacks/` are **kebab-case** and name the agent + backend they exercise (e.g. `claude-elastic`).
 - Within a stack: `docker-compose.yml` at the stack root, service config under `config/`, scripts under `scripts/`, and any importable backend assets in their own dir (e.g. `kibana/` for Kibana saved objects).
 - Compose service names are lowercase, matching the component (e.g. `kibana`, `apm-server`).
 - Shell scripts are kebab-case with a `.sh` extension (e.g. `smoke-test.sh`).

@@ -1,7 +1,7 @@
 # Threat model and audit coverage
 
 This document records why the lab grows a local-sidecar variant
-(`claude-code-otelcol-elastic`, future `codex-otelcol-elastic`, …) of every
+(`claude-otelcol-elastic`, future `codex-otelcol-elastic`, …) of every
 direct stack, and what that variant does and does **not** solve. It exists
 because the same question keeps coming back — *"can't a user just disable
 VPN to evade audit?"* — and the honest answer shapes the lab's scope.
@@ -191,11 +191,11 @@ the center can tell you *that* an edge has gone dark. Build both.
 
 ## Where this leaves the lab
 
-- The first stack **`claude-code-elastic`** is **direct** (no sidecar) — it
+- The first stack **`claude-elastic`** is **direct** (no sidecar) — it
   exercises the (A)-with-loss case and is the smallest working end-to-end
   demo. Audit coverage is "VPN-connected sessions only", and this must be
   documented openly to whoever consumes the data.
-- The planned **`claude-code-otelcol-elastic`** adds the sidecar — it is the
+- The planned **`claude-otelcol-elastic`** adds the sidecar — it is the
   (A)-solved reference implementation, and the working artifact when
   discussing fleet rollout with IT / MDM / SecOps / legal.
 - Anything beyond (A) — tamper resistance, audit enforcement, always-on VPN

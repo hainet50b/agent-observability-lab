@@ -2,7 +2,7 @@
 
 > OpenAI **Codex CLI** → APM Server (Elastic-native OTLP) → Elasticsearch → Kibana.
 > The second agent on the shared Elastic backend, alongside
-> [`claude-code-elastic`](../claude-code-elastic/).
+> [`claude-elastic`](../claude-elastic/).
 
 ```
 Codex CLI  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsearch  ──▶  Kibana
@@ -12,7 +12,7 @@ Codex CLI  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsearc
 **APM Server** is the OTLP receiver — Elastic's native, fully-supported way to ingest
 OpenTelemetry straight into Elasticsearch. Codex CLI points at it directly rather than
 through an OpenTelemetry Collector (a Collector variant would be a separate stack,
-mirroring [`claude-code-otelcol-elastic`](../claude-code-otelcol-elastic/)).
+mirroring [`claude-otelcol-elastic`](../claude-otelcol-elastic/)).
 
 > 🚧 **Session wired; data views + curated saved searches in.** This stack stands up the
 > composition, proves the OTLP path with the synthetic smoke test, points a real Codex CLI
@@ -31,7 +31,7 @@ mirroring [`claude-code-otelcol-elastic`](../claude-code-otelcol-elastic/)).
 > first.
 
 **Naming.** `codex` is the lab's human-facing name for the OpenAI Codex agent (as
-`claude-code` is its own), disambiguating from Codex cloud / the IDE extension / the
+`claude` is its own), disambiguating from Codex cloud / the IDE extension / the
 legacy Codex model. The emitted `service.name` is **`codex_cli_rs`** (the Rust CLI), so Codex
 traces are isolated into the per-agent data stream `traces-apm-agents_codex_cli_rs` (routed
 by `setup.sh`), and its metrics/events land in `*-apm.app.codex_cli_rs-default` — matching
@@ -280,7 +280,7 @@ endpoints with `ES_URL` / `APM_OTLP_URL`.
 Wired now: the composition, the OTLP-path smoke test, trace isolation, a real Codex
 session's `[otel]` telemetry config, the three Codex **data views** (Metrics / Events /
 Traces), and the curated Codex saved searches — all loaded by the shared Kibana importer,
-modelled on `components/backends/services/kibana/claude-code/`. (Prompt / tool-call **audit**
+modelled on `components/backends/services/kibana/claude/`. (Prompt / tool-call **audit**
 is the sibling [`codex-elastic-audit`](../codex-elastic-audit/) stack.) Authored
 later, with the human:
 

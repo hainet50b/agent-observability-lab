@@ -4,7 +4,7 @@ set -euo pipefail
 : "${KIBANA_URL:?must be set by the stack}"
 
 [ "$#" -ge 1 ] || {
-  echo "usage: setup-kibana.sh <source>... (e.g. claude-code)" >&2
+  echo "usage: setup-kibana.sh <source>... (e.g. claude)" >&2
   exit 1
 }
 

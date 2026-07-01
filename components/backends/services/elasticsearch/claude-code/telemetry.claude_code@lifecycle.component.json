@@ -1,7 +1,0 @@
-{
-  "template": {
-    "settings": {
-      "index.lifecycle.name": "telemetry.claude_code-policy"
-    }
-  }
-}

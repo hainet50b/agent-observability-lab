@@ -1,4 +1,0 @@
-name: claude-code-elastic
-
-include:
-  - ../../components/backends/elastic/docker-compose.yml

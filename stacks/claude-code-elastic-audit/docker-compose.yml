@@ -1,4 +1,0 @@
-name: claude-code-elastic-audit
-
-include:
-  - ../../components/backends/elastic-audit/docker-compose.yml
