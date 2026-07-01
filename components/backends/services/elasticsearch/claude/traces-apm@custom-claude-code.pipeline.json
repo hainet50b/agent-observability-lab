@@ -1,5 +1,5 @@
 {
-  "description": "Claude Code (service.name claude-code) traces forwarder: shared redact via traces-apm@custom-claude, then reroute to agents_claude_code (reroute last — it is terminal).",
+  "description": "Claude Code (claude-code) traces forwarder: shared redact, then reroute to agents_claude_code (reroute last — it is terminal).",
   "processors": [
     { "pipeline": { "name": "traces-apm@custom-claude" } },
     { "reroute": { "namespace": "agents_claude_code" } }

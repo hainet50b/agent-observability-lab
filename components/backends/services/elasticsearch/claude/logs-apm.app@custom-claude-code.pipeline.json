@@ -1,5 +1,5 @@
 {
-  "description": "Claude Code (service.name claude-code) app-logs forwarder → logs-apm.app@custom-claude.",
+  "description": "Claude Code (claude-code) app-logs forwarder → logs-apm.app@custom-claude.",
   "processors": [
     { "pipeline": { "name": "logs-apm.app@custom-claude" } }
   ]
