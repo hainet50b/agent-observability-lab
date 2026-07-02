@@ -1,5 +1,6 @@
 package lab.agentobservability.callers;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -14,10 +15,28 @@ public enum Agent {
         }
 
         @Override
-        Map<String, String> env(LaunchContext ctx) {
+        Map<String, String> traceEnv(TraceHandoff handoff) {
             return Map.of(
-                    "TRACEPARENT", ctx.traceparent(),
-                    "OTEL_RESOURCE_ATTRIBUTES", "app.name=" + ctx.appName());
+                    "TRACEPARENT", handoff.traceparent(),
+                    "OTEL_RESOURCE_ATTRIBUTES", "caller.name=" + handoff.name()
+            );
+        }
+    },
+
+    CODEX("codex", "../../stacks/codex-elastic") {
+        @Override
+        List<String> argv(String executable, String prompt) {
+            return List.of(executable, "exec", prompt);
+        }
+
+        @Override
+        Map<String, String> traceEnv(TraceHandoff handoff) {
+            return Map.of("OTEL_RESOURCE_ATTRIBUTES", "caller.name=" + handoff.name());
+        }
+
+        @Override
+        Map<String, String> extraEnv(File workingDir) {
+            return Map.of("CODEX_HOME", new File(workingDir, ".codex").getAbsolutePath());
         }
     };
 
@@ -39,7 +58,11 @@ public enum Agent {
 
     abstract List<String> argv(String executable, String prompt);
 
-    abstract Map<String, String> env(LaunchContext ctx);
+    abstract Map<String, String> traceEnv(TraceHandoff handoff);
+
+    Map<String, String> extraEnv(File workingDir) {
+        return Map.of();
+    }
 
     static Agent from(String name) {
         String wanted = (name == null || name.isBlank()) ? CLAUDE.name() : name;
@@ -47,8 +70,8 @@ public enum Agent {
                 .filter(a -> a.name().equalsIgnoreCase(wanted))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
-                        "caller.agent='" + wanted + "' is not supported yet; implemented: " + supported())
-                );
+                        "caller.agent='" + wanted + "' is not supported yet; implemented: " + supported()
+                ));
     }
 
     private static String supported() {

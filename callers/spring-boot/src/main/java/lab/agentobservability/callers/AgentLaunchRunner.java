@@ -41,17 +41,21 @@ public class AgentLaunchRunner implements CommandLineRunner, ExitCodeGenerator {
         File workingDir = resolveWorkingDir(agent);
 
         Span span = tracer.nextSpan().name("caller").start();
-        String appName = properties.appName();
+        String callerName = properties.name();
 
         try (Tracer.SpanInScope scope = tracer.withSpan(span)) {
             ProcessBuilder builder = new ProcessBuilder(agent.argv(executable, properties.prompt()));
             builder.directory(workingDir);
-            builder.environment().putAll(agent.env(new LaunchContext(traceparent(span), appName)));
+
+            Map<String, String> env = builder.environment();
+            env.putAll(agent.traceEnv(new TraceHandoff(traceparent(span), callerName)));
+            env.putAll(agent.extraEnv(workingDir));
+
             builder.redirectError(ProcessBuilder.Redirect.INHERIT);
 
             log.info("launching {} ('{}') in {}", agent.name().toLowerCase(), executable, workingDir);
             log.info("trace.id={}", span.context().traceId());
-            log.info("app.name={}", appName);
+            log.info("caller.name={}", callerName);
             log.info("prompt: {}", properties.prompt());
 
             try {

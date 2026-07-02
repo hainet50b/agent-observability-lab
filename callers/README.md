@@ -8,7 +8,7 @@ observes the *agent's* signals — it only shapes how that telemetry is **traced
 | Concern | Mechanism | Where it shows up |
 | --- | --- | --- |
 | **Join** the agent's run into the caller's distributed trace | pass `TRACEPARENT` into the child env (`claude -p` and the Agent SDK read it; the interactive REPL ignores it) | agent spans share the caller's `trace.id` (`traces-apm-agents_*`) |
-| **Attribute** agent usage per launching application | pass `OTEL_RESOURCE_ATTRIBUTES=app.name=…` | `labels.app_name` on every agent metric / log / span (a single run is identified by its `trace.id`) |
+| **Attribute** agent usage per launching application | pass `OTEL_RESOURCE_ATTRIBUTES=caller.name=…` | `labels.caller_name` on every agent metric / log / span (a single run is identified by its `trace.id`) |
 
 The agent's `service.name` is never changed, so the standard pipelines, templates, and Kibana views
 apply unchanged. Point a caller at an already-running telemetry stack (e.g.
@@ -17,5 +17,5 @@ apply unchanged. Point a caller at an already-running telemetry stack (e.g.
 ## Callers
 
 - [`spring-boot/`](spring-boot/) — a Spring Boot 4 one-shot (`./mvnw spring-boot:run`): boots the
-  container, issues a W3C trace id, launches an agent (`claude` today) with a chosen `app.name`,
-  exits. Agent-agnostic by design (`caller.agent`); a second agent is one `Agent` enum constant.
+  container, reads its active Micrometer trace, launches an agent (`claude` or `codex`) with a
+  chosen `caller.name`, exits. Agent-agnostic (`caller.agent`); a further agent is one `Agent` enum constant.
