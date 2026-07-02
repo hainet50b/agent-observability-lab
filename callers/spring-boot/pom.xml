@@ -15,18 +15,31 @@
     <artifactId>spring-boot-caller</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>spring-boot-caller</name>
-    <description>Boots Spring, issues a W3C trace id, and launches the claude CLI one-shot with per-app attribution</description>
+    <description>Boots Spring, reads the active Micrometer trace, and launches an agent CLI one-shot with per-app attribution</description>
 
     <properties>
         <java.version>25</java.version>
     </properties>
 
     <dependencies>
-        <!-- Deliberately just the core starter: this app emits no telemetry of its own
-             (the lab observes the AGENT). It only fabricates a trace id and launches claude. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <!-- Micrometer Tracing over OpenTelemetry, granular modules only: the Tracer/Propagator this
+             app reads to mint the trace id. No OTLP metrics registry or span exporter is pulled, so
+             the app exports nothing — the lab observes the agent's telemetry, not this app's. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-opentelemetry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-micrometer-tracing-opentelemetry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
         </dependency>
     </dependencies>
 

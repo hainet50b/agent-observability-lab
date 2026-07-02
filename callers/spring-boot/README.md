@@ -1,22 +1,22 @@
 # spring-boot caller
 
-A minimal **Spring Boot 4** application that boots the container, **issues a W3C trace id**, launches
-`claude -p` **once** with per-app attribution, and exits with the child's code. A single
-`CommandLineRunner` does the whole job; the app is non-web (only `spring-boot-starter`), so the
-context closes as soon as the run finishes. It **emits no telemetry of its own** — see
-[`../`](../) for the caller concept.
+A minimal **Spring Boot 4** application that boots the container, **reads the active Micrometer
+trace**, launches an agent (`claude`) **once** with per-app attribution, and exits with the child's
+code. A single `CommandLineRunner` does the whole job; the app is non-web, so the context closes as
+soon as the run finishes. It runs Micrometer Tracing but configures **no exporter, so it emits no
+telemetry of its own** — see [`../`](../) for the caller concept.
 
 ## What it demonstrates
 
-- **Trace join** — fabricates `TRACEPARENT=00-<traceId>-<spanId>-01` and passes it to `claude -p`, so
-  Claude's `interaction` span becomes a child of `<traceId>`. (A real service would inject its own
-  *active* span's context here instead of fabricating one.)
+- **Trace join** — opens a Micrometer span and passes its W3C `traceparent` to the agent, so the
+  agent's spans become children of that trace. (Sampled at `1.0`, so the traceparent is marked
+  sampled and the agent exports its children.)
 - **Per-app attribution** — passes `OTEL_RESOURCE_ATTRIBUTES=app.name=<name>`, which rides every
   Claude metric / log / span as `labels.app_name`. (A single run is identified by its `trace.id`.)
 
 ## Prerequisites
 
-- JDK 17+ (`java -version`).
+- JDK 25 (`java -version`).
 - The [`claude-elastic`](../../stacks/claude-elastic/) stack **up** and `claude` **logged in** — the
   caller runs `claude` in that stack directory so its `.claude/settings.local.json` (telemetry env,
   traces beta) is picked up.
@@ -27,7 +27,7 @@ context closes as soon as the run finishes. It **emits no telemetry of its own**
 # defaults: app.name=my-app, prompt "say hi in one word"
 ./mvnw spring-boot:run                        # .\mvnw.cmd on Windows
 
-# choose the application name / id / prompt
+# choose the application name / prompt
 ./mvnw spring-boot:run -Dspring-boot.run.arguments="--caller.app-name=checkout-svc --caller.prompt=list the files here"
 ```
 

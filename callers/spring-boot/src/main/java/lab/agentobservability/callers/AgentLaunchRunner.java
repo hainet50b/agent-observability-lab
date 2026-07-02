@@ -4,9 +4,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.security.SecureRandom;
-import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.Map;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -17,13 +20,16 @@ import org.springframework.stereotype.Component;
 public class AgentLaunchRunner implements CommandLineRunner, ExitCodeGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(AgentLaunchRunner.class);
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final CallerProperties properties;
+    private final Tracer tracer;
+    private final Propagator propagator;
     private int exitCode = 0;
 
-    public AgentLaunchRunner(CallerProperties properties) {
+    public AgentLaunchRunner(CallerProperties properties, Tracer tracer, Propagator propagator) {
         this.properties = properties;
+        this.tracer = tracer;
+        this.propagator = propagator;
     }
 
     @Override
@@ -34,36 +40,42 @@ public class AgentLaunchRunner implements CommandLineRunner, ExitCodeGenerator {
                 ? agent.defaultCommand() : properties.command();
         File workingDir = resolveWorkingDir(agent);
 
-        String traceId = randomHex(16); // 32 hex chars
-        String spanId = randomHex(8);   // 16 hex chars
-        String traceparent = "00-" + traceId + "-" + spanId + "-01"; // 01 = sampled
-
+        Span span = tracer.nextSpan().name("caller").start();
         String appName = properties.appName();
 
-        ProcessBuilder builder = new ProcessBuilder(agent.argv(executable, properties.prompt()));
-        builder.directory(workingDir);
-        builder.environment().putAll(agent.env(new LaunchContext(traceparent, appName)));
-        builder.redirectError(ProcessBuilder.Redirect.INHERIT);
+        try (Tracer.SpanInScope scope = tracer.withSpan(span)) {
+            ProcessBuilder builder = new ProcessBuilder(agent.argv(executable, properties.prompt()));
+            builder.directory(workingDir);
+            builder.environment().putAll(agent.env(new LaunchContext(traceparent(span), appName)));
+            builder.redirectError(ProcessBuilder.Redirect.INHERIT);
 
-        log.info("launching {} ('{}') in {}", agent.name().toLowerCase(), executable, workingDir);
-        log.info("trace.id={}", traceId);
-        log.info("app.name={}", appName);
-        log.info("prompt: {}", properties.prompt());
+            log.info("launching {} ('{}') in {}", agent.name().toLowerCase(), executable, workingDir);
+            log.info("trace.id={}", span.context().traceId());
+            log.info("app.name={}", appName);
+            log.info("prompt: {}", properties.prompt());
 
-        try {
-            Process process = builder.start();
-            process.getOutputStream().close();
-            String response = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
-            this.exitCode = process.waitFor();
+            try {
+                Process process = builder.start();
+                process.getOutputStream().close();
+                String response = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+                this.exitCode = process.waitFor();
 
-            log.info("response: {}", response);
-            log.info("{} exited with code {}", executable, exitCode);
-        } catch (IOException e) {
-            this.exitCode = 127;
-            log.error("could not start '{}' — is the CLI on PATH? (override with --caller.command=<path>): {}",
-                    executable, e.getMessage()
-            );
+                log.info("response: {}", response);
+                log.info("{} exited with code {}", executable, exitCode);
+            } catch (IOException e) {
+                this.exitCode = 127;
+                log.error("could not start '{}' — is the CLI on PATH? (override with --caller.command=<path>): {}",
+                        executable, e.getMessage());
+            }
+        } finally {
+            span.end();
         }
+    }
+
+    private String traceparent(Span span) {
+        Map<String, String> carrier = new HashMap<>();
+        propagator.inject(span.context(), carrier, Map::put);
+        return carrier.get("traceparent");
     }
 
     private File resolveWorkingDir(Agent agent) {
@@ -77,11 +89,5 @@ public class AgentLaunchRunner implements CommandLineRunner, ExitCodeGenerator {
     @Override
     public int getExitCode() {
         return exitCode;
-    }
-
-    private static String randomHex(int numBytes) {
-        byte[] bytes = new byte[numBytes];
-        RANDOM.nextBytes(bytes);
-        return HexFormat.of().formatHex(bytes);
     }
 }
