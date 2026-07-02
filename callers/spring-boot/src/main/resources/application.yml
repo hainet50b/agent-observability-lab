@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: spring-boot-caller
+  main:
+    banner-mode: "off"
+    log-startup-info: false
+
+# All overridable at launch, e.g.
+#   ./mvnw spring-boot:run -Dspring-boot.run.arguments="--caller.app-name=checkout-svc --caller.prompt=say hi"
+caller:
+  agent: claude # which agent to launch (implemented: claude)
+  app-name: aol-app
+  prompt: "say hi in one word"
+  command: "" # blank → the agent's default CLI (e.g. claude), resolved on PATH
+  working-dir: "" # blank → the agent's default stack dir (holds its telemetry config)
+
+logging:
+  level:
+    root: WARN
+    lab.agentobservability.callers: INFO

@@ -14,11 +14,14 @@ agent-observability-lab/
 │  │  └─ <backend>/                              # a backend = `include:` of the service fragments it needs + façade scripts (setup-elasticsearch / setup-kibana) selecting which concerns to apply; owns no asset files of its own
 │  ├─ paths/<path>/                              # transport-layer addition between agent and backend (e.g. otelcol-sidecar)
 │  └─ agents/<agent>/                            # agent-runtime config (templates + render primitives) behind concern façades (setup-telemetry / setup-audit); no Kibana assets
-└─ stacks/
-   └─ <combo>/                                   # one composition (Backends × Path? × Agents): docker-compose `include:` + Quick Tour README + any combination-specific glue
+├─ stacks/
+│  └─ <combo>/                                   # one composition (Backends × Path? × Agents): docker-compose `include:` + Quick Tour README + any combination-specific glue
+└─ callers/<app>/                                # a calling application that drives an agent as a subprocess to exercise its telemetry — propagates a trace id (TRACEPARENT) + tags per-app identity (OTEL_RESOURCE_ATTRIBUTES); emits no telemetry itself
 ```
 
 A stack composes one or more Backends, optionally a Path, and one or more Agents by `include:`ing the relevant component compose files; the stack directory carries only the combination's `README.md` and any glue that is specific to *that* combination (e.g. a fan-out Collector config enumerating multiple Backends). The typical stack is 1×1×1, but multi-Backend fan-out (one Collector to several backends) and multi-Agent (several agents on one Backend) are first-class compositions. The **direct** path — agent talking straight to the Backend over the network — has no `paths/` component; a direct stack simply includes the Backend alone.
+
+A **caller** under `callers/<app>/` is the counterpart to a stack from the other side of the wire: not a Backend/Agent composition but a small *application* that launches an agent (`claude -p`, `codex exec`) as a subprocess, to demonstrate two client-side concerns — **joining** the agent's spans into the caller's distributed trace by passing `TRACEPARENT`, and **attributing** agent usage per launching application by passing `OTEL_RESOURCE_ATTRIBUTES` (`app.name`, which lands as `labels.app_name` on every agent signal; a single run is identified by its `trace.id`). A caller **emits no telemetry of its own** — the lab observes the *agent's* signals — and it never changes the agent's `service.name`, so the standard pipelines/templates/views apply unchanged. It reuses an existing stack's backend rather than standing up its own.
 
 ## The five stacks
 
