@@ -137,7 +137,8 @@ sign-*out* audit, not a usage-start signal; for session starts use the
 
 A third, optional signal. Tracing is **off by default**; the Quick Tour config
 enables it with `CLAUDE_CODE_ENABLE_TELEMETRY=1` + `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
-+ `OTEL_TRACES_EXPORTER=otlp` (endpoint/protocol reuse the common OTLP config —
++ `OTEL_TRACES_EXPORTER=otlp` (the traces endpoint/protocol are rendered as
+per-signal `OTEL_EXPORTER_OTLP_TRACES_*` vars like the other two signals' —
 this stack's `http/protobuf` → `:8200`). APM Server receives spans natively on
 `/v1/traces` (no server change); this stack then **routes** Claude Code's spans
 into the dedicated **`traces-apm-agents_claude_code`** data stream (see Trace data model
@@ -160,13 +161,11 @@ below).
   (the Claude Code docs state the same for `prompt.id`); there is no metric↔trace join,
   correlate metrics to a run by shared dimensions like `session.id` instead.
 - **Where to view it:** the **APM UI** (<http://localhost:5601/app/apm>) — service
-  map and trace waterfalls — is the natural home; the **Claude Code — Traces**
+  map and trace waterfalls — is the natural home; the **Claude — Traces**
   Discover data view (`traces-apm-agents_claude_code*`, this agent) also lets
-  you scan spans. Two saved searches sit on it: **Claude Code — Interactions** (one row per
-  *interactive turn* — the `interaction` root, with rich prompt/sequence/duration
-  columns; interactive-only) and **Claude Code — Traces** (one row per *trace*,
-  all session types, via `processor.event: transaction`). On these data views
-  `trace.id` is a **click-through to the APM UI trace view** (URL field formatter →
+  you scan spans (no saved searches ship on it — the curated saved searches are
+  all event-based). On the events and traces data views `trace.id` is a
+  **click-through to the APM UI trace view** (URL field formatter →
   `/app/apm/link-to/trace/{{value}}`).
 - **Content is still redacted by default.** Spans redact prompt text, tool input,
   and tool content unless the matching `OTEL_LOG_*` gate is set. In particular,
@@ -199,8 +198,11 @@ scoped to **`traces-apm-agents_claude_code*`**, so it needs no `service.name`
 filter; the `agents_` prefix also gives a cross-agent glob
 **`traces-apm-agents_*`** (claude_code, codex, …) that excludes non-agent traces.
 (Spans captured before the pipeline was installed remain in `traces-apm-default`.)
-The same `traces-apm@custom-claude-code` sub-pipeline also force-redacts
-`labels.user_prompt` to `<REDACTED>` (see [Content-exposure gates](#content-exposure-gates)).
+Before the reroute, the sub-pipeline forwards to the shared per-agent
+**`traces-apm@custom-claude`** pipeline — also reached from the
+`claude-code-desktop` Desktop surface via its own forwarder (which reroutes to
+`agents_claude_code_desktop`) — which force-redacts `labels.user_prompt` to
+`<REDACTED>` (see [Content-exposure gates](#content-exposure-gates)).
 
 **Why isolate traces specifically — and only traces:**
 
@@ -255,16 +257,16 @@ sessions** (which also emit `user_prompt` events). **Headless / `-p` sessions (e
 Ralph) emit no `interaction` span and no `user_prompt` event** — each `llm_request`
 or `tool` runs parentless and APM promotes it to its own root `transaction` (one
 trace per API call / tool execution). So a "trace" is a whole prompt **turn**
-interactively, but a single **API call / tool execution** headlessly. Consequences:
-the **Claude Code — Interactions** saved search (`span_type: interaction`) is
-interactive-only; **Claude Code — Traces** (`processor.event: transaction`) covers
-every session, with `transaction.name` exposing the root type. Verified live:
+interactively, but a single **API call / tool execution** headlessly. Consequences: on the
+traces data view a `labels.span_type: interaction` filter matches interactive
+sessions only, while `processor.event: transaction` covers every session, with
+`transaction.name` exposing the root type. Verified live:
 across two sessions, the interactive one rooted at `interaction` (with `user_prompt`
 events), the Ralph one rooted at `llm_request`/`tool` (zero `user_prompt` events).
 
 How the trace signal maps to the event saved searches (activity-level, not 1:1):
-`interaction` ↔ **User Prompts**, `llm_request` ↔ **API Requests**, `tool*` ↔
-**Tool Results** (+ `tool.blocked_on_user` ↔ **Tool Decisions**). One tool call is
+`interaction` ↔ **Claude — User Prompts**, `llm_request` ↔ **Claude — LLM
+Requests**, `tool*` ↔ **Claude — Tool Calls**. One tool call is
 one `tool_result` event but several spans (`tool` + `blocked_on_user` +
 `execution`), so the span side is finer-grained.
 
@@ -327,9 +329,12 @@ each gate changes — by data stream, document, and field:
 | `OTEL_LOG_TOOL_CONTENT` | events `message: tool.output` (whole doc) → `labels.output` / `content` / `diff` | discard the document | `drop` (whole-doc) |
 | `OTEL_LOG_RAW_API_BODIES` | events `claude_code.api_request_body` / `api_response_body` (whole docs) → `labels.body` | discard the documents | `drop` (whole-doc) |
 
-All four controls live in the per-agent `logs-apm.app@custom-claude-code`
-sub-pipeline (plus `traces-apm@custom-claude-code` for the trace-side
-`user_prompt`), and each **reproduces that gate's own off-state** for the
+All four controls live in the shared per-agent `logs-apm.app@custom-claude`
+pipeline (plus `traces-apm@custom-claude` for the trace-side `user_prompt`);
+the per-`service.name` sub-pipelines (`…@custom-claude-code` for the CLI,
+`…@custom-claude-code-desktop` for Desktop) are thin forwarders into it — the
+`@custom` diamond in `SPEC.md`'s invariants. Each control **reproduces that
+gate's own off-state** for the
 sensitive payload — a field that is `<REDACTED>` when off stays `<REDACTED>`, a
 field that is absent when off is removed, a document that does not exist when off
 is dropped — so a client cannot widen exposure by turning a gate on. Per-gate
@@ -342,9 +347,9 @@ detail follows.
 | `logs-apm.app.claude_code-default` | `message: claude_code.user_prompt` | `labels.prompt` | `<REDACTED>` | verbatim prompt text |
 | `traces-apm-agents_claude_code` | `labels.span_type: interaction` (the `claude_code.interaction` root, `processor.event: transaction`) | `labels.user_prompt` | `<REDACTED>` | verbatim prompt text |
 
-- **This stack force-redacts at ingest, overriding the gate.** The per-agent APM
-  `@custom` sub-pipelines — `logs-apm.app@custom-claude-code` (events) and
-  `traces-apm@custom-claude-code` (traces) — unconditionally set `labels.prompt`
+- **This stack force-redacts at ingest, overriding the gate.** The shared
+  per-agent APM `@custom` pipelines — `logs-apm.app@custom-claude` (events) and
+  `traces-apm@custom-claude` (traces) — unconditionally set `labels.prompt`
   and `labels.user_prompt` to `<REDACTED>`, so the **stored** value is always
   `<REDACTED>` even when a client sets `OTEL_LOG_USER_PROMPTS=1` (the `1` column
   above is what the agent *emits*, not what lands). A deliberate backend control:
@@ -371,8 +376,8 @@ detail follows.
 | `logs-apm.app.claude_code-default` | `message: claude_code.tool_decision` | `labels.tool_parameters` | absent | same shape — shows *what* the accept/reject decision was about |
 | `logs-apm.app.claude_code-default` | `message: claude_code.mcp_server_connection` | `labels.server_name` | absent | the configured MCP server name (e.g. `elasticsearch`) — this event otherwise has no server-name field at all |
 
-- **This stack field-drops the tool-argument fields at ingest.** The per-agent
-  `logs-apm.app@custom-claude-code` sub-pipeline `remove`s `labels.tool_input` and
+- **This stack field-drops the tool-argument fields at ingest.** The shared
+  per-agent `logs-apm.app@custom-claude` pipeline `remove`s `labels.tool_input` and
   `labels.tool_parameters` (ignore-missing), so on stored `tool_result` /
   `tool_decision` documents those two fields are **absent** — identical to the
   `OTEL_LOG_TOOL_DETAILS=0` shape (not `<REDACTED>`), so a client cannot expose
@@ -404,8 +409,8 @@ detail follows.
 | --- | --- | --- | --- | --- |
 | `logs-apm.app.claude_code-default` | `message: tool.output` — a new document type | `labels.output` (Bash: command stdout) / `labels.content` (Read: file contents) / `labels.diff` + `labels.file_path` (Edit: structured diff) | documents don't exist | verbatim tool output |
 
-- **This stack drops the `tool.output` documents at ingest.** The per-agent
-  `logs-apm.app@custom-claude-code` sub-pipeline `drop`s every `message: tool.output`
+- **This stack drops the `tool.output` documents at ingest.** The shared
+  per-agent `logs-apm.app@custom-claude` pipeline `drop`s every `message: tool.output`
   event, so tool output (`labels.output` / `content` / `diff` / `file_path`) **never
   lands** regardless of the gate — the same whole-doc drop used for
   `OTEL_LOG_RAW_API_BODIES`, matching the gate-off state (the documents don't exist
@@ -444,8 +449,9 @@ detail follows.
   belongs to `OTEL_LOG_TOOL_DETAILS`' `tool_input`).
 - These docs carry **no `labels.user_*` / `prompt_id` envelope** — identity is
   only top-level (`service.name`, `session.id`, host fields). They match no
-  `message: claude_code.*` filter, so they surface only in **Event Overview**
-  (no `message` pill) or a dedicated view.
+  `message: claude_code.*` filter, so none of the curated saved searches would
+  surface them — seeing one takes an unfiltered Discover scan of the events
+  data view (moot in this stack, which drops them at ingest).
 
 ### `OTEL_LOG_RAW_API_BODIES`
 
@@ -453,8 +459,8 @@ detail follows.
 | --- | --- | --- | --- | --- |
 | `logs-apm.app.claude_code-default` | `message: claude_code.api_request_body` (one per API attempt) / `claude_code.api_response_body` (one per response) | `labels.body` (+ `labels.body_length`, `labels.body_truncated`) | documents don't exist | Messages API request/response JSON — see the truncation chain |
 
-- **This stack drops both documents at ingest.** The per-agent
-  `logs-apm.app@custom-claude-code` sub-pipeline `drop`s every
+- **This stack drops both documents at ingest.** The shared per-agent
+  `logs-apm.app@custom-claude` pipeline `drop`s every
   `claude_code.api_request_body` / `claude_code.api_response_body` event, so raw
   API bodies **never land** regardless of the client gate or mode (inline
   `labels.body` or `file:<dir>` `labels.body_ref`) — a deliberate backend control,

@@ -37,6 +37,6 @@ The full settings schema, at highest precedence — notably:
 
 ## Placement & teardown (shared model)
 
-Placement and removal follow the **same deploy-only, human-gated, never-overwrite model** documented in `SPEC/codex-managed-config.md` "Placement in this lab": an agent-scoped capability any stack opts into, **no mechanical verification**, an **always-interactive** prompt with **no `--yes`** (non-TTY aborts; permission errors fail loud), and the lab **never overwrites a file it does not own** — provenance is tracked by a sidecar marker and a mandatory teardown removes only lab-placed files.
+Placement and removal follow the **same deploy-only, human-gated, never-overwrite model** documented in `SPEC/config-deployment.md` "Managed placement": an agent-scoped capability any stack opts into, **no mechanical verification**, an **always-interactive** prompt with **no `--yes`** (non-TTY aborts; permission errors fail loud), and the lab **never overwrites a file it does not own** — provenance is tracked by a sidecar marker and a mandatory teardown removes only lab-placed files.
 
 The Claude-specific surface is the **single** `managed-settings.json` at the path above. Because it is one file at the most sensitive location, the "foreign file" safety case is especially pointed: the operator's **real employer may already enforce policy through this exact file**, so a present file with no lab marker is hard-refused and never touched.

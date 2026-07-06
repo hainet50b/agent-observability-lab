@@ -28,14 +28,25 @@ to a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; s
 
 ## How to read the data
 
-- **Service name is `codex_cli_rs`, not `codex`.** Codex emits the Rust
-  implementation's name, so APM derives the datasets `*-apm.app.codex_cli_rs-default`.
-  The lab's human-facing names stay `codex` / `codex-elastic`; everything
-  physical (datasets, the trace namespace `agents_codex_cli_rs`) carries the
-  `codex_cli_rs` token.
-- **Three data streams:** `metrics-apm.app.codex_cli_rs-default` (metrics),
-  `logs-apm.app.codex_cli_rs-default` (events), and traces. Traces are **isolated by routing** — the `traces-apm@custom-codex_cli_rs` sub-pipeline reroutes Codex spans (`service.name: codex_cli_rs`) off the service-agnostic `traces-apm-default` to a dedicated `agents_codex_cli_rs` data stream (see [Trace data model](#trace-data-model)). APM also
-  auto-creates an empty `metrics-apm.service_summary.1m-default` marker.
+- **Codex is one agent with several surfaces, each its own `service.name`.**
+  The CLI (this reference's capture) emits the Rust implementation's name
+  **`codex_cli_rs`**; Codex Desktop emits **`codex-app-server`**; a third
+  routed surface is **`codex-mcp-server`**. The lab's human-facing names stay
+  `codex` / `codex-elastic`; everything physical carries the per-surface token
+  (datasets `*-apm.app.codex_cli_rs-default`, trace namespaces
+  `agents_codex_cli_rs` / `agents_codex_app_server` / `agents_codex_mcp_server`),
+  and the index templates / Kibana data views are **surface-agnostic globs**
+  (`logs-apm.app.codex_*`, `traces-apm-agents_codex_*`) so every surface lands
+  in the same views.
+- **Three data streams (per surface):** for the CLI,
+  `metrics-apm.app.codex_cli_rs-default` (metrics),
+  `logs-apm.app.codex_cli_rs-default` (events), and traces. Traces are
+  **isolated by routing** — each surface's `traces-apm@custom-<service.name>`
+  sub-pipeline forwards into the shared `traces-apm@custom-codex` pipeline,
+  then reroutes the spans off the service-agnostic `traces-apm-default` to a
+  dedicated `agents_<surface>` data stream (see
+  [Trace data model](#trace-data-model)). APM also auto-creates an empty
+  `metrics-apm.service_summary.1m-default` marker.
 - **Where the value/type lives:** a metric's value is in a field *named after the
   metric* (e.g. `codex.turn.token_usage`); an event's type is in
   **`labels.event_name`** (e.g. `codex.tool_result`) — but **only on the
@@ -94,7 +105,9 @@ with the log_only body. Many structured fields (`tool_name`, `success`,
 needs only one family: a tool-I/O audit (who + command + output + success +
 duration) is fully served by the **`log_only` tool twin alone** (filter
 `service.framework.name: codex_otel.log_only` + `labels.tool_name` exists, no
-join).
+join) — though in this stack the command/output columns read `[REDACTED]`,
+since the ingest pipeline redacts `labels.arguments` / `labels.output` (see
+below); the who / success / duration / size axes are unaffected.
 
 **Why two families.** The names are Codex's own privacy classification (Rust
 `tracing` *targets*): **`trace_safe`** = events scrubbed of content and identity,
@@ -106,10 +119,14 @@ the full set local. But Codex's **OTLP logs exporter emits both targets**, so th
 tool-payload exposure tracked in openai/codex
 [#17909](https://github.com/openai/codex/issues/17909). The boundary holds on the
 **traces** path (only trace_safe-shaped data becomes spans) but is defeated on the
-**logs** path. So the principled redaction is to **drop the whole
-`codex_otel.log_only` family** (at a Collector or the `logs-apm.app@custom` ingest
-pipeline) — that keeps exactly Codex's own "safe to export" set; surgically
-removing `labels.arguments` / `labels.output` is the finer-grained alternative.
+**logs** path. **This stack closes it at ingest, field-grained:** the shared
+`logs-apm.app@custom-codex` pipeline sets `labels.prompt`, `labels.arguments`,
+and `labels.output` to `[REDACTED]`, so the stored `log_only` docs keep their
+identity / structure / size fields but no content — a client cannot expose
+content by configuration. The coarser alternative — dropping the whole
+`codex_otel.log_only` family (keeping exactly Codex's own "safe to export"
+set) — would also discard the identity fields (`user_email`, `host.*`) that
+only `log_only` carries, which the views use as the "who" axis.
 
 ## Metrics (`metrics-apm.app.codex_cli_rs-default`)
 
@@ -129,9 +146,13 @@ metric name *is* the field. Grouped:
 ⚠️ **Metrics default to Statsig, not OTLP.** Codex ships `metrics_exporter`
 defaulting to `statsig`; the lab template sets it to `otlp-http` explicitly,
 else **no metrics reach the stack**. Also `codex exec` (headless) emits **no
-metrics** and `codex mcp-server` emits no telemetry at all (openai/codex
-[#12913](https://github.com/openai/codex/issues/12913)). No metric saved searches
-are built (metric docs aren't Discover rows); the metrics view feeds dashboards.
+metrics**, and `codex mcp-server` was observed emitting no telemetry at all
+(openai/codex [#12913](https://github.com/openai/codex/issues/12913)) — the
+stack nonetheless ships routing sub-pipelines for the `codex-mcp-server`
+surface, so if a Codex version starts emitting there it is routed like the
+others rather than polluting `traces-apm-default`. The Hooks saved search is
+the one metrics-based view (`codex.hooks.run`); other metric docs aren't useful
+Discover rows and feed dashboards instead.
 
 ## Events (`logs-apm.app.codex_cli_rs-default`, discriminated by `labels.event_name`)
 
@@ -153,9 +174,10 @@ content as noted.
 **Stream noise.** `codex.websocket_event` (894) plus the log_only-side
 `event_kind: response.*.delta` records (2017 `response.output_text.delta` alone)
 are streaming fragments — one per model SSE event. They dominate the stream
-(~2900 of ~2674 distinct… i.e. most rows). Curated views filter a specific
-`event_name` and so exclude them automatically; only the **Event Overview** must
-explicitly drop `codex.websocket_event`.
+(~2900 of ~2674 distinct… i.e. most rows). Every curated view filters a specific
+`event_name` (or the `log_only` family plus a field-exists pill) and so excludes
+them automatically — and the delta fragments never land anyway (dropped at
+ingest; see [Volume reduction](#volume-reduction-ingest-drops)).
 
 **Transport note.** This session streamed the model over **WebSocket**
 (`websocket_connect` → `websocket_request` frames → `websocket_event` stream),
@@ -166,12 +188,14 @@ through `codex.api_request`.
 ## Traces (`traces-apm-agents_codex_cli_rs`)
 
 Codex emits spans natively (APM receives them on `/v1/traces`, no server change).
-This stack **routes** them off the service-agnostic `traces-apm-default` into the
-dedicated `traces-apm-agents_codex_cli_rs` data stream: the agent-agnostic
-`traces-apm@custom` router dispatches by `service.name` to the per-agent
-`traces-apm@custom-codex_cli_rs` sub-pipeline (the real `service.name` is
-`codex_cli_rs`, which the sub-pipeline filename matches), which reroutes to
-namespace `agents_codex_cli_rs` (see [Trace data model](#trace-data-model)). In one
+This stack **routes** them off the service-agnostic `traces-apm-default` into a
+dedicated per-surface data stream (the CLI's is
+`traces-apm-agents_codex_cli_rs`): the agent-agnostic `traces-apm@custom`
+router dispatches by `service.name` to the per-surface sub-pipeline
+(`traces-apm@custom-codex_cli_rs` for the CLI), which forwards into the shared
+`traces-apm@custom-codex` pipeline (the span drops live there) and then
+reroutes to its surface's namespace, `agents_codex_cli_rs` (see
+[Trace data model](#trace-data-model)). In one
 session ~3,479 spans, `span.type: app` (most are streaming-fragment spans dropped
 before the reroute — see [Volume reduction](#volume-reduction-ingest-drops)).
 
@@ -186,12 +210,16 @@ transport- and component-oriented.
 
 Same APM constraint as Claude Code: all OTLP spans default to the service-agnostic
 `traces-apm-default` (no per-service trace dataset), so isolation is by **routing**.
-Isolation reroutes `service.name: codex_cli_rs` → namespace
-**`agents_codex_cli_rs`** in the `traces-apm@custom-codex_cli_rs` sub-pipeline (data stream
-`traces-apm-agents_codex_cli_rs`, still matching `traces-apm-*` so it inherits APM
-trace mappings). The cross-agent glob **`traces-apm-agents_*`** then catches
-claude_code, codex_cli_rs, … while excluding non-agent traces. The reasons to
-isolate (PII once content gates are on, independent deletion/ILM/RBAC,
+Each surface's sub-pipeline (`traces-apm@custom-codex_cli_rs` /
+`…-codex-app-server` / `…-codex-mcp-server`) forwards into the shared
+`traces-apm@custom-codex` pipeline, then reroutes its own `service.name` to a
+per-surface namespace — `agents_codex_cli_rs` / `agents_codex_app_server` /
+`agents_codex_mcp_server` (each data stream still matches `traces-apm-*` so it
+inherits APM trace mappings, and the surface-agnostic glob
+`traces-apm-agents_codex_*` covers them all in one data view / index template).
+The cross-agent glob **`traces-apm-agents_*`** then catches claude_code,
+codex_cli_rs, … while excluding non-agent traces. The reasons to isolate (PII
+once content gates are on, independent deletion/ILM/RBAC,
 experimental/high-churn) are the same as for Claude Code; only traces are routed
 (metrics/logs are already per-service).
 
@@ -205,14 +233,15 @@ content (Codex's export carries none — see below). Two rules govern the design
 - **Leaf-only.** An ES ingest pipeline is stateless and per-document, so it cannot
   reparent children — only a span that is *never* a `parent.id` is safe to drop
   without orphaning descendants.
-- **Per-agent sub-pipeline.** The `@custom` pipelines are agent-agnostic routers that
-  dispatch by `service.name` to per-agent sub-pipelines, so both drops live in Codex's
-  own `…@custom-codex_cli_rs` sub-pipelines and need **no** in-pipeline `service.name`
-  gate — the router already confines them to Codex CLI, and a stack without Codex never
-  installs them.
+- **Shared per-agent pipeline.** The `@custom` pipelines are agent-agnostic routers
+  that dispatch by `service.name` to per-surface sub-pipelines; those are thin
+  forwarders into the shared `…@custom-codex` pipelines, where both drops live
+  once for every surface — with **no** in-pipeline `service.name` gate, since the
+  router already confines them to Codex, and a stack without Codex never installs
+  them.
 
-**Traces — `traces-apm@custom-codex_cli_rs`, dropped *before* the reroute** (so dropped spans
-never reach routing):
+**Traces — the shared `traces-apm@custom-codex`, called by each surface's
+forwarder *before* its reroute** (so dropped spans never reach routing):
 
 | `span.name` | role | leaf? | share |
 | --- | --- | --- | --- |
@@ -228,10 +257,11 @@ opened (consumption is aggregate / dashboard), the volume is decisive (~0.86 TB 
 the data stream's retention. Condition:
 `ctx.span?.name == 'receiving' || ctx.span?.name == 'handle_responses'`.
 
-**Logs — `logs-apm.app@custom-codex_cli_rs`** (the agent-agnostic `logs-apm.app@custom`
-router — which the managed `logs-apm.app@default-pipeline` calls via
-`ignore_missing_pipeline` — dispatches to it on `service.name`). Drop the three **verified** streaming-delta
-`event_kind`s — together ~91% of the stream:
+**Logs — the shared `logs-apm.app@custom-codex`** (the agent-agnostic
+`logs-apm.app@custom` router — which the managed `logs-apm.app@default-pipeline`
+calls via `ignore_missing_pipeline` — dispatches on `service.name` to the
+per-surface forwarders, which call it). Drop the three **verified**
+streaming-delta `event_kind`s — together ~91% of the stream:
 
 ```
    ctx.labels?.event_kind == 'response.output_text.delta'
@@ -271,6 +301,12 @@ instruments (startup phases, MCP cache, sqlite, transport; see Metrics above).
   full `arguments` (command) and `output` (stdout) with no extra gate (unlike
   Claude Code's `OTEL_LOG_TOOL_DETAILS` / `OTEL_LOG_TOOL_CONTENT`). Treat the
   `log_only` stream as content-bearing whenever tools run.
+- **This stack force-redacts all three at ingest, overriding the gates.** The
+  shared `logs-apm.app@custom-codex` pipeline unconditionally sets
+  `labels.prompt`, `labels.arguments`, and `labels.output` to `[REDACTED]`, so
+  the **stored** values never carry content even when a client turns
+  `log_user_prompt` on — the client-side gates describe what the agent *emits*,
+  not what lands. Lengths / counts and the identity envelope still land.
 
 ## Conditional events (not yet observed)
 

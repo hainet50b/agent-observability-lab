@@ -195,7 +195,7 @@ the center can tell you *that* an edge has gone dark. Build both.
   exercises the (A)-with-loss case and is the smallest working end-to-end
   demo. Audit coverage is "VPN-connected sessions only", and this must be
   documented openly to whoever consumes the data.
-- The planned **`claude-otelcol-elastic`** adds the sidecar — it is the
+- **`claude-otelcol-elastic`** adds the sidecar — it is the
   (A)-solved reference implementation, and the working artifact when
   discussing fleet rollout with IT / MDM / SecOps / legal.
 - Anything beyond (A) — tamper resistance, audit enforcement, always-on VPN

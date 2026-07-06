@@ -127,31 +127,9 @@ survives `CODEX_HOME` changes and local-file tampering, since it is not a file.
 Out of scope for the lab's local-layer validation; documented here for
 completeness.
 
-## Placement in this lab (deploy-only, human-gated)
+## Placement in this lab
 
-Managed config is **machine-global, admin-owned, highest-precedence** — it cannot be isolated per-stack with `CODEX_HOME` the way the existing stacks isolate user config. But it does not need a stack of its own: it is an **agent-scoped capability** — templates plus an OS-path-aware placement primitive under `components/agents/<agent>/` — that **any** stack can opt into at setup, regardless of backend (managed config is agent-side; the backend is irrelevant). This placement model is itself agent-agnostic; only the file format, paths, and what is enforceable differ per agent.
-
-It is deliberately a **guarded manual deploy, not part of the automated suite.** Exercising managed config means writing host-global, admin-owned, highest-precedence files that affect **every** agent on the machine and cannot be overridden by a user — too dangerous to drive mechanically. So the lab **does not mechanically verify it**: no verify script, no containerized harness, and **no auto-confirm.** Placement is the deliverable; that enforcement takes effect is confirmed by observation and documented, never by an automated assertion.
-
-Placement is **always interactive:**
-
-- An opt-in (`--scope managed` / a `setup.conf` key) selects the *attempt*; the **confirm itself cannot be bypassed** — there is no `--yes`.
-- **Non-TTY / EOF aborts** (never default-yes), so automation (Ralph, CI) can never place managed config even if it reaches the step.
-- A permission error **fails loud** — print the path and the privileged/manual command — rather than fail-open (unlike the audit hook: the operator asked for this write, so a failure must be seen).
-
-### Never overwrite; track provenance; provide teardown
-
-Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** Placement records a **sidecar provenance marker** beside the managed file (which agent / **OTLP endpoint** / when / target the lab placed it). Ownership is keyed on the **endpoint** — what the host is enforced *toward* — not a stack name (a managed deploy is a host act, not a per-stack one):
-
-| Existing file | Verdict |
-| --- | --- |
-| none | place after confirm, write the marker |
-| lab-placed, same endpoint, same content | no-op (already placed) |
-| lab-placed, same endpoint, changed content | update after explicit confirm |
-| lab-placed, **different endpoint** | refuse — "this host already enforces &lt;endpoint&gt;; run teardown first" |
-| present with **no lab marker** (foreign / real org config) | **hard refuse — never touch it** |
-
-A **teardown script is mandatory** — the counterpart to placement, since a host-global change otherwise persists after the experiment (the machine stays enforced). Teardown removes **only** files the marker confirms the lab placed (restoring the host), **refuses to remove a foreign file**, and is itself interactive + fail-loud (no `--yes`).
+Managed placement follows the shared **deploy-only, human-gated, never-overwrite** model owned by [`config-deployment.md`](config-deployment.md) "Managed placement" — always interactive with no `--yes`, non-TTY aborts, fail-loud on permission errors, a sidecar provenance marker keyed on the endpoint, a hard refusal to touch any file without a lab marker (the path may hold the operator's **real organization's** MDM-pushed config), and a mandatory interactive teardown. One Codex-specific caveat: managed config cannot be isolated per-stack with `CODEX_HOME` the way the stacks isolate user config — `CODEX_HOME` never reaches the managed layer.
 
 ### What can actually be enforced (state it honestly)
 

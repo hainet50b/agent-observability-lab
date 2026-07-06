@@ -35,6 +35,14 @@ Conversation ⊃ Turn ⊃ { User Prompt · LLM Request · Tool Call }
 - **Error views** — failure-filtered complements of LLM Request / Tool Call.
 - **Hooks** — the agent's extensibility runtime (registration / execution).
 
+Not every agent realizes every kind: **Claude** currently ships all five
+(Conversations / Turns rollups, Turn Timeline, per-activity, errors, hooks),
+while **Codex** was deliberately consolidated down to per-activity + Hooks —
+its Conversations / Turns rollups and Turn Timeline saved searches were
+dropped, and User Prompts collapsed to a single `log_only` view. The model
+kinds stay available for a new agent; shipping them is a per-agent curation
+decision, not an obligation.
+
 **The three facets** — each in-turn activity is looked at through up to three
 lenses:
 
@@ -53,10 +61,12 @@ The facets are abstract; each agent fills them from the telemetry it actually
 has. **This is why two agents' saved-search sets differ in shape even though they
 model the same activities.**
 
-- **Codex CLI** emits a **dual log family** — `log_only` (carries content) and
-  `trace_safe` (carries the safe envelope) — plus traces. So each activity fans
-  out to **up to three facet lenses** (e.g. LLM Requests × {Traces / Duration,
-  Log Only / Tokens, Trace Safe / Communication}).
+- **Codex** emits a **dual log family** — `log_only` (carries content) and
+  `trace_safe` (carries the safe envelope) — plus traces, so an activity *can*
+  fan out to multiple facet lenses. The shipped set uses at most **two** per
+  activity: LLM Requests × {Traces / Response Time, Log Only / Tokens},
+  Tool Calls × {Log Only, Trace Safe / I/O Sizes}; User Prompts is a single
+  `log_only` view.
 - **Claude Code** emits a **single event stream** (no `log_only` / `trace_safe`
   split) plus traces, with content gated behind `OTEL_LOG_*` flags. So for Claude
   the **Content and Metadata facets collapse into one event view** — the event
@@ -66,8 +76,9 @@ model the same activities.**
 
 ## Conventions
 
-- **Naming:** `<Agent> — <Entity> (<facet / purpose>)`; mark a superseded view
-  `(Deprecated)` rather than deleting it.
+- **Naming:** `<Agent> — <Entity> (<facet / purpose>)`. A superseded view is
+  **deleted** from the NDJSON bundle (the bundle is the curated set, not a
+  history — git holds the history).
 - **Object kind:** aggregates are ES|QL saved Discover sessions; raw views are
   data-view + filter-pill objects with an empty query bar.
 - **Trailer / spine:** every raw view ends with `trace.id` (click-through).

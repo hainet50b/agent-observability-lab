@@ -205,7 +205,7 @@ seal.compress_min_bytes=512
 # elasticsearch: url/api_key/timeout_ms shared; data_stream is per stream
 elasticsearch.url=https://...
 elasticsearch.api_key=
-elasticsearch.timeout_ms=300
+elasticsearch.timeout_ms=1000
 elasticsearch.data_stream.user_prompt=logs-agent_audit.user_prompt-default
 elasticsearch.data_stream.tool_call=logs-agent_audit.tool_call-default
 ```
