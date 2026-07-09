@@ -35,13 +35,14 @@ Conversation ⊃ Turn ⊃ { User Prompt · LLM Request · Tool Call }
 - **Error views** — failure-filtered complements of LLM Request / Tool Call.
 - **Hooks** — the agent's extensibility runtime (registration / execution).
 
-Not every agent realizes every kind: **Claude** currently ships all five
-(Conversations / Turns rollups, Turn Timeline, per-activity, errors, hooks),
-while **Codex** was deliberately consolidated down to per-activity + Hooks —
-its Conversations / Turns rollups and Turn Timeline saved searches were
-dropped, and User Prompts collapsed to a single `log_only` view. The model
-kinds stay available for a new agent; shipping them is a per-agent curation
-decision, not an obligation.
+Not every agent realizes every kind: both shipped agents (**Claude**,
+**Codex**) are deliberately consolidated down to **per-activity + Hooks** —
+the Conversations / Turns rollups, Turn Timelines, and error views were
+dropped (rollups belong to the deferred Overview dashboard; timelines to the
+APM trace UI via the `trace.id` click-through; failures stay triageable via
+the success columns or a one-off `message` filter on the events data view).
+The model kinds stay available for a new agent; shipping them is a per-agent
+curation decision, not an obligation.
 
 **The three facets** — each in-turn activity is looked at through up to three
 lenses:
