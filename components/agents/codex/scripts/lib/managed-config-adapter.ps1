@@ -2,26 +2,23 @@ $script:McAgent = 'codex'
 
 function Get-McManifest {
     param([string]$Os, [string[]]$Sources = @())
-    switch ($Os) {
-        'windows' {
-            $requirementsTarget = Join-Path $env:ProgramData 'OpenAI\Codex\requirements.toml'
-            $managedTarget = Join-Path $HOME '.codex\managed_config.toml'
-        }
-        'macos' {
-            $requirementsTarget = '/etc/codex/requirements.toml'
-            $managedTarget = '/etc/codex/managed_config.toml'
-        }
-        'linux' {
-            $requirementsTarget = '/etc/codex/requirements.toml'
-            $managedTarget = '/etc/codex/managed_config.toml'
-        }
-        default { Write-McFatal "no Codex managed-config path for os '$Os'" }
+    $root = Get-McManagedRoot $Os
+    if ($Os -eq 'windows') {
+        $sep = '\'
+        # Codex reads managed_config.toml from the user profile on Windows: an
+        # interactive place targets this host's $HOME, while a rendered bundle
+        # carries a USERPROFILE/ placeholder the MDM layer must expand per user.
+        $managedTarget = if ($script:McRenderMode) { '%USERPROFILE%\.codex\managed_config.toml' } else { Join-Path $HOME '.codex\managed_config.toml' }
+    }
+    else {
+        $sep = '/'
+        $managedTarget = "$root/managed_config.toml"
     }
     # requirements.toml is the hook-enforcement layer — placed only when hooks are
     # deployed (--with-hooks). A telemetry-only managed deploy places managed_config.toml
     # alone (symmetric with Claude's env-only managed-settings.json).
     if ($script:McWithHooks) {
-        [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = $requirementsTarget }
+        [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = "$root${sep}requirements.toml" }
     }
     # managed_config.toml carries only telemetry defaults; with no telemetry it
     # would be just a comment, so place it only when telemetry is present.
@@ -29,13 +26,13 @@ function Get-McManifest {
         [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
     }
     if ($script:McWithHooks) {
-        Get-McHookManifestItem (Join-Path (Split-Path -Parent $requirementsTarget) 'hooks')
+        Get-McHookManifestItem "$root${sep}hooks" (Get-McHookFlavor $Os)
     }
 }
 
 function Get-McManagedRoot($Os) {
     switch ($Os) {
-        'windows' { Join-Path $env:ProgramData 'OpenAI\Codex' }
+        'windows' { 'C:\ProgramData\OpenAI\Codex' }
         'macos' { '/etc/codex' }
         'linux' { '/etc/codex' }
         default { Write-McFatal "no Codex managed-config path for os '$Os'" }

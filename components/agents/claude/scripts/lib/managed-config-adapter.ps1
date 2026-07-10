@@ -12,6 +12,7 @@ function Get-McManagedRoot($Os) {
 function Get-McManifest {
     param([string]$Os, [string[]]$Sources = @())
     $root = Get-McManagedRoot $Os
-    [pscustomobject]@{ Key = 'managed-settings'; Source = $Sources[0]; Target = (Join-Path $root 'managed-settings.json') }
-    if ($script:McWithHooks) { Get-McHookManifestItem (Join-Path $root 'hooks') }
+    $sep = if ($Os -eq 'windows') { '\' } else { '/' }
+    [pscustomobject]@{ Key = 'managed-settings'; Source = $Sources[0]; Target = "$root${sep}managed-settings.json" }
+    if ($script:McWithHooks) { Get-McHookManifestItem "$root${sep}hooks" (Get-McHookFlavor $Os) }
 }

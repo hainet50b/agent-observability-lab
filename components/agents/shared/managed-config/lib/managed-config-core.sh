@@ -10,6 +10,7 @@ logs_endpoint=''
 traces_endpoint=''
 metrics_endpoint=''
 marker_endpoint=''
+otlp_api_key=''
 es_url=''
 es_api_key=''
 timeout_ms=''
@@ -22,6 +23,8 @@ seal_key_id=''
 with_hooks=0
 with_telemetry=0
 hooks_stage=''
+os_override=''
+render_dir=''
 
 managed_config::log() { printf '[managed-config] %s\n' "$*" >&2; }
 
@@ -115,9 +118,44 @@ managed_config::parse_args() {
       with_hooks=1
       shift
       ;;
+    --os)
+      [ "$#" -ge 2 ] || managed_config::die "--os needs a value"
+      case $2 in
+      linux | macos | windows) os_override=$2 ;;
+      *) managed_config::die "--os must be linux, macos or windows (got '$2')" ;;
+      esac
+      shift 2
+      ;;
+    --render-dir)
+      [ "$#" -ge 2 ] || managed_config::die "--render-dir needs a value"
+      render_dir=$2
+      shift 2
+      ;;
     *) managed_config::die "unknown argument: $1" ;;
     esac
   done
+  [ -z "$os_override" ] || [ -n "$render_dir" ] || managed_config::die "--os requires --render-dir"
+}
+
+managed_config::render_os_list() {
+  printf '%s' "${os_override:-linux macos windows}"
+}
+
+managed_config::hook_flavor() {
+  case $1 in
+  windows) printf 'ps1' ;;
+  *) printf 'sh' ;;
+  esac
+}
+
+managed_config::render_rel_path() {
+  local t=$1
+  case $t in
+  %USERPROFILE%*) printf 'USERPROFILE%s' "${t#%USERPROFILE%}" ;;
+  [A-Za-z]:/*) printf '%s/%s' "${t%%:*}" "${t#*:/}" ;;
+  /*) printf '%s' "${t#/}" ;;
+  *) managed_config::die "cannot map target '$t' into a render directory" ;;
+  esac
 }
 
 managed_config::require_tty() {
@@ -263,20 +301,21 @@ managed_config::teardown_one() {
 managed_config::stage_hooks() {
   local component_dir=$1 es_url_val=$2 es_api_key_val=${3:-}
   local timeout_ms_val=${4:-} up_enabled_val=${5:-} up_content_val=${6:-} tc_enabled_val=${7:-} tc_content_val=${8:-}
-  local seal_src=${9:-} seal_key_id_val=${10:-} seal_recipients_target=${11:-}
+  local seal_src=${9:-} seal_key_id_val=${10:-} seal_recipients_target=${11:-} flavor=${12:-sh}
   local seal_recipients_conf=""
   local hooks_src="$component_dir/hooks" core_src="$component_dir/../shared/agent-audit/lib"
   local conf_template="$component_dir/templates/agent-audit.template.conf"
   [ -f "$conf_template" ] || managed_config::die "conf template not found: $conf_template"
+  [ -z "$hooks_stage" ] || rm -rf "$hooks_stage"
   hooks_stage=$(mktemp -d) || managed_config::die "could not create temp staging dir"
   mkdir -p "$hooks_stage/lib"
-  cp "$hooks_src/agent-audit.sh" "$hooks_stage/" ||
+  cp "$hooks_src/agent-audit.$flavor" "$hooks_stage/" ||
     managed_config::die "could not stage hook entry script"
-  cp "$hooks_src/lib/adapter.sh" "$hooks_stage/lib/" ||
+  cp "$hooks_src/lib/adapter.$flavor" "$hooks_stage/lib/" ||
     managed_config::die "could not stage hook adapter"
-  cp "$core_src/agent-audit-core.sh" "$hooks_stage/lib/" ||
+  cp "$core_src/agent-audit-core.$flavor" "$hooks_stage/lib/" ||
     managed_config::die "could not stage hook core"
-  cp "$core_src/seal.sh" "$hooks_stage/lib/" ||
+  cp "$core_src/seal.$flavor" "$hooks_stage/lib/" ||
     managed_config::die "could not stage seal helper"
   [ -n "$seal_src" ] && {
     cp "$seal_src" "$hooks_stage/recipient.pem" ||
@@ -295,13 +334,13 @@ managed_config::stage_hooks() {
     -e "s#@@SEAL_KEY_ID@@#$seal_key_id_val#" \
     "$conf_template" >"$hooks_stage/agent-audit.conf" ||
     managed_config::die "could not render agent-audit.conf"
-  chmod +x "$hooks_stage/agent-audit.sh"
+  chmod +x "$hooks_stage/agent-audit.$flavor"
 }
 
 managed_config::hook_manifest_lines() {
-  local hooks_target=$1 rel
-  for rel in agent-audit.sh agent-audit.conf \
-    lib/adapter.sh lib/agent-audit-core.sh lib/seal.sh; do
+  local hooks_target=$1 flavor=${2:-sh} rel
+  for rel in "agent-audit.$flavor" agent-audit.conf \
+    "lib/adapter.$flavor" "lib/agent-audit-core.$flavor" "lib/seal.$flavor"; do
     printf '%s\t%s\t%s\n' "hook:$rel" "$hooks_stage/$rel" "$hooks_target/$rel"
   done
   if [ -z "$hooks_stage" ] || [ -f "$hooks_stage/recipient.pem" ]; then
@@ -328,6 +367,30 @@ managed_config::place() {
 $manifest_lines
 EOF
   [ "$failed" -eq 0 ] || managed_config::die "one or more managed files were refused (see above); nothing foreign was touched"
+}
+
+managed_config::render() {
+  local os=$1
+  shift
+  managed_config::require_adapter
+  local manifest_lines line key rest source target dest
+  manifest_lines=$(managed_config::manifest "$os" "$@")
+  [ -n "$manifest_lines" ] || managed_config::die "manifest empty for os '$os' — nothing to render"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key=${line%%$'\t'*}
+    rest=${line#*$'\t'}
+    source=${rest%%$'\t'*}
+    target=${rest##*$'\t'}
+    [ -f "$source" ] || managed_config::die "$key: source content not found: $source"
+    dest="$render_dir/$agent/$os/$(managed_config::render_rel_path "$target")"
+    mkdir -p "$(dirname -- "$dest")" || managed_config::die "cannot create $(dirname -- "$dest")"
+    cp "$source" "$dest" || managed_config::die "cannot write $dest"
+    if [ -x "$source" ]; then chmod 755 "$dest" 2>/dev/null || true; fi
+    managed_config::log "$key: rendered $dest"
+  done <<EOF
+$manifest_lines
+EOF
 }
 
 managed_config::teardown() {

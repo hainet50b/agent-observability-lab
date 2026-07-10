@@ -7,6 +7,7 @@ $script:McEndpoint = ''
 $script:McWithHooks = $false
 $script:McWithTelemetry = $false
 $script:McHooksStage = ''
+$script:McRenderMode = $false
 
 function Write-McLog($Message) {
     [Console]::Error.WriteLine("[managed-config] $Message")
@@ -22,6 +23,18 @@ function Test-McAdapter {
     if (-not (Get-Command -Name Get-McManifest -ErrorAction SilentlyContinue)) {
         Write-McFatal 'adapter did not define Get-McManifest'
     }
+}
+
+function Get-McHookFlavor($Os) {
+    if ($Os -eq 'windows') { 'ps1' } else { 'sh' }
+}
+
+function Convert-McRenderRelPath($Target) {
+    $t = $Target -replace '\\', '/'
+    if ($t -like '%USERPROFILE%*') { return 'USERPROFILE' + $t.Substring('%USERPROFILE%'.Length) }
+    if ($t -match '^([A-Za-z]):/(.+)$') { return $Matches[1] + '/' + $Matches[2] }
+    if ($t.StartsWith('/')) { return $t.TrimStart('/') }
+    Write-McFatal "cannot map target '$Target' into a render directory"
 }
 
 function Get-McPlatform {
@@ -184,17 +197,18 @@ function Remove-McManagedFile($Item) {
     Write-McLog "${key}: removed $target and its marker"
 }
 
-function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '', $SealRecipientsSrc = '', $SealKeyId = '', $SealRecipientsTarget = '') {
+function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '', $UserPromptEnabled = '', $UserPromptContent = '', $ToolCallEnabled = '', $ToolCallContent = '', $SealRecipientsSrc = '', $SealKeyId = '', $SealRecipientsTarget = '', $Flavor = 'ps1') {
     $hooksSrc = Join-Path $ComponentDir 'hooks'
     $coreSrc = Join-Path $ComponentDir '../shared/agent-audit/lib'
     $confTemplate = Join-Path (Join-Path $ComponentDir 'templates') 'agent-audit.template.conf'
     if (-not (Test-Path -LiteralPath $confTemplate -PathType Leaf)) { Write-McFatal "conf template not found: $confTemplate" }
+    if ($script:McHooksStage) { Remove-Item -LiteralPath $script:McHooksStage -Recurse -Force -ErrorAction SilentlyContinue }
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ('mc-hooks-' + [System.IO.Path]::GetRandomFileName())
     New-Item -ItemType Directory -Force -Path (Join-Path $stage 'lib') | Out-Null
-    Copy-Item -LiteralPath (Join-Path $hooksSrc 'agent-audit.ps1') -Destination $stage -Force
-    Copy-Item -LiteralPath (Join-Path $hooksSrc 'lib/adapter.ps1') -Destination (Join-Path $stage 'lib') -Force
-    Copy-Item -LiteralPath (Join-Path $coreSrc 'agent-audit-core.ps1') -Destination (Join-Path $stage 'lib') -Force
-    Copy-Item -LiteralPath (Join-Path $coreSrc 'seal.ps1') -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $hooksSrc "agent-audit.$Flavor") -Destination $stage -Force
+    Copy-Item -LiteralPath (Join-Path $hooksSrc "lib/adapter.$Flavor") -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $coreSrc "agent-audit-core.$Flavor") -Destination (Join-Path $stage 'lib') -Force
+    Copy-Item -LiteralPath (Join-Path $coreSrc "seal.$Flavor") -Destination (Join-Path $stage 'lib') -Force
     $sealRecipientsConf = ''
     if ($SealRecipientsSrc) {
         Copy-Item -LiteralPath $SealRecipientsSrc -Destination (Join-Path $stage 'recipient.pem') -Force
@@ -215,8 +229,8 @@ function Add-McHookStage($ComponentDir, $EsUrl, $EsApiKey = '', $TimeoutMs = '',
     return $stage
 }
 
-function Get-McHookManifestItem($HooksTarget) {
-    foreach ($rel in @('agent-audit.ps1', 'agent-audit.conf', 'lib/adapter.ps1', 'lib/agent-audit-core.ps1', 'lib/seal.ps1')) {
+function Get-McHookManifestItem($HooksTarget, $Flavor = 'ps1') {
+    foreach ($rel in @("agent-audit.$Flavor", 'agent-audit.conf', "lib/adapter.$Flavor", "lib/agent-audit-core.$Flavor", "lib/seal.$Flavor")) {
         # teardown has no staging dir (McHooksStage empty); Source is unused there, and Join-Path rejects an empty -Path.
         $src = if ($script:McHooksStage) { Join-Path $script:McHooksStage $rel } else { '' }
         [pscustomobject]@{ Key = "hook:$rel"; Source = $src; Target = (Join-Path $HooksTarget $rel) }
@@ -237,6 +251,20 @@ function Invoke-McPlace($Endpoint, $Sources) {
     if ($items.Count -eq 0) { Write-McFatal "manifest empty for os '$os' — nothing to place" }
     foreach ($item in $items) { Install-McManagedFile $item }
     if ($script:McFailed) { Write-McFatal 'one or more managed files were refused (see above); nothing foreign was touched' }
+}
+
+function Invoke-McRender($Os, $RenderDir, $Sources) {
+    Test-McAdapter
+    $script:McRenderMode = $true
+    $items = @(Get-McManifest -Os $Os -Sources $Sources)
+    if ($items.Count -eq 0) { Write-McFatal "manifest empty for os '$Os' — nothing to render" }
+    foreach ($item in $items) {
+        if (-not (Test-Path -LiteralPath $item.Source -PathType Leaf)) { Write-McFatal "$($item.Key): source content not found: $($item.Source)" }
+        $dest = Join-Path (Join-Path (Join-Path $RenderDir $script:McAgent) $Os) (Convert-McRenderRelPath $item.Target)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+        Copy-Item -LiteralPath $item.Source -Destination $dest -Force
+        Write-McLog "$($item.Key): rendered $dest"
+    }
 }
 
 function Invoke-McTeardown {

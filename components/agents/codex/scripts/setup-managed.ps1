@@ -13,13 +13,17 @@ param(
     [string]$ToolCallEnabled = '',
     [string]$ToolCallContent = '',
     [string]$SealRecipientsSrc = '',
-    [string]$SealKeyId = ''
+    [string]$SealKeyId = '',
+    [ValidateSet('linux', 'macos', 'windows')][string]$Os,
+    [string]$RenderDir
 )
 
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/../../shared/managed-config/lib/managed-config-core.ps1"
 . "$PSScriptRoot/lib/managed-config-adapter.ps1"
+
+if ($Os -and -not $RenderDir) { Write-McFatal '-Os requires -RenderDir' }
 
 $WithTelemetry = $false
 if ($LogsEndpoint -or $TracesEndpoint -or $MetricsEndpoint) {
@@ -59,29 +63,41 @@ if ($WithTelemetry) {
     $script:McWithTelemetry = $true
 }
 
+$hookStageArgs = @($ComponentDir, $EsUrl, $EsApiKey, $TimeoutMs, $UserPromptEnabled, $UserPromptContent, $ToolCallEnabled, $ToolCallContent, $SealRecipientsSrc, $SealKeyId)
+if ($WithHooks) {
+    if (-not $EsUrl) { Write-McFatal '-WithHooks requires -EsUrl (audit hooks need the ES endpoint)' }
+    $script:McWithHooks = $true
+}
+
 # Hooks -> requirements.toml (the hook-enforcement layer), with the bundle materialized
 # into the host managed_dir. Without -WithHooks there is no enforcement layer to place:
 # a telemetry-only managed deploy is managed_config.toml alone (symmetric with Claude's
 # env-only managed-settings.json).
-$requirementsRendered = ''
-if ($WithHooks) {
-    if (-not $EsUrl) { Write-McFatal '-WithHooks requires -EsUrl (audit hooks need the ES endpoint)' }
-    $os = Get-McPlatform
-    $hooksRef = Join-Path (Get-McManagedRoot $os) 'hooks'
-    $certTarget = (Join-Path $hooksRef 'recipient.pem') -replace '\\', '/'
-    Add-McHookStage $ComponentDir $EsUrl $EsApiKey $TimeoutMs $UserPromptEnabled $UserPromptContent $ToolCallEnabled $ToolCallContent $SealRecipientsSrc $SealKeyId $certTarget | Out-Null
-    $script:McWithHooks = $true
-    # Codex picks windows_managed_dir on Windows and managed_dir on non-Windows, with no
-    # fallback (hook_config.rs: managed_dir_for_current_platform). This .ps1 runs on Windows,
-    # so emit windows_managed_dir only and drop the managed_dir line.
-    $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
-        -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef `
-        -replace "(?m)^managed_dir = '@@MANAGED_DIR@@'\r?\n", ''
+# Codex picks windows_managed_dir on Windows and managed_dir on non-Windows, with no
+# fallback (hook_config.rs: managed_dir_for_current_platform), so requirements.toml
+# keeps only the key for the target OS.
+function Get-OsRequirementsToml($TargetOs) {
+    if (-not $WithHooks) { return '' }
+    $flavor = Get-McHookFlavor $TargetOs
+    $sep = if ($TargetOs -eq 'windows') { '\' } else { '/' }
+    $hooksRef = (Get-McManagedRoot $TargetOs) + $sep + 'hooks'
+    $certTarget = "$hooksRef/recipient.pem" -replace '\\', '/'
+    Add-McHookStage @hookStageArgs $certTarget $flavor | Out-Null
+    if ($TargetOs -eq 'windows') {
+        $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
+            -replace '@@WINDOWS_MANAGED_DIR@@', $hooksRef `
+            -replace "(?m)^managed_dir = '@@MANAGED_DIR@@'\r?\n", ''
+    }
+    else {
+        $requirementsRendered = (Get-Content -Raw -LiteralPath $requirementsTemplate) `
+            -replace '@@MANAGED_DIR@@', $hooksRef `
+            -replace "(?m)^windows_managed_dir = '@@WINDOWS_MANAGED_DIR@@'\r?\n", ''
+    }
     $hooksRendered = (Get-Content -Raw -LiteralPath $hooksTemplate) `
-        -replace '@@AGENT_AUDIT_SH@@', (Join-Path $hooksRef 'agent-audit.sh') `
-        -replace '@@AGENT_AUDIT_PS1@@', (Join-Path $hooksRef 'agent-audit.ps1') `
-        -replace '@@AGENT_AUDIT_CONF@@', (Join-Path $hooksRef 'agent-audit.conf')
-    $requirementsRendered = $requirementsRendered + "`n" + $hooksRendered
+        -replace '@@AGENT_AUDIT_SH@@', "$hooksRef${sep}agent-audit.sh" `
+        -replace '@@AGENT_AUDIT_PS1@@', "$hooksRef${sep}agent-audit.ps1" `
+        -replace '@@AGENT_AUDIT_CONF@@', "$hooksRef${sep}agent-audit.conf"
+    return $requirementsRendered + "`n" + $hooksRendered
 }
 
 $markerEndpoint = "telemetry=$LogsEndpoint;audit=$EsUrl"
@@ -90,8 +106,18 @@ $managedSource = [System.IO.Path]::GetTempFileName()
 $requirementsSource = [System.IO.Path]::GetTempFileName()
 try {
     [System.IO.File]::WriteAllText($managedSource, $managedRendered, [System.Text.UTF8Encoding]::new($false))
-    [System.IO.File]::WriteAllText($requirementsSource, $requirementsRendered, [System.Text.UTF8Encoding]::new($false))
-    Invoke-McPlace -Endpoint $markerEndpoint -Sources @($requirementsSource, $managedSource)
+    if ($RenderDir) {
+        $osList = if ($Os) { @($Os) } else { @('linux', 'macos', 'windows') }
+        foreach ($targetOs in $osList) {
+            [System.IO.File]::WriteAllText($requirementsSource, (Get-OsRequirementsToml $targetOs), [System.Text.UTF8Encoding]::new($false))
+            Invoke-McRender -Os $targetOs -RenderDir $RenderDir -Sources @($requirementsSource, $managedSource)
+        }
+    }
+    else {
+        $hostOs = Get-McPlatform
+        [System.IO.File]::WriteAllText($requirementsSource, (Get-OsRequirementsToml $hostOs), [System.Text.UTF8Encoding]::new($false))
+        Invoke-McPlace -Endpoint $markerEndpoint -Sources @($requirementsSource, $managedSource)
+    }
 }
 finally {
     Remove-Item -LiteralPath $managedSource -Force -ErrorAction SilentlyContinue
