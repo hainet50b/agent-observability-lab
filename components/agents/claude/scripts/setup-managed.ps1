@@ -15,7 +15,9 @@ param(
     [string]$SealRecipientsSrc = '',
     [string]$SealKeyId = '',
     [ValidateSet('linux', 'macos', 'windows')][string]$Os,
-    [string]$RenderDir
+    [string]$RenderDir,
+    [string]$BundleVersion = '',
+    [string]$BundleVersionFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +26,9 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/lib/managed-config-adapter.ps1"
 
 if ($Os -and -not $RenderDir) { Write-McFatal '-Os requires -RenderDir' }
+if ($BundleVersion -and -not $RenderDir) { Write-McFatal '-BundleVersion requires -RenderDir' }
+$script:McBundleVersion = $BundleVersion
+if ($BundleVersionFile) { $script:McBundleVersionFile = $BundleVersionFile }
 
 $WithTelemetry = $false
 if ($LogsEndpoint -or $TracesEndpoint -or $MetricsEndpoint) {

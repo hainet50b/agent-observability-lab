@@ -8,6 +8,8 @@ $script:McWithHooks = $false
 $script:McWithTelemetry = $false
 $script:McHooksStage = ''
 $script:McRenderMode = $false
+$script:McBundleVersion = ''
+$script:McBundleVersionFile = 'agent-audit.version'
 
 function Write-McLog($Message) {
     [Console]::Error.WriteLine("[managed-config] $Message")
@@ -265,6 +267,13 @@ function Invoke-McRender($Os, $RenderDir, $Sources) {
         Copy-Item -LiteralPath $item.Source -Destination $dest -Force
         Write-McLog "$($item.Key): rendered $dest"
     }
+    if (-not $script:McBundleVersion) { return }
+    $root = Get-McManagedRoot $Os
+    $versionDir = Join-Path (Join-Path (Join-Path $RenderDir $script:McAgent) $Os) (Convert-McRenderRelPath $root)
+    New-Item -ItemType Directory -Force -Path $versionDir | Out-Null
+    $versionDest = Join-Path $versionDir $script:McBundleVersionFile
+    [System.IO.File]::WriteAllText($versionDest, "$script:McBundleVersion`n", [System.Text.UTF8Encoding]::new($false))
+    Write-McLog "version: rendered $versionDest"
 }
 
 function Invoke-McTeardown {

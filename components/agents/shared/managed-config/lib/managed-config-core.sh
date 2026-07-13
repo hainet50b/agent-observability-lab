@@ -25,6 +25,8 @@ with_telemetry=0
 hooks_stage=''
 os_override=''
 render_dir=''
+bundle_version=''
+bundle_version_file='agent-audit.version'
 
 managed_config::log() { printf '[managed-config] %s\n' "$*" >&2; }
 
@@ -131,10 +133,21 @@ managed_config::parse_args() {
       render_dir=$2
       shift 2
       ;;
+    --bundle-version)
+      [ "$#" -ge 2 ] || managed_config::die "--bundle-version needs a value"
+      bundle_version=$2
+      shift 2
+      ;;
+    --bundle-version-file)
+      [ "$#" -ge 2 ] || managed_config::die "--bundle-version-file needs a value"
+      bundle_version_file=$2
+      shift 2
+      ;;
     *) managed_config::die "unknown argument: $1" ;;
     esac
   done
   [ -z "$os_override" ] || [ -n "$render_dir" ] || managed_config::die "--os requires --render-dir"
+  [ -z "$bundle_version" ] || [ -n "$render_dir" ] || managed_config::die "--bundle-version requires --render-dir"
 }
 
 managed_config::render_os_list() {
@@ -373,7 +386,7 @@ managed_config::render() {
   local os=$1
   shift
   managed_config::require_adapter
-  local manifest_lines line key rest source target dest
+  local manifest_lines line key rest source target dest root version_dest
   manifest_lines=$(managed_config::manifest "$os" "$@")
   [ -n "$manifest_lines" ] || managed_config::die "manifest empty for os '$os' — nothing to render"
   while IFS= read -r line; do
@@ -391,6 +404,12 @@ managed_config::render() {
   done <<EOF
 $manifest_lines
 EOF
+  [ -n "$bundle_version" ] || return 0
+  root=$(managed_config::managed_root "$os")
+  version_dest="$render_dir/$agent/$os/$(managed_config::render_rel_path "$root")/$bundle_version_file"
+  mkdir -p "$(dirname -- "$version_dest")" || managed_config::die "cannot create $(dirname -- "$version_dest")"
+  printf '%s\n' "$bundle_version" >"$version_dest" || managed_config::die "cannot write $version_dest"
+  managed_config::log "version: rendered $version_dest"
 }
 
 managed_config::teardown() {
