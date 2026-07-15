@@ -42,7 +42,11 @@ dropped (rollups belong to the deferred Overview dashboard; timelines to the
 APM trace UI via the `trace.id` click-through; failures stay triageable via
 the success columns or a one-off `message` filter on the events data view).
 The model kinds stay available for a new agent; shipping them is a per-agent
-curation decision, not an obligation.
+curation decision, not an obligation. One rollup outside the conversation spine
+did ship for both agents: **User Activity** — an ES|QL aggregate over User
+Prompts, one row per `labels.user_email` (prompt volume, active days, avg per
+day, last used). It is an adoption lens keyed by identity, not a revival of the
+Conversations / Turns rollups.
 
 **The three facets** — each in-turn activity is looked at through up to three
 lenses:
