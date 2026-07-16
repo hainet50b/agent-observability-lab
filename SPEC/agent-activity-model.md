@@ -46,7 +46,13 @@ curation decision, not an obligation. One rollup outside the conversation spine
 did ship for both agents: **User Activity** — an ES|QL aggregate over User
 Prompts, one row per `labels.user_email` (prompt volume, active days, avg per
 day, last used). It is an adoption lens keyed by identity, not a revival of the
-Conversations / Turns rollups.
+Conversations / Turns rollups. Both rollups are also embedded side-by-side in
+the cross-agent **Agents — Adoption Overview** dashboard
+(`kibana/agents/dashboard.ndjson`), which references both agents' data views
+and saved searches and therefore imports only after both agents' bundles.
+No lab stack imports it — each stack stays closed over its single-agent
+concern; `agents/` is a fleet-level bundle for environments running several
+agents (e.g. the live deployment).
 
 **The three facets** — each in-turn activity is looked at through up to three
 lenses:
