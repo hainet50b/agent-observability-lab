@@ -9,7 +9,6 @@ This is an infrastructure / demo repository, not an application codebase. The "c
 - **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up` (the unit of delivery is a running stack, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
 - **POSIX shell (`sh`/`bash`)** — smoke tests, health waits, and verification queries under each stack's `scripts/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean.
 - **PowerShell (`pwsh`)** — each `.sh` script ships a `.ps1` mirror with identical behaviour for Windows hosts; keep the pair in sync and `PSScriptAnalyzer`-clean. `.ps1` files carry **no shebang**: PowerShell does not honour one, these scripts are always invoked via `powershell`/`pwsh -File` or `&` (never executed directly), and a `#!/usr/bin/env pwsh` line both is dead and misleadingly implies a PS7 requirement where Windows fleets run `powershell.exe` (5.1).
-- **Java / Spring Boot (`callers/` only)** — the one exception to "no application codebase": `callers/<app>/` are small JVM programs that *drive* an agent, not part of any stack. Standard Spring Boot layout, built and run through the committed Maven wrapper (`./mvnw spring-boot:run`; `only-script`, no jar). Keep them minimal (a caller emits no telemetry of its own) and pinned (Spring Boot version explicit in `pom.xml`, Java 25).
 
 ## Comments and leanness
 
