@@ -14,8 +14,7 @@ searches** rather than extra data views (a data view holds only an index-pattern
 no credential is needed and the rendered telemetry config carries none by default.
 A stack can still ship one for a secured endpoint: set the backing service's api_key
 in the gitignored `setup.local.conf` (copy from `setup.local.conf.example`) —
-`telemetry.apm_server.api_key` in `claude-elastic`,
-`telemetry.otel_collector.api_key` in `claude-otelcol-elastic` — and
+`telemetry.apm_server.api_key` in `claude-elastic` — and
 `setup-config` renders `OTEL_EXPORTER_OTLP_HEADERS: "Authorization=ApiKey <key>"`
 into the settings `env` block. Absent or empty → no header line, byte-identical to
 a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; see
@@ -58,13 +57,10 @@ be attributed to a **person** (`labels.user_email` — the "who") and to a
 **session** (`session.id`), but **not to a device** — there is no "which machine"
 axis in the native telemetry, only a coarse OS class. For fleet auditing where
 device-level attribution matters (managed vs personal machine, which laptop), it
-must be **added downstream**: a local OpenTelemetry Collector (the `otelcol-sidecar`
-path) can stamp `host.name` / `host.id` onto every passing signal via a
-`resourcedetection` processor. Caveat for this lab: the Collector runs in a
-*container*, so a `system` detector reports the **container's** hostname, not the
-laptop's — the dockerized stacks demonstrate the *mechanism*; a real fleet runs the
-Collector as a host service (systemd / launchd) where it picks up the true host
-name.
+would have to be **added downstream**, by infrastructure below the agent; the lab
+ships no such component, so in the telemetry stacks the gap simply stands. (The
+**audit** path is different: its hooks run on the host and record `host.name` /
+`host.hostname` themselves — see [`agent-audit.md`](agent-audit.md).)
 
 ## Metrics (`metrics-apm.app.claude_code-default`)
 

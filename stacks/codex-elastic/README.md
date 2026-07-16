@@ -10,9 +10,7 @@ Codex CLI  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsearc
 ```
 
 **APM Server** is the OTLP receiver — Elastic's native, fully-supported way to ingest
-OpenTelemetry straight into Elasticsearch. Codex CLI points at it directly rather than
-through an OpenTelemetry Collector (a Collector variant would be a separate stack,
-mirroring [`claude-otelcol-elastic`](../claude-otelcol-elastic/)).
+OpenTelemetry straight into Elasticsearch; Codex CLI points at it directly.
 
 > 🚧 **Session wired; data views + curated saved searches in.** This stack stands up the
 > composition, proves the OTLP path with the synthetic smoke test, points a real Codex CLI

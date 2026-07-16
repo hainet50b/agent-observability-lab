@@ -1,2 +1,0 @@
-{"id":"otelcol-sidecar-metrics","type":"index-pattern","managed":false,"attributes":{"name":"OTel Collector Sidecar — Metrics","title":"metrics-apm.app.otelcol_sidecar*","timeFieldName":"@timestamp"},"references":[],"coreMigrationVersion":"9.4.2"}
-{"exportedCount":1,"missingRefCount":0,"missingReferences":[]}

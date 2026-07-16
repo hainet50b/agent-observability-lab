@@ -32,7 +32,7 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 
 ## Placement is marker-aware and fail-if-foreign — across all scopes
 
-Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for `local`/`project` telemetry deploys the OTLP base (the `apm_server` / `otel_collector` endpoint), for audit deploys the audit ES url; a **`managed`** deploy writes a composite `telemetry=<logs OTLP endpoint>;audit=<audit ES url>` value (always both halves, the unused one empty), since one managed deploy can carry both concerns. It is what teardown matches on to recognize its own work. A render script writes only its **own** concern's key and takes an optional **marker-endpoint override**, so a deploy that materializes both concerns into one agent home can key every file on a single deployment endpoint and let telemetry + audit **co-own** the shared `settings.local.json` / `config.toml`.
+Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — four lines `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `endpoint` is the deploy's data-plane endpoint, threaded from `setup-config`: for `local`/`project` telemetry deploys the OTLP base (the `apm_server` endpoint), for audit deploys the audit ES url; a **`managed`** deploy writes a composite `telemetry=<logs OTLP endpoint>;audit=<audit ES url>` value (always both halves, the unused one empty), since one managed deploy can carry both concerns. It is what teardown matches on to recognize its own work. A render script writes only its **own** concern's key and takes an optional **marker-endpoint override**, so a deploy that materializes both concerns into one agent home can key every file on a single deployment endpoint and let telemetry + audit **co-own** the shared `settings.local.json` / `config.toml`.
 
 `managed` placement is **interactive** (confirm each file — or answer `a` once to accept the rest — non-TTY aborts; the `a` shortcut is still interactive, not a `--yes` bypass) via `components/agents/shared/managed-config/`. `local` and `project` are **non-interactive** via the shared helper `components/agents/shared/config-place/`, reused by every render script and by local/project teardown. Both share the marker format and the fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
 
@@ -98,7 +98,6 @@ Each stack's `setup.conf` is the single source for the values the setup scripts 
 |---|---|---|
 | **Control plane** | `elasticsearch.url`, `kibana.url` — endpoints `setup-backend` waits on / loads assets into. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) that `render-mcp` places verbatim | all |
 | **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | `claude-elastic`, `codex-elastic` |
-| | `telemetry.otel_collector.endpoint` (`:4318`) | `claude-otelcol-elastic` |
 | **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | `claude-elastic-audit`, `codex-elastic-audit` |
 
 `setup-config` builds the three `/v1/{logs,traces,metrics}` URLs from the telemetry OTLP base. The data-plane key names the actual backing service rather than a generic `otlp` (the architecture is already exposed via the control-plane `elasticsearch.url` / `kibana.url`). Audit details: see [`agent-audit.md`](agent-audit.md).
@@ -108,10 +107,9 @@ Each stack's `setup.conf` is the single source for the values the setup scripts 
 | Stacks | Secret key | Threaded to | Rendered header |
 |---|---|---|---|
 | Audit | `agent_audit.elasticsearch.api_key` | the audit hook config | (see [`agent-audit.md`](agent-audit.md)) |
-| Telemetry (APM) | `telemetry.apm_server.api_key` | `setup-config` → `setup-telemetry` → `render-otel` | `Authorization: ApiKey <key>` on OTLP exports |
-| Telemetry (Collector) | `telemetry.otel_collector.api_key` | (same) | (same) |
+| Telemetry | `telemetry.apm_server.api_key` | `setup-config` → `setup-telemetry` → `render-otel` | `Authorization: ApiKey <key>` on OTLP exports |
 
-For telemetry, Claude sends the header via `OTEL_EXPORTER_OTLP_HEADERS` in the settings `env` block; Codex via the per-exporter `headers` table in `[otel.*.otlp-http]`. When **absent the rendered otel config is byte-identical to a no-key run** — no header line emitted — which suits the local demo APM Server / Collector, whose auth is disabled.
+For telemetry, Claude sends the header via `OTEL_EXPORTER_OTLP_HEADERS` in the settings `env` block; Codex via the per-exporter `headers` table in `[otel.*.otlp-http]`. When **absent the rendered otel config is byte-identical to a no-key run** — no header line emitted — which suits the local demo APM Server, whose auth is disabled.
 
 ## Managed materialize
 

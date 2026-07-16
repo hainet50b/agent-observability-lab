@@ -1,5 +1,0 @@
-name: claude-otelcol-elastic
-
-include:
-  - ../../components/backends/elastic/docker-compose.yml
-  - ../../components/paths/otelcol-sidecar/docker-compose.yml

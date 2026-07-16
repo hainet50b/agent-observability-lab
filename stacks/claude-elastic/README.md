@@ -11,10 +11,8 @@ Claude Code  ──OTLP/HTTP (+gRPC)──▶  APM Server  ──▶  Elasticsea
 ```
 
 **APM Server** is the OTLP receiver — Elastic's native, fully-supported way to
-ingest OpenTelemetry straight into Elasticsearch. Claude Code points at it
-directly rather than through an OpenTelemetry Collector; both are valid, and the
-Collector variant is the separate [`claude-otelcol-elastic`](../claude-otelcol-elastic/)
-stack.
+ingest OpenTelemetry straight into Elasticsearch; Claude Code points at it
+directly.
 
 > ⚠️ **Demo posture only.** Single node, security disabled, ports bound to
 > `127.0.0.1`. Never expose this publicly. The events channel can capture your

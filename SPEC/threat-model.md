@@ -1,10 +1,9 @@
 # Threat model and audit coverage
 
-This document records why the lab grows a local-sidecar variant
-(`claude-otelcol-elastic`, future `codex-otelcol-elastic`, …) of every
-direct stack, and what that variant does and does **not** solve. It exists
-because the same question keeps coming back — *"can't a user just disable
-VPN to evade audit?"* — and the honest answer shapes the lab's scope.
+This document records the audit-coverage boundaries of the lab's two
+acquisition paths — OTel telemetry and hook audit. It exists because the
+same question keeps coming back — *"can't a user just disable VPN to evade
+audit?"* — and the honest answer shapes the lab's scope.
 
 ## Two threat models
 
@@ -18,8 +17,8 @@ bad designs.
   temporarily broken.
 - **(B) Adversarial / audit evasion.** The user actively wants their
   activity not recorded — disables VPN, kills the agent process, edits
-  config, deletes the sidecar binary or its queue, formats the disk. The
-  audit goal is *tamper resistance*.
+  config, deletes local telemetry state, formats the disk. The audit goal
+  is *tamper resistance*.
 
 ## What telemetry can and cannot do
 
@@ -43,7 +42,7 @@ The agent-audit stacks (`*-elastic-audit`) capture prompts and tool calls with
 **agent hooks** that POST straight to Elasticsearch (`logs-agent_audit.*`) — a
 different mechanism from the OTel telemetry path above. The same (A)/(B)
 boundary applies (it is an (A) tool), but the hook path sits on a **lower
-floor** than the OTel sidecar, so its limits must be stated explicitly or it
+floor** than the OTel telemetry path, so its limits must be stated explicitly or it
 will be mistaken for a tamper-proof audit trail — which it is not. Mistaking it
 for one is worse than having no audit: decisions get made on data that is
 incomplete and forgeable.
@@ -98,106 +97,29 @@ still be dropped or forged, which is polishing a foundation with a hole in it.
 In one line: the hook-audit answers *"what did cooperative users do?"* — never
 *"prove a motivated user did not evade it."*
 
-## Solving (A): local sidecar with persistent queue
+## The (A) gap in the direct telemetry path
 
 Claude Code (and other OTel-emitting agents) use the OpenTelemetry SDK's
 OTLP exporter, which buffers **in memory only**. If the network is down at
 flush time, the batch is retried for a short window and then lost on process
-exit. The OpenTelemetry JS SDK has no built-in disk-persistent exporter
-today, and Claude Code exposes no hook for one — so this cannot be solved at
-the agent layer without an upstream change.
+exit — so even the cooperative (A) case has a loss window on a flaky link,
+and this cannot be fixed at the agent layer without an upstream change.
 
-The standard remedy is to insert a local **OpenTelemetry Collector** as a
-same-host sidecar:
-
-```
-Agent ──OTLP(localhost:4318)──▶ Collector ──OTLP──▶ Backend
-                                  │
-                                  └─ file_storage extension + sending_queue
-                                     (durable on-disk queue per exporter)
-```
-
-The Collector's `file_storage` extension, combined with the OTLP exporter's
-`sending_queue.storage`, persists every batch to disk before retry. When
-the network comes back, the queue drains. The queue is **per-exporter**, so
-when the same Collector fans out to multiple backends, one backend being
-unreachable does not back-pressure the others.
-
-The agent points at `localhost:4318` — always reachable — so its export
-path never fails as long as the local Collector is up. The local Collector
-is what this lab's `*-otelcol-*` stacks demonstrate.
-
-## What this still costs to deploy at fleet scale
-
-The Collector approach is technically off-the-shelf, but rolling it out to
-every employee's machine is the hard part. The honest list:
-
-- **Installation:** MDM-pushed (Intune on Windows, Jamf / Kandji on macOS)
-  as a system service (`Windows Service` / `LaunchDaemon`). Zero user UI.
-- **Pointing the agent at the sidecar:** for Claude Code, this is the
-  `managed-settings.json` mechanism (highest precedence — user cannot
-  override) distributed by the same MDM. For Codex and other agents, each
-  has its own enforcement story.
-- **PII at rest on the device:** with content gates on
-  (`OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_TOOL_CONTENT`,
-  `OTEL_LOG_RAW_API_BODIES`), the on-disk `file_storage` queue contains
-  prompt text and tool I/O. Disk encryption, queue size / retention caps,
-  end-of-life device handling become legal / privacy concerns, not just
-  technical ones.
-- **Secrets on the device:** the Collector's auth to the central backend
-  (API key, mTLS cert) must be system-owned, user-unreadable, and
-  rotatable.
-- **Multi-OS:** Windows + macOS at minimum, each with its own packaging
-  and service-management story.
-- **Self-observation:** a sidecar that dies silently is an audit hole. A
-  heartbeat metric or "no telemetry from device X for Y minutes" alert is
-  mandatory, not optional.
-
-Treat the sidecar rollout as a cross-functional project
-(Observability + IT/MDM + SecOps + legal/privacy), not as the Observability
-team's solo work.
-
-## Observing the sidecar itself
-
-A sidecar that dies silently is an audit hole, so the Collector must be
-observable too. This splits into two responsibilities on **two sides**, which
-are complementary — not alternatives:
-
-- **Edge side — the Collector reports its own health.** An OpenTelemetry
-  Collector emits its own internal telemetry (`otelcol_exporter_queue_size`,
-  `otelcol_exporter_send_failed_*`, `otelcol_receiver_accepted_*`, `process_*`
-  CPU/memory, …) via the **`service.telemetry`** subsystem — which is a
-  *separate path* from the data pipelines that carry the agent's telemetry, so
-  the Collector's self-metrics do **not** ride the agent payload's
-  `file_storage` queue. This is the standard, natural configuration: point
-  `service.telemetry.metrics` at the same backend over OTLP. The single most
-  useful signal is `otelcol_exporter_queue_size` — a growing persistent queue
-  means the link to the central backend is failing while the agent keeps
-  working locally. This lab's `*-otelcol-*` stacks demonstrate this edge side.
-- **Central side — detect the *absence* of an edge.** Edge self-telemetry only
-  arrives when the edge can reach the center. When the VPN is down, the
-  Collector is dead, or the laptop is powered off, the central backend receives
-  **nothing** from that host — by definition no edge mechanism can self-report
-  that condition. The only way to catch a host that has gone silent is to
-  detect it **centrally**: alert on "no telemetry from device X for Y minutes"
-  (heartbeat-absence) against the expected fleet inventory. This is an operator
-  responsibility on the central backend, **out of scope for the lab to
-  implement** (it needs the real fleet roster and alerting policy), but it is
-  the load-bearing half of sidecar observability and is recorded here so it is
-  not mistaken for something the edge configuration solves.
-
-In short: the edge can tell you *how* it is doing while it is reachable; only
-the center can tell you *that* an edge has gone dark. Build both.
+Closing that window requires infrastructure **below the agent** — a
+same-host relay with a durable on-disk queue — plus the fleet rollout that
+entails (MDM installation, managed config pointing the agent at it,
+PII-at-rest and device-secret handling, and observing the relay itself).
+The lab once prototyped that pattern and has since **removed it** to stay
+converged on acquisition methods and data formats; git history holds the
+working reference. Treat durable transport as deployment infrastructure
+outside the lab's scope.
 
 ## Where this leaves the lab
 
-- The first stack **`claude-elastic`** is **direct** (no sidecar) — it
-  exercises the (A)-with-loss case and is the smallest working end-to-end
-  demo. Audit coverage is "VPN-connected sessions only", and this must be
-  documented openly to whoever consumes the data.
-- **`claude-otelcol-elastic`** adds the sidecar — it is the
-  (A)-solved reference implementation, and the working artifact when
-  discussing fleet rollout with IT / MDM / SecOps / legal.
+- The telemetry stacks (`claude-elastic`, `codex-elastic`) are **direct**
+  (agent → APM Server) — the (A)-with-loss posture. Audit coverage is
+  "connected sessions only", and this must be documented openly to whoever
+  consumes the data.
 - Anything beyond (A) — tamper resistance, audit enforcement, always-on VPN
   policy — is **out of scope for this lab** and belongs to endpoint-security
   tooling outside it.

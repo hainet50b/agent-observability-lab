@@ -12,29 +12,27 @@ agent-observability-lab/
 │  ├─ backends/
 │  │  ├─ services/<service>/                     # shared service fragment: compose def + config + a concern-namespaced asset library (<concern>/) + the one importer that loads chosen concerns (elasticsearch / kibana / apm-server)
 │  │  └─ <backend>/                              # a backend = `include:` of the service fragments it needs + façade scripts (setup-elasticsearch / setup-kibana) selecting which concerns to apply; owns no asset files of its own
-│  ├─ paths/<path>/                              # transport-layer addition between agent and backend (e.g. otelcol-sidecar)
 │  ├─ agents/<agent>/                            # agent-runtime config (templates + render primitives) behind concern façades (setup-telemetry / setup-audit); no Kibana assets
 │  └─ agents/shared/                             # agent-agnostic libraries the agents' scripts source: agent-audit/ (hook core + sealing), config-place/ (marker-aware placement), managed-config/ (managed-scope placement)
 ├─ stacks/
-│  └─ <combo>/                                   # one composition (Backends × Path? × Agents): docker-compose `include:` + Quick Tour README + any combination-specific glue
+│  └─ <combo>/                                   # one composition (Backends × Agents): docker-compose `include:` + Quick Tour README + any combination-specific glue
 └─ callers/<app>/                                # a calling application that drives an agent as a subprocess to exercise its telemetry — propagates a trace id (TRACEPARENT) + tags per-app identity (OTEL_RESOURCE_ATTRIBUTES); emits no telemetry itself
 ```
 
-A stack composes one or more Backends, optionally a Path, and one or more Agents by `include:`ing the relevant component compose files; the stack directory carries only the combination's `README.md` and any glue that is specific to *that* combination (e.g. a fan-out Collector config enumerating multiple Backends). The typical stack is 1×1×1, but multi-Backend fan-out (one Collector to several backends) and multi-Agent (several agents on one Backend) are first-class compositions. The **direct** path — agent talking straight to the Backend over the network — has no `paths/` component; a direct stack simply includes the Backend alone.
+A stack composes one or more Backends and one or more Agents by `include:`ing the relevant component compose files; the stack directory carries only the combination's `README.md` and any glue that is specific to *that* combination. The typical stack is 1×1, but multi-Agent (several agents on one Backend) is a first-class composition. The agent talks **directly** to the Backend over the network.
 
 A **caller** under `callers/<app>/` is the counterpart to a stack from the other side of the wire: not a Backend/Agent composition but a small *application* that launches an agent (`claude -p`, `codex exec`) as a subprocess, to demonstrate two client-side concerns — **joining** the agent's spans into the caller's distributed trace by passing `TRACEPARENT`, and **attributing** agent usage per launching application by passing `OTEL_RESOURCE_ATTRIBUTES` (`caller.name`, which lands as `labels.caller_name` on every agent signal; a single run is identified by its `trace.id`). A caller **emits no telemetry of its own** — the lab observes the *agent's* signals — and it never changes the agent's `service.name`, so the standard pipelines/templates/views apply unchanged. It reuses an existing stack's backend rather than standing up its own.
 
-## The five stacks
+## The four stacks
 
-Three telemetry stacks (agent → OTLP → APM) and two audit stacks (agent hooks → ES). Ports are localhost-bound (demo posture).
+Two telemetry stacks (agent → OTLP → APM) and two audit stacks (agent hooks → ES). Ports are localhost-bound (demo posture).
 
-| Stack | Agent | Concern | Backend | Path | Data-plane key | Backend ports |
-|---|---|---|---|---|---|---|
-| `claude-elastic` | Claude | telemetry | `elastic` | direct | `telemetry.apm_server.endpoint` `:8200` | ES `9200`, Kibana `5601`, APM `8200` |
-| `codex-elastic` | Codex | telemetry | `elastic` | direct | `telemetry.apm_server.endpoint` `:8200` | ES `9200`, Kibana `5601`, APM `8200` |
-| `claude-otelcol-elastic` | Claude | telemetry | `elastic` | `otelcol-sidecar` | `telemetry.otel_collector.endpoint` `:4318` | + Collector `4317`/`4318` |
-| `claude-elastic-audit` | Claude | audit | `elastic-audit` | direct | `agent_audit.elasticsearch.url` `:9200` | ES `9200`, Kibana `5601` (no APM) |
-| `codex-elastic-audit` | Codex | audit | `elastic-audit` | direct | `agent_audit.elasticsearch.url` `:9200` | ES `9200`, Kibana `5601` (no APM) |
+| Stack | Agent | Concern | Backend | Data-plane key | Backend ports |
+|---|---|---|---|---|---|
+| `claude-elastic` | Claude | telemetry | `elastic` | `telemetry.apm_server.endpoint` `:8200` | ES `9200`, Kibana `5601`, APM `8200` |
+| `codex-elastic` | Codex | telemetry | `elastic` | `telemetry.apm_server.endpoint` `:8200` | ES `9200`, Kibana `5601`, APM `8200` |
+| `claude-elastic-audit` | Claude | audit | `elastic-audit` | `agent_audit.elasticsearch.url` `:9200` | ES `9200`, Kibana `5601` (no APM) |
+| `codex-elastic-audit` | Codex | audit | `elastic-audit` | `agent_audit.elasticsearch.url` `:9200` | ES `9200`, Kibana `5601` (no APM) |
 
 `elastic` = `elasticsearch` + `kibana` + `apm-server` (the full OTLP ingest path); `elastic-audit` = `elasticsearch` + `kibana` only (audit hooks write straight to ES, never the OTLP/APM path). Telemetry and audit are **separate stacks**, alternatives — not co-run — each with its own agent home and volumes. The deep references per concern are indexed in [Reference documents](#reference-documents).
 
@@ -42,7 +40,6 @@ Component responsibilities:
 
 - **`components/backends/services/<service>/`** is a shared, agent- and backend-agnostic **service fragment**: its Compose service definition (`docker-compose.yml`, no `name:`), its config file, the **asset library that service consumes, namespaced by concern** (`<concern>/`, one ES object / Kibana bundle per file, typed by filename suffix — e.g. `*.pipeline.json`, `*.template.json`, `data-views.ndjson`), and the **single importer** that loads chosen concerns into the running service (`import-elasticsearch-assets` / `import-kibana-assets`, taking concern names). Both service components share this concern-first shape. Composed into backends via `include:`.
 - **`components/backends/<backend>/`** is a **composition, not an asset owner**: a `docker compose include:` over the service fragments it needs, plus **façade scripts** (`setup-elasticsearch` / `setup-kibana`) that select which concerns to apply to each service. It owns no service definitions, config, or asset files of its own.
-- **`components/paths/<path>/`** owns transport-layer services (e.g. a local OpenTelemetry Collector) and their default config. Non-trivial wiring (multi-Backend fan-out, alternative pipelines) is expressed as a per-stack configuration override rather than by parameterizing the path component, so each composition stays explainable from its own files. (Its Kibana assets, being Kibana-consumed, live in `services/kibana/` like an agent's — see the placement rule below.)
 - **`components/agents/<agent>/`** owns only what the **agent runtime** consumes: telemetry-config templates (the `[otel]` / MCP / hooks blocks, `managed-settings.json` excerpt), hook scripts, the hook-delivery config they read (`agent-audit.conf`), and the **render primitives** that materialize them into the agent home — fronted by **concern façades** (`setup-telemetry` / `setup-audit`). Telemetry templates take the **full per-signal OTLP endpoints** from the caller — no `/v1/<signal>` path construction in the agent. It owns **no** Kibana assets.
 - **`components/agents/shared/`** holds the agent-agnostic libraries those per-agent scripts source, one dir per concern: `agent-audit/lib/` (the hook core + sealing, copied into each deployed bundle), `config-place/lib/` (the marker-aware placement primitive every render script uses), `managed-config/lib/` (the interactive managed-scope placement core). Nothing here is deployed on its own — an agent's façade decides what to render and copy.
 
@@ -87,14 +84,14 @@ Index templates attach their policy by **composition**, two ways depending on wh
 
 ## Audit-coverage scope
 
-Telemetry-as-audit in this lab targets the **non-adversarial / network-reliability** threat model only; the adversarial / audit-evasion model is explicitly out of scope and belongs to endpoint-security tooling outside the lab. This framing is what motivates the `*-otelcol-*` sidecar variants of the direct stacks (`claude-otelcol-elastic` today; a Codex counterpart would follow the same shape). The full rationale, the (A)/(B) distinction, the sidecar + `file_storage` solution, and the real cost of fleet rollout are in [`threat-model.md`](threat-model.md).
+Telemetry-as-audit in this lab targets the **non-adversarial / network-reliability** threat model only; the adversarial / audit-evasion model is explicitly out of scope and belongs to endpoint-security tooling outside the lab. The full rationale, the (A)/(B) distinction, and the hook-audit's bypass / failure surface are in [`threat-model.md`](threat-model.md).
 
 ## Reference documents
 
 Developer-facing references that sit beside this spec. The user-facing `README.md` files do **not** link into these — they are found here, via `SPEC/`:
 
 - [`agent-activity-model.md`](agent-activity-model.md) — the agent-agnostic activity model the Kibana saved searches are designed from (Conversation ⊃ Turn ⊃ {prompt, LLM request, tool call}; the Execution / Content / Metadata facets; the `conversation_id` + `trace.id` spine) and how each agent's telemetry realizes it (Codex's dual-family facet fan-out vs Claude's collapsed event view). The top-down design contract for onboarding a new agent's views.
-- [`threat-model.md`](threat-model.md) — audit-coverage threat model: the (A) non-adversarial / (B) adversarial split, why telemetry only solves (A), and the local-sidecar (`file_storage`) solution the `*-otelcol-*` stacks demonstrate.
+- [`threat-model.md`](threat-model.md) — audit-coverage threat model: the (A) non-adversarial / (B) adversarial split, why telemetry can only serve (A), and the hook-audit's bypass / failure surface.
 - [`agent-audit.md`](agent-audit.md) — direct agent-audit data streams and hook delivery: canonical user-prompt schema, mapping/lifecycle defaults, fail-open delivery, and hook-specific configuration.
 - [`claude-telemetry.md`](claude-telemetry.md) — what Claude Code emits into the `claude-elastic` stack: every metric / event / span field, the string-vs-numeric and PII caveats, the trace data model, and the trace-isolation routing.
 - [`codex-telemetry.md`](codex-telemetry.md) — what OpenAI Codex emits into the `codex-elastic` stack: the per-surface `service.name`s (`codex_cli_rs`, `codex-app-server`, `codex-mcp-server`), the dual `log_only`/`trace_safe` log families (identity+content vs `event_name`, joined on `call_id`/`span.id`), the metric/event catalogs, the WebSocket-vs-SSE transport split, and the trace-isolation routing.
