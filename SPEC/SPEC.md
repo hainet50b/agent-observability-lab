@@ -7,7 +7,6 @@ Internal spec for people (and agents) implementing the lab. User-facing surface 
 ```
 agent-observability-lab/
 ├─ PRD.md / SPEC/ / CONVENTIONS.md / README.md   # repo-wide spec layer (owned by human + conversational LLM)
-├─ prompt.md / ralph.sh / ralph.ps1              # Ralph Loop driver
 ├─ components/                                   # reusable building blocks composed by stacks
 │  ├─ backends/
 │  │  ├─ services/<service>/                     # shared service fragment: compose def + config + a concern-namespaced asset library (<concern>/) + the one importer that loads chosen concerns (elasticsearch / kibana / apm-server)
