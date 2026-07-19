@@ -249,8 +249,8 @@ trace position. They complement each other.
 
 **Trace root depends on session type — so "one trace" means different things.**
 The `claude_code.interaction` root span is emitted **only in interactive REPL
-sessions** (which also emit `user_prompt` events). **Headless / `-p` sessions (e.g.
-Ralph) emit no `interaction` span and no `user_prompt` event** — each `llm_request`
+sessions** (which also emit `user_prompt` events). **Headless / `-p` sessions
+emit no `interaction` span and no `user_prompt` event** — each `llm_request`
 or `tool` runs parentless and APM promotes it to its own root `transaction` (one
 trace per API call / tool execution). So a "trace" is a whole prompt **turn**
 interactively, but a single **API call / tool execution** headlessly. Consequences: on the
@@ -258,7 +258,7 @@ traces data view a `labels.span_type: interaction` filter matches interactive
 sessions only, while `processor.event: transaction` covers every session, with
 `transaction.name` exposing the root type. Verified live:
 across two sessions, the interactive one rooted at `interaction` (with `user_prompt`
-events), the Ralph one rooted at `llm_request`/`tool` (zero `user_prompt` events).
+events), the headless one rooted at `llm_request`/`tool` (zero `user_prompt` events).
 
 How the trace signal maps to the event saved searches (activity-level, not 1:1):
 `interaction` ↔ **Claude — User Prompts**, `llm_request` ↔ **Claude — LLM
@@ -285,7 +285,7 @@ one `tool_result` event but several spans (`tool` + `blocked_on_user` +
 - **`decision_type` / `decision_source`** (tool_result) — *what* was decided
   (accept/reject) and *where* it came from (`config` = allowlisted,
   `user_temporary` = a one-off in-session approval). ⚠️ **Present only in
-  interactive sessions** — a headless run (e.g. Ralph: zero `user_prompt` events,
+  interactive sessions** — a headless run (zero `user_prompt` events,
   `start_type: fresh`, all decisions `source: config`) omits both, an
   all-or-nothing split *by session*. The decision is never lost: every
   `tool_result` has a matching `claude_code.tool_decision` event (1:1 by
