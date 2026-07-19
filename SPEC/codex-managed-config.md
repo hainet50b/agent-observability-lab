@@ -76,7 +76,7 @@ managed-only wrapper fields differ:
   **or** inline `[[hooks.<Event>]]` / `[[hooks.<Event>.hooks]]` tables in
   `config.toml`. The per-hook table body is **identical** to what goes in
   `requirements.toml` — TOML is the shared form, which is why the lab authors
-  hooks as TOML (see the migration task in `PRD.md`).
+  hooks as TOML.
 - **Managed**: `[[hooks.<Event>]]` tables in `requirements.toml` (or a managed
   config layer), plus managed-only top-level fields:
   - `managed_dir` / `windows_managed_dir` — directory holding the hook

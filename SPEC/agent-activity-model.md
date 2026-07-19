@@ -9,7 +9,7 @@ telemetry onto this model** — not by enumerating its event types. This doc is
 that model; the per-agent field detail lives in the telemetry references
 ([`claude-telemetry.md`](claude-telemetry.md),
 [`codex-telemetry.md`](codex-telemetry.md)) and the exact columns live in
-the NDJSON and the PRD tasks that ship each search.
+the NDJSON itself.
 
 ## The model
 
