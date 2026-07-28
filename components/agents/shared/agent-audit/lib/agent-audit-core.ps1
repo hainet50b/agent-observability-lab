@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $sealLib = Join-Path $PSScriptRoot 'seal.ps1'
 if (Test-Path -LiteralPath $sealLib) { . $sealLib }
 
-$DefaultTimeoutMs = 1000
+$DefaultTimeoutMs = 2000
 
 function Log($Message) {
     [Console]::Error.WriteLine("[agent-audit $script:Stream] $Message")

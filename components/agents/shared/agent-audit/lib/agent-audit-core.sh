@@ -8,7 +8,7 @@ _audit_lib_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)
 # shellcheck source=/dev/null
 [ -f "$_audit_lib_dir/seal.sh" ] && . "$_audit_lib_dir/seal.sh"
 
-default_timeout_ms=1000
+default_timeout_ms=2000
 
 stream=""
 config_file=""
