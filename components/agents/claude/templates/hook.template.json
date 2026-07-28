@@ -9,7 +9,7 @@
           {
             "type": "command",
             "command": "@@USER_PROMPT_COMMAND@@",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       }
@@ -20,7 +20,7 @@
           {
             "type": "command",
             "command": "@@TOOL_CALL_COMMAND@@",
-            "timeout": 3
+            "timeout": 10
           }
         ]
       }

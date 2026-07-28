@@ -7,7 +7,7 @@
 type = "command"
 command = '"@@AGENT_AUDIT_SH@@" --stream user_prompt --config "@@AGENT_AUDIT_CONF@@"'
 commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "@@AGENT_AUDIT_PS1@@" -Stream user_prompt -Config "@@AGENT_AUDIT_CONF@@"'
-timeout = 5
+timeout = 10
 statusMessage = "Delivering UserPromptSubmit audit document"
 
 [[hooks.PostToolUse]]
@@ -16,5 +16,5 @@ statusMessage = "Delivering UserPromptSubmit audit document"
 type = "command"
 command = '"@@AGENT_AUDIT_SH@@" --stream tool_call --config "@@AGENT_AUDIT_CONF@@"'
 commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "@@AGENT_AUDIT_PS1@@" -Stream tool_call -Config "@@AGENT_AUDIT_CONF@@"'
-timeout = 5
+timeout = 10
 statusMessage = "Delivering PostToolUse audit document"
