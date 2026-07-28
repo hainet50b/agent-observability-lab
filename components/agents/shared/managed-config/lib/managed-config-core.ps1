@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $script:McMarkerSuffix = '.managed'
+$script:McTool = 'agent-observability-lab'
 $script:McFailed = $false
 $script:McConfirmAll = $false
 $script:McEndpoint = ''
@@ -76,6 +77,7 @@ function Get-McMarkerField($Marker, $Key) {
 function Write-McMarker($Marker, $Target) {
     $placedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     $lines = @(
+        "tool=$script:McTool"
         "agent=$script:McAgent"
         "endpoint=$script:McEndpoint"
         "placed_at=$placedAt"
@@ -181,9 +183,10 @@ function Remove-McManagedFile($Item) {
         return
     }
 
+    $markerTool = Get-McMarkerField $marker 'tool'
     $markerAgent = Get-McMarkerField $marker 'agent'
     $markerEndpoint = Get-McMarkerField $marker 'endpoint'
-    if (-not (Confirm-McProceed "Remove managed $key at $target (agent='$markerAgent' endpoint='$markerEndpoint')?")) { return }
+    if (-not (Confirm-McProceed "Remove managed $key at $target (tool='$markerTool' agent='$markerAgent' endpoint='$markerEndpoint')?")) { return }
     try {
         Remove-McFile $target
     }

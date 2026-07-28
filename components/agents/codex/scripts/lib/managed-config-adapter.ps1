@@ -26,7 +26,7 @@ function Get-McManifest {
         [pscustomobject]@{ Key = 'managed_config'; Source = $Sources[1]; Target = $managedTarget }
     }
     if ($script:McWithHooks) {
-        Get-McHookManifestItem "$root${sep}hooks" (Get-McHookFlavor $Os)
+        Get-McHookManifestItem "$root${sep}hooks${sep}$($script:McTool)" (Get-McHookFlavor $Os)
     }
 }
 

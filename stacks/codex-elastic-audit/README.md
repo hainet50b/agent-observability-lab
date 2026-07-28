@@ -144,10 +144,12 @@ scripts/setup-config.sh --scope project --target /path/to/your/project
 precedence). This is an **audit-only** managed deploy — hooks, no telemetry — so it places
 **only `requirements.toml`** (pinning `[features].hooks` and the hook tables, pointing at the
 host `managed_dir`) and **no `managed_config.toml`** (with no telemetry that file would be
-just a comment). It materializes the hook bundle into the host `managed_dir` and pins it via
-`requirements.toml`. Placement is **interactive, deploy-only, and marker-aware** (confirms
-each file, never overwrites a foreign/real-org config, writes a provenance sidecar keyed on
-the audit ES url); a non-TTY shell aborts.
+just a comment). It materializes the hook bundle into the host `managed_dir` — an owner-scoped
+`hooks/agent-observability-lab/` under the managed root, so it cannot collide with another
+distribution of the same tooling — and pins it via `requirements.toml`. Placement is
+**interactive, deploy-only, and marker-aware** (confirms each file, never overwrites a file
+the lab did not place, writes a provenance sidecar keyed on the audit ES url); a non-TTY
+shell aborts.
 
 ```sh
 scripts/setup-config.sh --scope managed

@@ -3,12 +3,13 @@
 
 # Non-interactive, marker-aware placement for local/project bundle files.
 # Reuses the managed-config marker format exactly: a per-file sidecar
-# <target>.managed with lines agent=, endpoint=, placed_at=, target=.
+# <target>.managed with lines tool=, agent=, endpoint=, placed_at=, target=.
 # Placement is scriptable with NO prompt and NO --yes (local/project are
 # "safe, scriptable, no confirmation" per SPEC); foreign or endpoint-mismatched
 # targets fail loud and are never touched.
 
 config_place_marker_suffix='.managed'
+config_place_tool='agent-observability-lab'
 
 config_place::log() { printf '[config-place] %s\n' "$*" >&2; }
 
@@ -32,8 +33,8 @@ config_place::marker_field() {
 config_place::write_marker() {
   local marker=$1 agent=$2 endpoint=$3 target=$4 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  printf 'agent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$agent" "$endpoint" "$placed_at" "$target" >"$marker" ||
+  printf 'tool=%s\nagent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
+    "$config_place_tool" "$agent" "$endpoint" "$placed_at" "$target" >"$marker" ||
     config_place::die "could not write provenance marker $marker"
 }
 

@@ -4,6 +4,7 @@
 set -u
 
 marker_suffix='.managed'
+tool='agent-observability-lab'
 failed=0
 confirm_all=0
 logs_endpoint=''
@@ -235,8 +236,8 @@ managed_config::install_file() {
 managed_config::write_marker() {
   local marker=$1 target=$2 placed_at
   placed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  printf 'agent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
-    "$agent" "$marker_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
+  printf 'tool=%s\nagent=%s\nendpoint=%s\nplaced_at=%s\ntarget=%s\n' \
+    "$tool" "$agent" "$marker_endpoint" "$placed_at" "$target" >"$marker" 2>/dev/null
 }
 
 managed_config::place_one() {
@@ -300,10 +301,11 @@ managed_config::teardown_one() {
     return 0
   fi
 
-  local marker_agent existing_endpoint
+  local marker_tool marker_agent existing_endpoint
+  marker_tool=$(managed_config::marker_field "$marker" tool)
   marker_agent=$(managed_config::marker_field "$marker" agent)
   existing_endpoint=$(managed_config::marker_field "$marker" endpoint)
-  managed_config::confirm "Remove managed $key at $target (agent='$marker_agent' endpoint='$existing_endpoint')?" || return 0
+  managed_config::confirm "Remove managed $key at $target (tool='$marker_tool' agent='$marker_agent' endpoint='$existing_endpoint')?" || return 0
   rm -f "$target" 2>/dev/null ||
     managed_config::die "cannot remove $target (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '$target'"
   rm -f "$marker" 2>/dev/null ||

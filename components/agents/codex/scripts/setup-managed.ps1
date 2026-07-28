@@ -85,7 +85,7 @@ function Get-OsRequirementsToml($TargetOs) {
     if (-not $WithHooks) { return '' }
     $flavor = Get-McHookFlavor $TargetOs
     $sep = if ($TargetOs -eq 'windows') { '\' } else { '/' }
-    $hooksRef = (Get-McManagedRoot $TargetOs) + $sep + 'hooks'
+    $hooksRef = (Get-McManagedRoot $TargetOs) + $sep + 'hooks' + $sep + $script:McTool
     $certTarget = "$hooksRef/recipient.pem" -replace '\\', '/'
     Add-McHookStage @hookStageArgs $certTarget $flavor | Out-Null
     if ($TargetOs -eq 'windows') {

@@ -1,11 +1,12 @@
 # Non-interactive, marker-aware placement for local/project bundle files.
 # Reuses the managed-config marker format exactly: a per-file sidecar
-# <target>.managed with lines agent=, endpoint=, placed_at=, target=.
+# <target>.managed with lines tool=, agent=, endpoint=, placed_at=, target=.
 # Placement is scriptable with NO prompt and NO -Yes (local/project are
 # "safe, scriptable, no confirmation" per SPEC); foreign or endpoint-mismatched
 # targets fail loud and are never touched.
 
 $script:CpMarkerSuffix = '.managed'
+$script:CpTool = 'agent-observability-lab'
 
 function Write-CpLog($Message) {
     [Console]::Error.WriteLine("[config-place] $Message")
@@ -33,6 +34,7 @@ function Get-CpMarkerField($Marker, $Key) {
 function Write-CpMarker($Marker, $Agent, $Endpoint, $Target) {
     $placedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     $lines = @(
+        "tool=$script:CpTool"
         "agent=$Agent"
         "endpoint=$Endpoint"
         "placed_at=$placedAt"

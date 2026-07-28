@@ -76,8 +76,9 @@ if ($WithHooks) {
 }
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
-# materializing the hook bundle at the managed root and adding a hooks block that
-# points at it. Requires a confirmed host check (see the stack README).
+# materializing the hook bundle into an owner-scoped dir under the managed root
+# and adding a hooks block that points at it. Requires a confirmed host check
+# (see the stack README).
 # The hook block, the hook bundle flavor (sh vs ps1) and the paths baked into
 # agent-audit.conf are all per-OS, so the fragment is finalized once per target
 # OS. Output is normalized to LF with a trailing newline so a bundle
@@ -85,9 +86,10 @@ if ($WithHooks) {
 function Get-OsRendered($TargetOs) {
     $doc = $rendered | ConvertFrom-Json
     if ($WithHooks) {
-        $root = Get-McManagedRoot $TargetOs
+        $sep = if ($TargetOs -eq 'windows') { '\' } else { '/' }
+        $hooksRoot = (Get-McManagedRoot $TargetOs) + $sep + 'hooks' + $sep + $script:McTool
         $flavor = Get-McHookFlavor $TargetOs
-        $certTarget = "$root/hooks/recipient.pem" -replace '\\', '/'
+        $certTarget = "$hooksRoot/recipient.pem" -replace '\\', '/'
         Add-McHookStage @hookStageArgs $certTarget $flavor | Out-Null
         $tpl = Get-Content -Raw -LiteralPath $hookTemplate | ConvertFrom-Json
         foreach ($h in @(
@@ -98,11 +100,11 @@ function Get-OsRendered($TargetOs) {
                 $h.entry.command = 'powershell'
                 $h.entry | Add-Member -NotePropertyName 'args' -NotePropertyValue @(
                     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-                    '-File', "$root\hooks\agent-audit.ps1", '-Stream', $h.stream, '-Config', "$root\hooks\agent-audit.conf"
+                    '-File', "$hooksRoot\agent-audit.ps1", '-Stream', $h.stream, '-Config', "$hooksRoot\agent-audit.conf"
                 ) -Force
             }
             else {
-                $h.entry.command = "'$root/hooks/agent-audit.sh' --stream $($h.stream) --config '$root/hooks/agent-audit.conf'"
+                $h.entry.command = "'$hooksRoot/agent-audit.sh' --stream $($h.stream) --config '$hooksRoot/agent-audit.conf'"
             }
         }
         $doc | Add-Member -NotePropertyName 'hooks' -NotePropertyValue $tpl.hooks -Force

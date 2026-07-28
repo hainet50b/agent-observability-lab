@@ -56,27 +56,28 @@ if [ "$with_hooks" -eq 1 ]; then
 fi
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
-# materializing the hook bundle at the managed root and adding a hooks block that
-# points at it. Requires a confirmed host check (see the stack README).
+# materializing the hook bundle into an owner-scoped dir under the managed root
+# and adding a hooks block that points at it. Requires a confirmed host check
+# (see the stack README).
 # The hook block, the hook bundle flavor (sh vs ps1) and the paths baked into
 # agent-audit.conf are all per-OS, so the fragment is finalized once per target OS.
 render_for_os() {
-  local target_os=$1 root flavor entry_target conf_target cert_target hooks_json tmp
+  local target_os=$1 hooks_root flavor entry_target conf_target cert_target hooks_json tmp
   cp "$base_source" "$os_source" || managed_config::die "failed to stage the managed settings fragment"
   [ "$with_hooks" -eq 1 ] || {
     finalize_managed_settings
     return 0
   }
-  root=$(managed_config::managed_root "$target_os")
+  hooks_root="$(managed_config::managed_root "$target_os")/hooks/$tool"
   flavor=$(managed_config::hook_flavor "$target_os")
-  cert_target="$root/hooks/recipient.pem"
+  cert_target="$hooks_root/recipient.pem"
   managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key" \
     "$timeout_ms" "$capture_user_prompt_enabled" "$capture_user_prompt_content" \
     "$capture_tool_call_enabled" "$capture_tool_call_content" \
     "$seal_recipients_src" "$seal_key_id" "$cert_target" "$flavor"
   if [ "$flavor" = ps1 ]; then
-    entry_target="${root//\//\\}\\hooks\\agent-audit.ps1"
-    conf_target="${root//\//\\}\\hooks\\agent-audit.conf"
+    entry_target="${hooks_root//\//\\}\\agent-audit.ps1"
+    conf_target="${hooks_root//\//\\}\\agent-audit.conf"
     hooks_json=$(jq \
       --arg entry "$entry_target" --arg conf "$conf_target" \
       '.hooks.UserPromptSubmit[0].hooks[0] |= (.command = "powershell"
@@ -87,8 +88,8 @@ render_for_os() {
                     "-File", $entry, "-Stream", "tool_call", "-Config", $conf])
        | .hooks' "$hook_template") || managed_config::die "could not build hooks block"
   else
-    entry_target="$root/hooks/agent-audit.sh"
-    conf_target="$root/hooks/agent-audit.conf"
+    entry_target="$hooks_root/agent-audit.sh"
+    conf_target="$hooks_root/agent-audit.conf"
     hooks_json=$(jq \
       --arg up "'$entry_target' --stream user_prompt --config '$conf_target'" \
       --arg tc "'$entry_target' --stream tool_call --config '$conf_target'" \

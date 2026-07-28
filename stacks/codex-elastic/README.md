@@ -176,9 +176,11 @@ Place it via `setup.sh --scope managed` (runs after the normal setup steps) or d
 (demo — you must hand-place an `agent-audit.conf` there, as noted above). Adding
 `--with-hooks --es-url <es>` (sh) / `-WithHooks -EsUrl <es>` (ps1) instead **materializes**
 the full bundle — scripts + shared core + adapter + a rendered `agent-audit.conf` — into the
-host `managed_dir` (`/etc/codex/hooks`, or `%ProgramData%\OpenAI\Codex\hooks` on Windows) and
-points `requirements.toml` there, so the enforced hooks are self-contained and the conf
-caveat no longer applies.
+host `managed_dir` — an owner-scoped `/etc/codex/hooks/agent-observability-lab`, or
+`%ProgramData%\OpenAI\Codex\hooks\agent-observability-lab` on Windows — and points
+`requirements.toml` there, so the enforced hooks are self-contained and the conf caveat no
+longer applies. The owner-scoped subdirectory keeps the bundle from colliding with another
+distribution of the same tooling on a machine-global root.
 
 > **Host-check gate — do this once before relying on `--with-hooks`.** Confirm on a **real
 > host** that the absolute managed hook command actually fires, and record the result. Until

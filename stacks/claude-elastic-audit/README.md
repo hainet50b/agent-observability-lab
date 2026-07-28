@@ -132,9 +132,9 @@ scripts/setup-config.sh --scope project --target /path/to/your/project
 
 **`managed`** — enforce the audit hooks for **every** user on a machine (highest
 precedence). This is an **audit-only** managed deploy — hooks, no telemetry — so the lab's
-managed fragment, `managed-settings.d/10-observability.json` under the managed root, carries
-only the `hooks` block (no telemetry `env`). It materializes the hook bundle into a `hooks/`
-dir at that root and pins it. Claude merges every `*.json` in `managed-settings.d/`, so the
+managed fragment, `managed-settings.d/10-agent-observability-lab.json` under the managed root,
+carries only the `hooks` block (no telemetry `env`). It materializes the hook bundle into an
+owner-scoped `hooks/agent-observability-lab/` under that root and pins it. Claude merges every `*.json` in `managed-settings.d/`, so the
 fragment sits beside any policy already deployed there and `managed-settings.json` is never
 touched — which also means the lab will not warn you about one. Placement is **interactive,
 deploy-only, and marker-aware** (confirms each file, never overwrites a file the lab did not
@@ -146,7 +146,7 @@ scripts/setup-config.sh --scope managed
 # teardown:   scripts/setup-config.sh --scope managed --teardown
 ```
 
-> **Caveat — validate the host path.** Claude has no managed `hooks/` convention, so confirm
+> **Caveat — validate the host path.** Claude has no managed hooks-directory convention, so confirm
 > on a **real host** that the absolute hook `command` path resolves under the managed root —
 > `/Library/Application Support/ClaudeCode` on macOS (note the space) and
 > `C:\Program Files\ClaudeCode` on Windows. The managed scripts abort under Git Bash / MINGW

@@ -199,9 +199,9 @@ already use); the fragment inside it is the lab's own file:
 
 | OS | Fragment |
 | --- | --- |
-| Linux/WSL | `/etc/claude-code/managed-settings.d/10-observability.json` |
-| macOS | `/Library/Application Support/ClaudeCode/managed-settings.d/10-observability.json` |
-| Windows | `C:\Program Files\ClaudeCode\managed-settings.d\10-observability.json` |
+| Linux/WSL | `/etc/claude-code/managed-settings.d/10-agent-observability-lab.json` |
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.d/10-agent-observability-lab.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.d\10-agent-observability-lab.json` |
 
 Claude Code merges **every `*.json`** in that directory — alphabetically, with arrays
 concatenated and later files winning scalar conflicts — so the lab's fragment sits
@@ -232,14 +232,15 @@ with the privileged command to run by hand. Place via `setup.sh --scope managed`
 **Staged opt-in — also enforce the audit hooks (`--with-hooks`).** Off by default
 (managed enforces telemetry only — "config-only"). Adding `--with-hooks --es-url <es>`
 (sh) / `-WithHooks -EsUrl <es>` (ps1) **materializes** the audit-hook bundle (entry +
-shared core + adapter, both shells, plus a rendered `agent-audit.conf`) into a `hooks/`
-dir at the **managed root** (beside `managed-settings.d/`) and adds a `hooks` block
+shared core + adapter, both shells, plus a rendered `agent-audit.conf`) into
+`hooks/agent-observability-lab/` under the **managed root** and adds a `hooks` block
 pointing at it — so the enforced hooks are self-contained on the host, never
-referencing this repo.
+referencing this repo. The owner-scoped subdirectory keeps the bundle from colliding
+with another distribution of the same tooling on a machine-global root.
 
 > **Host-check gate — do this once before relying on `--with-hooks`.** Claude Code has
-> no managed hooks-directory convention, so the lab picks `hooks/` at the managed root.
-> Confirm on a **real host** that an absolute hook `command`
+> no managed hooks-directory convention, so the lab picks its own dir under the managed
+> root. Confirm on a **real host** that an absolute hook `command`
 > path actually fires (mind the macOS space in `Application Support` and the Windows
 > `C:\Program Files\ClaudeCode` path) and record the result. Until confirmed, leave
 > `--with-hooks` off and keep managed config-only.

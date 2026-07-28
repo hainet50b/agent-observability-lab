@@ -68,7 +68,7 @@ render_for_os() {
   : >"$requirements_source"
   [ "$with_hooks" -eq 1 ] || return 0
   flavor=$(managed_config::hook_flavor "$target_os")
-  hooks_ref="$(managed_config::managed_root "$target_os")/hooks"
+  hooks_ref="$(managed_config::managed_root "$target_os")/hooks/$tool"
   managed_config::stage_hooks "$component_dir" "$es_url" "$es_api_key" \
     "$timeout_ms" "$capture_user_prompt_enabled" "$capture_user_prompt_content" \
     "$capture_tool_call_enabled" "$capture_tool_call_content" \

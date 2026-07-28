@@ -29,5 +29,5 @@ managed_config::manifest() {
   # managed_config.toml carries only telemetry defaults; with no telemetry it
   # would be just a comment, so place it only when telemetry is present.
   [ "$with_telemetry" -eq 1 ] && printf '%s\t%s\t%s\n' 'managed_config' "$managed_config_source" "$managed_config_target"
-  [ "$with_hooks" -eq 1 ] && managed_config::hook_manifest_lines "$root/hooks" "$(managed_config::hook_flavor "$os")"
+  [ "$with_hooks" -eq 1 ] && managed_config::hook_manifest_lines "$root/hooks/$tool" "$(managed_config::hook_flavor "$os")"
 }
