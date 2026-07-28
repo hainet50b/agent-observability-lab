@@ -85,7 +85,7 @@ machine**, at a trust boundary they do not own: provider-side enterprise audit
 
 Within budget, what raises the floor without reaching (B): **pin the hooks**
 through the managed layer (Codex `requirements.toml` `[features].hooks = true` +
-`allow_managed_hooks_only`; Claude `managed-settings.json`) so casual
+`allow_managed_hooks_only`; Claude's managed-tier `hooks` block) so casual
 disablement is blocked; **detect absence centrally** ("no audit from device X
 for Y minutes" against the fleet roster) to catch fail-open / disablement after
 the fact; and keep the ingest credential per-device, create-only, and rotatable

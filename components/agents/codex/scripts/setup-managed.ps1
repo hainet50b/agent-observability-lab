@@ -77,7 +77,7 @@ if ($WithHooks) {
 # Hooks -> requirements.toml (the hook-enforcement layer), with the bundle materialized
 # into the host managed_dir. Without -WithHooks there is no enforcement layer to place:
 # a telemetry-only managed deploy is managed_config.toml alone (symmetric with Claude's
-# env-only managed-settings.json).
+# env-only managed fragment).
 # Codex picks windows_managed_dir on Windows and managed_dir on non-Windows, with no
 # fallback (hook_config.rs: managed_dir_for_current_platform), so requirements.toml
 # keeps only the key for the target OS.

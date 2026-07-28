@@ -85,7 +85,7 @@ appears quickly. Supply them one of three ways:
 | --- | --- | --- | --- |
 | **A — shell env** | `export`/`set` the vars (below), then launch `claude` from any directory | ephemeral, creates no files | one-off, recommended |
 | **B — `settings.json` `env`** | same vars in a Claude Code settings file's `env` block | persistent; project-scope applies only from the launch dir, `~/.claude/settings.json` everywhere | keep telemetry on for a project / user |
-| **C — `managed-settings.json`** | machine-global [managed settings](https://code.claude.com/docs/en/monitoring-usage.md), **highest precedence, user cannot override** | enforced org-wide | force telemetry on across an org |
+| **C — managed settings** | a machine-global [managed settings](https://code.claude.com/docs/en/monitoring-usage.md) fragment, **highest precedence, user cannot override** | enforced org-wide | force telemetry on across an org |
 
 **Option A — shell env.**
 
@@ -190,17 +190,24 @@ the directory you point it at (gitignore it); the `api_*_body` events then carry
 Project settings load **only from the directory `claude` is launched in** (not
 inherited from parents); `~/.claude/settings.json` applies everywhere.
 
-**Option C — `managed-settings.json` (org enforcement).** The `env` block placed
-here is **enforced**: users cannot turn telemetry off, change the endpoint, or flip
-the `OTEL_LOG_*` gates. This stack can place that single machine-global file for you
-— **opt-in, always interactive, never destructive**. It lives at a fixed admin-owned
-path (the same file your real employer may already use):
+**Option C — managed settings (org enforcement).** The `env` block placed here is
+**enforced**: users cannot turn telemetry off, change the endpoint, or flip the
+`OTEL_LOG_*` gates. This stack can place it for you as a **drop-in fragment** in the
+machine-global managed directory — **opt-in, always interactive, never destructive**.
+The directory is admin-owned and fixed (the same one your real employer's policy may
+already use); the fragment inside it is the lab's own file:
 
-| OS | Path |
+| OS | Fragment |
 | --- | --- |
-| Linux/WSL | `/etc/claude-code/managed-settings.json` |
-| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
-| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
+| Linux/WSL | `/etc/claude-code/managed-settings.d/10-observability.json` |
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.d/10-observability.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.d\10-observability.json` |
+
+Claude Code merges **every `*.json`** in that directory — alphabetically, with arrays
+concatenated and later files winning scalar conflicts — so the lab's fragment sits
+**beside** any policy already deployed there and never touches `managed-settings.json`
+itself. The flip side: the lab no longer notices such a policy, so check the directory
+yourself before placing.
 
 Placement **refuses to overwrite any file the lab did not place** (tracked by a
 sidecar `.managed` marker) and prompts before writing. There is **no `--yes`**; a
@@ -226,12 +233,13 @@ with the privileged command to run by hand. Place via `setup.sh --scope managed`
 (managed enforces telemetry only — "config-only"). Adding `--with-hooks --es-url <es>`
 (sh) / `-WithHooks -EsUrl <es>` (ps1) **materializes** the audit-hook bundle (entry +
 shared core + adapter, both shells, plus a rendered `agent-audit.conf`) into a `hooks/`
-dir **beside** `managed-settings.json` and adds a `hooks` block pointing at it — so the
-enforced hooks are self-contained on the host, never referencing this repo.
+dir at the **managed root** (beside `managed-settings.d/`) and adds a `hooks` block
+pointing at it — so the enforced hooks are self-contained on the host, never
+referencing this repo.
 
 > **Host-check gate — do this once before relying on `--with-hooks`.** Claude Code has
-> no managed hooks-directory convention, so the lab picks `hooks/` beside
-> `managed-settings.json`. Confirm on a **real host** that an absolute hook `command`
+> no managed hooks-directory convention, so the lab picks `hooks/` at the managed root.
+> Confirm on a **real host** that an absolute hook `command`
 > path actually fires (mind the macOS space in `Application Support` and the Windows
 > `C:\Program Files\ClaudeCode` path) and record the result. Until confirmed, leave
 > `--with-hooks` off and keep managed config-only.

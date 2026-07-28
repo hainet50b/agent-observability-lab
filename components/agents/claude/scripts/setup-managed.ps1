@@ -46,7 +46,7 @@ $template = Join-Path (Join-Path $ComponentDir 'templates') 'managed-settings.te
 if (-not (Test-Path -LiteralPath $template -PathType Leaf)) { Write-McFatal "template not found: $template" }
 
 # Telemetry is optional: render the env block only when the OTLP endpoints are
-# present. Without them the managed-settings.json carries no env (just _comment,
+# present. Without them the fragment carries no env (just _comment,
 # plus hooks if -WithHooks) — an audit-only managed deploy.
 $cfg = Get-Content -Raw -LiteralPath $template | ConvertFrom-Json
 if ($WithTelemetry) {
@@ -76,11 +76,11 @@ if ($WithHooks) {
 }
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
-# materializing the hook bundle beside managed-settings.json and adding a hooks
-# block that points at it. Requires a confirmed host check (see the stack README).
+# materializing the hook bundle at the managed root and adding a hooks block that
+# points at it. Requires a confirmed host check (see the stack README).
 # The hook block, the hook bundle flavor (sh vs ps1) and the paths baked into
-# agent-audit.conf are all per-OS, so the managed-settings.json is finalized once
-# per target OS. Output is normalized to LF with a trailing newline so a bundle
+# agent-audit.conf are all per-OS, so the fragment is finalized once per target
+# OS. Output is normalized to LF with a trailing newline so a bundle
 # rendered here is byte-identical to one rendered by setup-managed.sh.
 function Get-OsRendered($TargetOs) {
     $doc = $rendered | ConvertFrom-Json

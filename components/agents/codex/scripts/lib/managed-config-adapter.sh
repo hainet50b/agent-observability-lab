@@ -24,7 +24,7 @@ managed_config::manifest() {
   fi
   # requirements.toml is the hook-enforcement layer — placed only when hooks are
   # deployed (--with-hooks). A telemetry-only managed deploy places managed_config.toml
-  # alone (symmetric with Claude's env-only managed-settings.json).
+  # alone (symmetric with Claude's env-only managed fragment).
   [ "$with_hooks" -eq 1 ] && printf '%s\t%s\t%s\n' 'requirements' "$requirements_source" "$root/requirements.toml"
   # managed_config.toml carries only telemetry defaults; with no telemetry it
   # would be just a comment, so place it only when telemetry is present.

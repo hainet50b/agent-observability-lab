@@ -15,6 +15,6 @@ managed_config::managed_root() {
 managed_config::manifest() {
   local os=$1 source=${2:-} root
   root=$(managed_config::managed_root "$os")
-  printf '%s\t%s\t%s\n' 'managed-settings' "$source" "$root/managed-settings.json"
+  printf '%s\t%s\t%s\n' 'managed-settings' "$source" "$root/managed-settings.d/10-observability.json"
   [ "$with_hooks" -eq 1 ] && managed_config::hook_manifest_lines "$root/hooks" "$(managed_config::hook_flavor "$os")"
 }

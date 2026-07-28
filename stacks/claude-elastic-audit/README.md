@@ -131,12 +131,14 @@ scripts/setup-config.sh --scope project --target /path/to/your/project
 ```
 
 **`managed`** — enforce the audit hooks for **every** user on a machine (highest
-precedence). This is an **audit-only** managed deploy — hooks, no telemetry — so Claude's
-`managed-settings.json` carries only the `hooks` block (no telemetry `env`). It materializes
-the hook bundle into a `hooks/` dir beside `managed-settings.json` and pins it. Placement is
-**interactive, deploy-only, and marker-aware** (confirms each file, never overwrites a
-foreign/real-org config, writes a provenance sidecar keyed on the audit ES url); a non-TTY
-shell aborts.
+precedence). This is an **audit-only** managed deploy — hooks, no telemetry — so the lab's
+managed fragment, `managed-settings.d/10-observability.json` under the managed root, carries
+only the `hooks` block (no telemetry `env`). It materializes the hook bundle into a `hooks/`
+dir at that root and pins it. Claude merges every `*.json` in `managed-settings.d/`, so the
+fragment sits beside any policy already deployed there and `managed-settings.json` is never
+touched — which also means the lab will not warn you about one. Placement is **interactive,
+deploy-only, and marker-aware** (confirms each file, never overwrites a file the lab did not
+place, writes a provenance sidecar keyed on the audit ES url); a non-TTY shell aborts.
 
 ```sh
 scripts/setup-config.sh --scope managed

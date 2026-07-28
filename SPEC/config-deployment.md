@@ -62,7 +62,7 @@ Placement is **always interactive:**
 
 ### Never overwrite; track provenance; provide teardown
 
-Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** Placement records the sidecar provenance marker beside the managed file (agent / endpoint / placed-at / target — the shared format above, with the managed composite `endpoint`). Ownership is keyed on the **endpoint** — what the host is enforced *toward* — not a stack name (a managed deploy is a host act, not a per-stack one):
+Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** (Claude is the exception to the singleton framing: its target is a lab-named **fragment** in a drop-in directory, so the lab coexists with a foreign `managed-settings.json` rather than contending for it — and therefore no longer detects one. See [`claude-managed-config.md`](claude-managed-config.md) "Placement & teardown".) Placement records the sidecar provenance marker beside the managed file (agent / endpoint / placed-at / target — the shared format above, with the managed composite `endpoint`). Ownership is keyed on the **endpoint** — what the host is enforced *toward* — not a stack name (a managed deploy is a host act, not a per-stack one):
 
 | Existing file | Verdict |
 | --- | --- |
@@ -115,14 +115,14 @@ For telemetry, Claude sends the header via `OTEL_EXPORTER_OTLP_HEADERS` in the s
 
 `setup-managed` makes the three OTLP endpoints **and** `--with-hooks` independently optional, requiring **at least one** of (all three OTLP endpoints) or `--with-hooks` (which also requires `--es-url`); it dies "nothing to place" if neither. Three combinations:
 
-| Combination | Driven by | Claude `managed-settings.json` | Codex |
+| Combination | Driven by | Claude `managed-settings.d/10-observability.json` | Codex |
 |---|---|---|---|
 | **Telemetry-only** (config-only) | telemetry stacks (OTLP endpoints, no `--with-hooks`) | `env` (telemetry) only | `managed_config.toml` `[otel]` only |
 | **Hooks-only** (audit) | audit stacks (`--with-hooks --es-url <audit ES url>`, no OTLP) | `_comment` + `hooks` block, **no `env`** | **only `requirements.toml`** (pins `[features].hooks`, hook tables); **no `managed_config.toml`** |
 | **Combined** (telemetry + hooks) | OTLP endpoints **and** `--with-hooks` | `env` + `hooks` | `managed_config.toml` `[otel]` + `requirements.toml` |
 
 - **Config-only files have no scripts to materialize** — Claude's `env` and Codex's `[otel]` are self-contained. Telemetry rendering happens **only** when the OTLP endpoints are present, byte-identical to before.
-- **Hooks** materialize the **hook scripts** to a stable host location and point the managed config at them. Codex has a first-class **`managed_dir`**; Claude has **no such convention**, so the lab picks a `hooks/` dir beside `managed-settings.json` and must confirm **on a real host** that an absolute hook `command` path works (the macOS space / Windows `Program Files` caveats).
+- **Hooks** materialize the **hook scripts** to a stable host location and point the managed config at them. Codex has a first-class **`managed_dir`**; Claude has **no such convention**, so the lab picks a `hooks/` dir at the managed root (beside `managed-settings.d/`) and must confirm **on a real host** that an absolute hook `command` path works (the macOS space / Windows `Program Files` caveats).
 - For hooks-only, Codex omits `managed_config.toml` because with no telemetry it would be just a comment.
 
 **Managed marker endpoint.** `setup-managed` keys the provenance marker on the composite `telemetry=<logs OTLP endpoint>;audit=<audit ES url>` value (see [Placement is marker-aware](#placement-is-marker-aware-and-fail-if-foreign--across-all-scopes)) — a telemetry-only deploy leaves the audit half empty, an audit-only deploy the telemetry half — so `place`/`teardown` and the marker stay meaningful for every combination. (`teardown` carries no endpoints and enumerates every candidate target; an unplaced one is a harmless no-op.)

@@ -16,7 +16,7 @@ function Get-McManifest {
     }
     # requirements.toml is the hook-enforcement layer — placed only when hooks are
     # deployed (--with-hooks). A telemetry-only managed deploy places managed_config.toml
-    # alone (symmetric with Claude's env-only managed-settings.json).
+    # alone (symmetric with Claude's env-only managed fragment).
     if ($script:McWithHooks) {
         [pscustomobject]@{ Key = 'requirements'; Source = $Sources[0]; Target = "$root${sep}requirements.toml" }
     }

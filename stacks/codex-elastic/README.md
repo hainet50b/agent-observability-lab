@@ -138,7 +138,7 @@ with **different power**:
 | File | Power | Pins | Path (Linux/macOS · Windows) |
 | --- | --- | --- | --- |
 | `requirements.toml` | **ENFORCED** — a conflicting user value is dropped to a compatible one and the user is told | managed audit hooks (`allow_managed_hooks_only`, `[features].hooks = true`) + allowed sandbox / approval policies | `/etc/codex/requirements.toml` · `%ProgramData%\OpenAI\Codex\requirements.toml` (the only enforceable local layer) |
-| `managed_config.toml` | managed **default**, *not* enforced — `[otel]` applies at launch but a user can change it in-session (reverts next start). **Codex cannot enforce `[otel]`** (unlike Claude's `managed-settings.json`) | the `[otel]` telemetry block | `/etc/codex/managed_config.toml` · `~/.codex/managed_config.toml` (user-writable — a weak boundary) |
+| `managed_config.toml` | managed **default**, *not* enforced — `[otel]` applies at launch but a user can change it in-session (reverts next start). **Codex cannot enforce `[otel]`** (unlike Claude's managed settings) | the `[otel]` telemetry block | `/etc/codex/managed_config.toml` · `~/.codex/managed_config.toml` (user-writable — a weak boundary) |
 
 Placement **refuses to overwrite any file the lab did not place** (tracked by a sidecar
 `.managed` marker — the path may already hold your real org's MDM-pushed config) and prompts

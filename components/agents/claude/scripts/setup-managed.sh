@@ -28,7 +28,7 @@ os_source=$(mktemp) || managed_config::die "could not create temp file"
 trap 'rm -f "$base_source" "$os_source"; [ -n "$hooks_stage" ] && rm -rf "$hooks_stage"' EXIT
 
 # Telemetry is optional: render the env block only when the OTLP endpoints are
-# present. Without them the managed-settings.json carries no env (just _comment,
+# present. Without them the fragment carries no env (just _comment,
 # plus hooks if --with-hooks) — an audit-only managed deploy.
 if [ "$with_telemetry" -eq 1 ]; then
   otel_template="$component_dir/templates/otel.template.json"
@@ -56,14 +56,13 @@ if [ "$with_hooks" -eq 1 ]; then
 fi
 
 # Opt-in (staged, off by default): also enforce the audit hooks org-wide by
-# materializing the hook bundle beside managed-settings.json and adding a hooks
-# block that points at it. Requires a confirmed host check (see the stack README).
+# materializing the hook bundle at the managed root and adding a hooks block that
+# points at it. Requires a confirmed host check (see the stack README).
 # The hook block, the hook bundle flavor (sh vs ps1) and the paths baked into
-# agent-audit.conf are all per-OS, so the managed-settings.json is finalized
-# once per target OS.
+# agent-audit.conf are all per-OS, so the fragment is finalized once per target OS.
 render_for_os() {
   local target_os=$1 root flavor entry_target conf_target cert_target hooks_json tmp
-  cp "$base_source" "$os_source" || managed_config::die "failed to stage managed-settings.json"
+  cp "$base_source" "$os_source" || managed_config::die "failed to stage the managed settings fragment"
   [ "$with_hooks" -eq 1 ] || {
     finalize_managed_settings
     return 0
@@ -99,18 +98,18 @@ render_for_os() {
   fi
   tmp=$(mktemp) || managed_config::die "could not create temp file"
   jq --argjson h "$hooks_json" '.hooks = $h' "$os_source" >"$tmp" ||
-    managed_config::die "could not inject hooks block into managed-settings.json"
+    managed_config::die "could not inject hooks block into the managed settings fragment"
   mv "$tmp" "$os_source"
   finalize_managed_settings
 }
 
 # jq on Windows (Git Bash) writes CRLF; the bundle content must be identical no
-# matter which host rendered it, so managed-settings.json is normalized to LF.
+# matter which host rendered it, so the fragment is normalized to LF.
 finalize_managed_settings() {
   local tmp
   tmp=$(mktemp) || managed_config::die "could not create temp file"
   sed 's/\r$//' "$os_source" >"$tmp" ||
-    managed_config::die "could not normalize managed-settings.json line endings"
+    managed_config::die "could not normalize the fragment's line endings"
   mv "$tmp" "$os_source"
 }
 
