@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/tmp/agent-config-fixture/.claude/hooks/agent-audit.sh' --stream user_prompt --config '/tmp/agent-config-fixture/.claude/hooks/agent-audit.conf'",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/tmp/agent-config-fixture/.claude/hooks/agent-audit.sh' --stream tool_call --config '/tmp/agent-config-fixture/.claude/hooks/agent-audit.conf'",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

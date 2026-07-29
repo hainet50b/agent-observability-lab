@@ -1,0 +1,55 @@
+{
+  "_comment": {
+    "docs": [
+      "https://code.claude.com/docs/en/settings#managed-settings"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell",
+            "timeout": 10,
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "C:\\Program Files\\ClaudeCode\\hooks\\agent-observability-lab\\agent-audit.ps1",
+              "-Stream",
+              "user_prompt",
+              "-Config",
+              "C:\\Program Files\\ClaudeCode\\hooks\\agent-observability-lab\\agent-audit.conf"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell",
+            "timeout": 10,
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "C:\\Program Files\\ClaudeCode\\hooks\\agent-observability-lab\\agent-audit.ps1",
+              "-Stream",
+              "tool_call",
+              "-Config",
+              "C:\\Program Files\\ClaudeCode\\hooks\\agent-observability-lab\\agent-audit.conf"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
