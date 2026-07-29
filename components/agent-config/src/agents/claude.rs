@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::assets;
-use crate::config::{Audit, Config, Telemetry};
+use crate::config::{Config, Telemetry};
 use crate::model::{Cell, Entry, Flavor, Location, Os, Scope};
 use crate::owner::OWNER;
 
@@ -32,10 +32,10 @@ fn user_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
     if let Some(audit) = &cfg.audit {
         let hooks_dir = format!("{target}/.claude/hooks");
         settings.insert("hooks".into(), hooks_block(cell.os, &hooks_dir)?);
-        entries.push(text_entry(
+        entries.push(Entry::text(
             "agent-audit",
             Location::InTarget(".claude/hooks/agent-audit.conf".into()),
-            render_conf(audit, "", ""),
+            crate::agents::render_conf(assets::AGENT_AUDIT_CONF_TEMPLATE, audit, "", ""),
         ));
         entries.extend(hook_asset_entries(cell.os, |rel| {
             Location::InTarget(format!(".claude/hooks/{rel}"))
@@ -44,13 +44,13 @@ fn user_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
 
     entries.insert(
         0,
-        text_entry(
+        Entry::text(
             "settings",
             Location::InTarget(".claude/settings.local.json".into()),
             pretty(&Value::Object(settings)),
         ),
     );
-    entries.push(text_entry(
+    entries.push(Entry::text(
         "gitignore",
         Location::InTarget(".claude/.gitignore".into()),
         "*\n".into(),
@@ -59,7 +59,7 @@ fn user_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
     if cell.scope == Scope::Local {
         let mut mcp: Value = parse_template(assets::MCP_TEMPLATE)?;
         mcp.as_object_mut().unwrap().remove("_comment");
-        entries.push(text_entry(
+        entries.push(Entry::text(
             "mcp",
             Location::InTarget(".mcp.json".into()),
             pretty(&mcp),
@@ -81,10 +81,10 @@ fn managed_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
     if let Some(audit) = &cfg.audit {
         let hooks_root = format!("{root}/hooks/{OWNER}");
         fragment["hooks"] = hooks_block(cell.os, &hooks_root)?;
-        entries.push(text_entry(
+        entries.push(Entry::text(
             "hook:agent-audit.conf",
             Location::Host(format!("{hooks_root}/agent-audit.conf")),
-            render_conf(audit, "", ""),
+            crate::agents::render_conf(assets::AGENT_AUDIT_CONF_TEMPLATE, audit, "", ""),
         ));
         entries.extend(hook_asset_entries(cell.os, |rel| {
             Location::Host(format!("{hooks_root}/{rel}"))
@@ -93,7 +93,7 @@ fn managed_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
 
     entries.insert(
         0,
-        text_entry(
+        Entry::text(
             "managed-settings",
             Location::Host(format!("{root}/managed-settings.d/10-{OWNER}.json")),
             pretty(&fragment),
@@ -184,25 +184,6 @@ fn otel_env(telemetry: &Telemetry, policy: EmptyHeaders) -> Result<Value, String
     Ok(env)
 }
 
-fn render_conf(audit: &Audit, seal_recipients_file: &str, seal_key_id: &str) -> String {
-    assets::AGENT_AUDIT_CONF_TEMPLATE
-        .replace("@@ES_URL@@", &audit.es_url)
-        .replace("@@ES_API_KEY@@", &audit.api_key)
-        .replace("@@ES_TIMEOUT_MS@@", &audit.timeout_ms)
-        .replace(
-            "@@CAPTURE_USER_PROMPT_ENABLED@@",
-            &audit.user_prompt.enabled,
-        )
-        .replace(
-            "@@CAPTURE_USER_PROMPT_CONTENT@@",
-            &audit.user_prompt.content,
-        )
-        .replace("@@CAPTURE_TOOL_CALL_ENABLED@@", &audit.tool_call.enabled)
-        .replace("@@CAPTURE_TOOL_CALL_CONTENT@@", &audit.tool_call.content)
-        .replace("@@SEAL_RECIPIENTS_FILE@@", seal_recipients_file)
-        .replace("@@SEAL_KEY_ID@@", seal_key_id)
-}
-
 fn parse_template(text: &str) -> Result<Value, String> {
     serde_json::from_str(text).map_err(|e| format!("invalid template JSON: {e}"))
 }
@@ -211,13 +192,4 @@ fn pretty(value: &Value) -> String {
     let mut out = serde_json::to_string_pretty(value).expect("JSON serialization cannot fail");
     out.push('\n');
     out
-}
-
-fn text_entry(key: &str, location: Location, content: String) -> Entry {
-    Entry {
-        key: key.into(),
-        location,
-        content: content.into_bytes(),
-        executable: false,
-    }
 }

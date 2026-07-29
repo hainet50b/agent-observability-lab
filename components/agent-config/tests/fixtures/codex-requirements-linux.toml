@@ -1,0 +1,29 @@
+# docs:   https://developers.openai.com/codex/enterprise/managed-configuration
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs
+
+allow_managed_hooks_only = false
+managed_dir = '/etc/codex/hooks/agent-observability-lab'
+
+[features]
+hooks = true
+
+# docs:   https://developers.openai.com/codex/hooks
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs (HookHandlerConfig)
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = '"/etc/codex/hooks/agent-observability-lab/agent-audit.sh" --stream user_prompt --config "/etc/codex/hooks/agent-observability-lab/agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "/etc/codex/hooks/agent-observability-lab/agent-audit.ps1" -Stream user_prompt -Config "/etc/codex/hooks/agent-observability-lab/agent-audit.conf"'
+timeout = 10
+statusMessage = "Delivering UserPromptSubmit audit document"
+
+[[hooks.PostToolUse]]
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = '"/etc/codex/hooks/agent-observability-lab/agent-audit.sh" --stream tool_call --config "/etc/codex/hooks/agent-observability-lab/agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "/etc/codex/hooks/agent-observability-lab/agent-audit.ps1" -Stream tool_call -Config "/etc/codex/hooks/agent-observability-lab/agent-audit.conf"'
+timeout = 10
+statusMessage = "Delivering PostToolUse audit document"

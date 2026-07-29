@@ -1,0 +1,20 @@
+# docs:   https://developers.openai.com/codex/hooks
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs (HookHandlerConfig)
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = '"/tmp/agent-config-fixture/.codex/hooks/agent-audit.sh" --stream user_prompt --config "/tmp/agent-config-fixture/.codex/hooks/agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "/tmp/agent-config-fixture/.codex/hooks/agent-audit.ps1" -Stream user_prompt -Config "/tmp/agent-config-fixture/.codex/hooks/agent-audit.conf"'
+timeout = 10
+statusMessage = "Delivering UserPromptSubmit audit document"
+
+[[hooks.PostToolUse]]
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = '"/tmp/agent-config-fixture/.codex/hooks/agent-audit.sh" --stream tool_call --config "/tmp/agent-config-fixture/.codex/hooks/agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "/tmp/agent-config-fixture/.codex/hooks/agent-audit.ps1" -Stream tool_call -Config "/tmp/agent-config-fixture/.codex/hooks/agent-audit.conf"'
+timeout = 10
+statusMessage = "Delivering PostToolUse audit document"

@@ -1,0 +1,27 @@
+# docs:   https://developers.openai.com/codex/hooks
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs (HookHandlerConfig)
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = '"C:\Users\user\proj\.codex\hooks\agent-audit.sh" --stream user_prompt --config "C:\Users\user\proj\.codex\hooks\agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Users\user\proj\.codex\hooks\agent-audit.ps1" -Stream user_prompt -Config "C:\Users\user\proj\.codex\hooks\agent-audit.conf"'
+timeout = 10
+statusMessage = "Delivering UserPromptSubmit audit document"
+
+[[hooks.PostToolUse]]
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = '"C:\Users\user\proj\.codex\hooks\agent-audit.sh" --stream tool_call --config "C:\Users\user\proj\.codex\hooks\agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Users\user\proj\.codex\hooks\agent-audit.ps1" -Stream tool_call -Config "C:\Users\user\proj\.codex\hooks\agent-audit.conf"'
+timeout = 10
+statusMessage = "Delivering PostToolUse audit document"
+
+# docs:   https://developers.openai.com/codex/mcp
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/mcp_types.rs (RawMcpServerConfig)
+
+[mcp_servers.elasticsearch]
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "ES_URL=http://host.docker.internal:9200", "docker.elastic.co/mcp/elasticsearch", "stdio"]

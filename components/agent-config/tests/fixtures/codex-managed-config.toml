@@ -1,0 +1,20 @@
+# docs: https://developers.openai.com/codex/enterprise/managed-configuration
+
+[otel]
+environment = "dev"
+log_user_prompt = false
+
+[otel.exporter.otlp-http]
+endpoint = "http://localhost:8200/v1/logs"
+protocol = "binary"
+headers = { Authorization = "ApiKey TESTKEY" }
+
+[otel.trace_exporter.otlp-http]
+endpoint = "http://localhost:8200/v1/traces"
+protocol = "binary"
+headers = { Authorization = "ApiKey TESTKEY" }
+
+[otel.metrics_exporter.otlp-http]
+endpoint = "http://localhost:8200/v1/metrics"
+protocol = "binary"
+headers = { Authorization = "ApiKey TESTKEY" }

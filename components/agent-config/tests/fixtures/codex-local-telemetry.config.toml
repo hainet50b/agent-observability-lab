@@ -1,0 +1,28 @@
+# docs:   https://developers.openai.com/codex/config-reference
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/types.rs (OtelConfigToml)
+
+[otel]
+environment = "dev"
+log_user_prompt = false
+
+[otel.exporter.otlp-http]
+endpoint = "http://localhost:8200/v1/logs"
+protocol = "binary"
+headers = {}
+
+[otel.trace_exporter.otlp-http]
+endpoint = "http://localhost:8200/v1/traces"
+protocol = "binary"
+headers = {}
+
+[otel.metrics_exporter.otlp-http]
+endpoint = "http://localhost:8200/v1/metrics"
+protocol = "binary"
+headers = {}
+
+# docs:   https://developers.openai.com/codex/mcp
+# schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/mcp_types.rs (RawMcpServerConfig)
+
+[mcp_servers.elasticsearch]
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "ES_URL=http://host.docker.internal:9200", "docker.elastic.co/mcp/elasticsearch", "stdio"]

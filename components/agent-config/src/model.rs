@@ -163,3 +163,14 @@ pub struct Entry {
     pub content: Vec<u8>,
     pub executable: bool,
 }
+
+impl Entry {
+    pub fn text(key: &str, location: Location, content: String) -> Entry {
+        Entry {
+            key: key.into(),
+            location,
+            content: content.into_bytes(),
+            executable: false,
+        }
+    }
+}
