@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::model::{Agent, Content, Entry, Location};
 use crate::owner::OWNER;
@@ -564,7 +563,7 @@ fn write_marker(agent: &str, endpoint: &str, target: &Path) -> Result<(), String
     let marker = marker_path(target);
     let content = format!(
         "tool={OWNER}\nagent={agent}\nendpoint={endpoint}\nplaced_at={}\ntarget={}\n",
-        utc_now_iso(),
+        crate::clock::utc_now_iso(),
         target.display()
     );
     fs::write(&marker, content)
@@ -591,31 +590,4 @@ fn ensure_parent(path: &Path) -> Result<(), String> {
 
 fn log(message: &str) {
     eprintln!("[agent-config] {message}");
-}
-
-fn utc_now_iso() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before 1970")
-        .as_secs();
-    let (year, month, day) = civil_from_days((secs / 86400) as i64);
-    let rem = secs % 86400;
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
-        rem / 3600,
-        (rem % 3600) / 60,
-        rem % 60
-    )
-}
-
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let z = days + 719468;
-    let era = z.div_euclid(146097);
-    let doe = z.rem_euclid(146097);
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    (yoe + era * 400 + i64::from(month <= 2), month, day)
 }

@@ -19,6 +19,13 @@ impl Agent {
             Agent::Codex => "codex",
         }
     }
+
+    pub fn home(self) -> &'static str {
+        match self {
+            Agent::Claude => ".claude",
+            Agent::Codex => ".codex",
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

@@ -4,13 +4,15 @@ use std::process::ExitCode;
 use agent_config::config::Config;
 use agent_config::model::{Agent, Cell, Os, Scope};
 use agent_config::seal::{self, SealSource};
-use agent_config::{agents, place, render};
+use agent_config::{agents, bundle, place, render};
 
 const USAGE: &str = "usage:
   agent-config render   --config <setup.conf> --agent <claude|codex> --out <dir>
                         [--scope <local|project|managed>] [--os <linux|macos|windows>] [--target <dir>]
   agent-config place    --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]
-  agent-config teardown --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]";
+  agent-config teardown --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]
+  agent-config bundle   --config <setup.conf> --agent <claude|codex> [--scope <s>] [--os <o>] [--target <dir>]
+                        [--out-dir <dir>] [--all]";
 
 fn main() -> ExitCode {
     match run() {
@@ -26,27 +28,38 @@ struct Args {
     config: PathBuf,
     agent: Agent,
     scope: Scope,
+    scope_given: bool,
     os: Option<Os>,
     target: Option<String>,
     out: Option<PathBuf>,
+    out_dir: Option<PathBuf>,
+    emit_all: bool,
 }
 
 fn parse_args(mut args: std::env::Args) -> Result<Args, String> {
     let mut config = None;
     let mut agent = None;
     let mut scope = Scope::Local;
+    let mut scope_given = false;
     let mut os = None;
     let mut target = None;
     let mut out = None;
+    let mut out_dir = None;
+    let mut emit_all = false;
     while let Some(flag) = args.next() {
         let mut value = || args.next().ok_or(format!("{flag} needs a value"));
         match flag.as_str() {
             "--config" => config = Some(PathBuf::from(value()?)),
             "--agent" => agent = Some(Agent::parse(&value()?)?),
-            "--scope" => scope = Scope::parse(&value()?)?,
+            "--scope" => {
+                scope = Scope::parse(&value()?)?;
+                scope_given = true;
+            }
             "--os" => os = Some(Os::parse(&value()?)?),
             "--target" => target = Some(value()?),
             "--out" => out = Some(PathBuf::from(value()?)),
+            "--out-dir" => out_dir = Some(PathBuf::from(value()?)),
+            "--all" => emit_all = true,
             other => return Err(format!("unknown argument: {other}\n{USAGE}")),
         }
     }
@@ -54,9 +67,12 @@ fn parse_args(mut args: std::env::Args) -> Result<Args, String> {
         config: config.ok_or("--config is required")?,
         agent: agent.ok_or("--agent is required")?,
         scope,
+        scope_given,
         os,
         target: target.map(|t| t.replace('\\', "/")),
         out,
+        out_dir,
+        emit_all,
     })
 }
 
@@ -132,6 +148,32 @@ fn run() -> Result<(), String> {
             };
             let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
             place::place(&entries, &target_dir, args.agent.name(), &endpoint)
+        }
+        "bundle" => {
+            let config_dir = args
+                .config
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."))
+                .to_path_buf();
+            let scopes = if args.scope_given {
+                vec![args.scope]
+            } else if args.target.is_some() {
+                vec![Scope::Local, Scope::Project, Scope::Managed]
+            } else {
+                vec![Scope::Local, Scope::Managed]
+            };
+            let run = bundle::BundleRun {
+                scopes,
+                oses: match args.os {
+                    Some(os) => vec![os],
+                    None => Os::ALL.to_vec(),
+                },
+                target: args.target,
+                out_dir: args.out_dir.unwrap_or_else(|| config_dir.join("dist")),
+                emit_all: args.emit_all,
+            };
+            bundle::bundle(&cfg, seal.as_ref(), args.agent, &config_dir, &run)
         }
         _ => Err(USAGE.into()),
     }
