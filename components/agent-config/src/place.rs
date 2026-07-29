@@ -133,6 +133,277 @@ pub fn teardown(agent: Agent, target_dir: &Path, endpoint: &str) -> Result<(), S
     Ok(())
 }
 
+pub trait Confirm {
+    fn confirm(&mut self, prompt: &str) -> Result<bool, String>;
+}
+
+pub struct TtyConfirm {
+    yes_all: bool,
+}
+
+impl TtyConfirm {
+    pub fn new() -> Result<TtyConfirm, String> {
+        use std::io::IsTerminal;
+        if !std::io::stdin().is_terminal() {
+            return Err(
+                "no controlling TTY — placement is always interactive (there is no --yes); nothing was changed"
+                    .into(),
+            );
+        }
+        Ok(TtyConfirm { yes_all: false })
+    }
+}
+
+impl Confirm for TtyConfirm {
+    fn confirm(&mut self, prompt: &str) -> Result<bool, String> {
+        if self.yes_all {
+            return Ok(true);
+        }
+        eprint!("{prompt} [y/a/N] ");
+        let mut reply = String::new();
+        std::io::stdin()
+            .read_line(&mut reply)
+            .map_err(|_| "aborted (EOF on confirm); nothing was changed".to_string())?;
+        if reply.is_empty() {
+            return Err("aborted (EOF on confirm); nothing was changed".into());
+        }
+        match reply.trim() {
+            "a" | "A" | "all" | "ALL" => {
+                self.yes_all = true;
+                Ok(true)
+            }
+            "y" | "Y" | "yes" | "YES" => Ok(true),
+            _ => {
+                log("declined — skipping");
+                Ok(false)
+            }
+        }
+    }
+}
+
+pub fn managed_place(
+    entries: &[Entry],
+    agent: &str,
+    endpoint: &str,
+    confirm: &mut dyn Confirm,
+) -> Result<(), String> {
+    let mut failed = false;
+    for entry in entries {
+        let Some((bytes, executable)) = entry.content.rendered() else {
+            continue;
+        };
+        let path = host_path(entry)?;
+        let key = &entry.key;
+        let marker = marker_path(&path);
+
+        if !path.exists() {
+            log(&format!(
+                "{key}: {} does not exist (new file)",
+                path.display()
+            ));
+            show_content(&bytes);
+            if !confirm.confirm(&format!("Place {key} at {}?", path.display()))? {
+                continue;
+            }
+            install_file(key, &path, &bytes, executable)?;
+            if let Err(e) = write_marker(agent, endpoint, &path) {
+                let _ = fs::remove_file(&path);
+                return Err(format!(
+                    "{key}: {e} — rolled back {} so it is not left unmarked",
+                    path.display()
+                ));
+            }
+            log(&format!("{key}: placed {}", path.display()));
+            continue;
+        }
+
+        if !marker.is_file() {
+            log(&format!(
+                "{key}: REFUSED — {} exists with no provenance marker (not placed by this tool / real-org managed config). Never touched.",
+                path.display()
+            ));
+            failed = true;
+            continue;
+        }
+        let existing_endpoint = marker_field(&marker, "endpoint").unwrap_or_default();
+        if existing_endpoint != endpoint {
+            log(&format!(
+                "{key}: REFUSED — this host already enforces {existing_endpoint}; run teardown first."
+            ));
+            failed = true;
+            continue;
+        }
+
+        if fs::read(&path).ok().as_deref() == Some(bytes.as_slice()) {
+            log(&format!("{key}: already placed and identical — no-op."));
+            continue;
+        }
+
+        log(&format!(
+            "{key}: {} was placed by managed setup but the content changed:",
+            path.display()
+        ));
+        show_diff(&path, &bytes);
+        if !confirm.confirm(&format!("Update {key} at {}?", path.display()))? {
+            continue;
+        }
+        install_file(key, &path, &bytes, executable)?;
+        write_marker(agent, endpoint, &path).map_err(|e| {
+            format!(
+                "{key}: updated {} but {e} — remove it manually",
+                path.display()
+            )
+        })?;
+        log(&format!("{key}: updated {}", path.display()));
+    }
+    if failed {
+        return Err(
+            "one or more managed files were refused (see above); nothing foreign was touched"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+pub fn managed_teardown(
+    candidates: &[(String, String)],
+    root: &Path,
+    confirm: &mut dyn Confirm,
+) -> Result<(), String> {
+    let mut failed = false;
+    for (key, host) in candidates {
+        let path = expand_host(host);
+        let marker = marker_path(&path);
+        if !path.exists() && !marker.is_file() {
+            log(&format!(
+                "{key}: nothing to remove ({} absent)",
+                path.display()
+            ));
+            continue;
+        }
+        if !marker.is_file() {
+            log(&format!(
+                "{key}: REFUSED — {} has no provenance marker (not placed by this tool / real-org config). Not removed.",
+                path.display()
+            ));
+            failed = true;
+            continue;
+        }
+        let tool = marker_field(&marker, "tool").unwrap_or_default();
+        let agent = marker_field(&marker, "agent").unwrap_or_default();
+        let endpoint = marker_field(&marker, "endpoint").unwrap_or_default();
+        if !confirm.confirm(&format!(
+            "Remove managed {key} at {} (tool='{tool}' agent='{agent}' endpoint='{endpoint}')?",
+            path.display()
+        ))? {
+            continue;
+        }
+        if path.exists() && fs::remove_file(&path).is_err() {
+            return Err(format!(
+                "cannot remove {} (permission denied?) — remove it manually with elevated privileges, e.g.: sudo rm '{}'",
+                path.display(),
+                path.display()
+            ));
+        }
+        if fs::remove_file(&marker).is_err() {
+            log(&format!(
+                "{key}: removed {} but could not remove marker {} — remove it manually",
+                path.display(),
+                marker.display()
+            ));
+        }
+        log(&format!("{key}: removed {} and its marker", path.display()));
+    }
+    if failed {
+        return Err("one or more managed files were refused (see above)".into());
+    }
+    remove_empty_dirs(root);
+    if !root.exists() {
+        log(&format!("removed empty managed root {}", root.display()));
+    }
+    Ok(())
+}
+
+fn remove_empty_dirs(dir: &Path) {
+    let Ok(children) = fs::read_dir(dir) else {
+        return;
+    };
+    for child in children.flatten() {
+        if child.file_type().is_ok_and(|t| t.is_dir()) {
+            remove_empty_dirs(&child.path());
+        }
+    }
+    let _ = fs::remove_dir(dir);
+}
+
+pub fn expand_host(host: &str) -> PathBuf {
+    if let Some(rest) = host.strip_prefix("%USERPROFILE%") {
+        let profile = std::env::var_os("USERPROFILE").unwrap_or_default();
+        return PathBuf::from(format!("{}{rest}", PathBuf::from(profile).display()));
+    }
+    PathBuf::from(host)
+}
+
+fn host_path(entry: &Entry) -> Result<PathBuf, String> {
+    match &entry.location {
+        Location::Host(abs) => Ok(expand_host(abs)),
+        Location::InTarget(_) => Err(format!(
+            "{}: managed placement received a target-relative entry",
+            entry.key
+        )),
+    }
+}
+
+fn show_content(bytes: &[u8]) {
+    log("content to be written:");
+    for line in String::from_utf8_lossy(bytes).lines() {
+        eprintln!("  | {line}");
+    }
+}
+
+fn show_diff(target: &Path, new_bytes: &[u8]) {
+    let tmp = std::env::temp_dir().join(format!("agent-config-diff-{}", std::process::id()));
+    if fs::write(&tmp, new_bytes).is_ok() {
+        let shown = std::process::Command::new("diff")
+            .arg("-u")
+            .arg(target)
+            .arg(&tmp)
+            .status()
+            .is_ok();
+        let _ = fs::remove_file(&tmp);
+        if shown {
+            return;
+        }
+    }
+    log("(diff unavailable) existing content differs from the new content");
+}
+
+fn install_file(key: &str, path: &Path, bytes: &[u8], executable: bool) -> Result<(), String> {
+    let dir = path.parent().expect("placement target always has a parent");
+    fs::create_dir_all(dir).map_err(|_| {
+        format!(
+            "cannot create {} — rerun with privileges, e.g.: sudo mkdir -p '{}'",
+            dir.display(),
+            dir.display()
+        )
+    })?;
+    fs::write(path, bytes).map_err(|_| {
+        format!(
+            "{key}: cannot write {} (permission denied?) — install it manually with elevated privileges",
+            path.display()
+        )
+    })?;
+    #[cfg(unix)]
+    if executable {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("{key}: cannot set mode on {}: {e}", path.display()))?;
+    }
+    #[cfg(not(unix))]
+    let _ = executable;
+    Ok(())
+}
+
 fn remove_file(key: &str, endpoint: &str, path: &Path, failed: &mut bool) {
     let marker = marker_path(path);
     let exists = path.symlink_metadata().is_ok();

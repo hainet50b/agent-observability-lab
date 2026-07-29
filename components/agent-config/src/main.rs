@@ -9,8 +9,8 @@ use agent_config::{agents, place, render};
 const USAGE: &str = "usage:
   agent-config render   --config <setup.conf> --agent <claude|codex> --out <dir>
                         [--scope <local|project|managed>] [--os <linux|macos|windows>] [--target <dir>]
-  agent-config place    --config <setup.conf> --agent <claude|codex> [--scope <local|project>] [--target <dir>]
-  agent-config teardown --config <setup.conf> --agent <claude|codex> [--scope <local|project>] [--target <dir>]";
+  agent-config place    --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]
+  agent-config teardown --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]";
 
 fn main() -> ExitCode {
     match run() {
@@ -93,8 +93,34 @@ fn run() -> Result<(), String> {
             if args.out.is_some() {
                 return Err(format!("--out does not apply to {command}"));
             }
-            let target_dir = resolve_target_dir(&args)?;
             let endpoint = cfg.marker_endpoint(args.scope);
+            if args.scope == Scope::Managed {
+                if args.target.is_some() {
+                    return Err("--scope managed does not take --target".into());
+                }
+                let os = Os::detect()?;
+                let mut confirm = place::TtyConfirm::new()?;
+                let root = PathBuf::from(match args.agent {
+                    Agent::Claude => agents::claude::managed_root(os),
+                    Agent::Codex => agents::codex::managed_root(os),
+                });
+                if command == "teardown" {
+                    let candidates = match args.agent {
+                        Agent::Claude => agents::claude::managed_candidates(&cfg, os),
+                        Agent::Codex => agents::codex::managed_candidates(&cfg, os),
+                    };
+                    return place::managed_teardown(&candidates, &root, &mut confirm);
+                }
+                let cell = Cell {
+                    agent: args.agent,
+                    scope: args.scope,
+                    os,
+                    target: None,
+                };
+                let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+                return place::managed_place(&entries, args.agent.name(), &endpoint, &mut confirm);
+            }
+            let target_dir = resolve_target_dir(&args)?;
             if command == "teardown" {
                 return place::teardown(args.agent, &target_dir, &endpoint);
             }
@@ -142,9 +168,7 @@ fn resolve_target_dir(args: &Args) -> Result<PathBuf, String> {
             .as_ref()
             .map(PathBuf::from)
             .ok_or("--scope project requires --target <dir>".into()),
-        Scope::Managed => {
-            Err("managed placement is not implemented yet (arrives in a later stage)".into())
-        }
+        Scope::Managed => unreachable!("managed scope is handled before target resolution"),
     }
 }
 

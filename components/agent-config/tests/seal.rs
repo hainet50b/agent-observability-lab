@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use agent_config::config::Config;
@@ -20,7 +20,7 @@ agent_audit.seal.recipients_file={recipients_file}
     )
 }
 
-fn load(dir: &PathBuf, conf: &str) -> Config {
+fn load(dir: &Path, conf: &str) -> Config {
     let path = dir.join("setup.conf");
     fs::write(&path, conf).unwrap();
     Config::load(&path).unwrap()
@@ -33,7 +33,7 @@ fn openssl_available() -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
-fn make_cert(dir: &PathBuf, epoch: &str) {
+fn make_cert(dir: &Path, epoch: &str) {
     let cert_dir = dir.join("recipients").join(epoch);
     fs::create_dir_all(&cert_dir).unwrap();
     let status = Command::new("openssl")

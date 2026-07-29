@@ -40,6 +40,28 @@ pub fn teardown_targets() -> (
     )
 }
 
+pub fn managed_candidates(cfg: &Config, os: Os) -> Vec<(String, String)> {
+    let root = managed_root(os);
+    let mut candidates = Vec::new();
+    if cfg.audit.is_some() {
+        candidates.push((
+            "requirements".to_string(),
+            format!("{root}/requirements.toml"),
+        ));
+        candidates.extend(crate::agents::claude::hook_candidates(
+            &format!("{root}/hooks/{OWNER}"),
+            os,
+        ));
+    }
+    let managed_config = if os == Os::Windows {
+        "%USERPROFILE%/.codex/managed_config.toml".to_string()
+    } else {
+        format!("{root}/managed_config.toml")
+    };
+    candidates.push(("managed_config".to_string(), managed_config));
+    candidates
+}
+
 fn user_entries(
     cfg: &Config,
     cell: &Cell,

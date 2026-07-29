@@ -43,6 +43,33 @@ pub fn teardown_targets() -> (
     )
 }
 
+pub fn managed_candidates(cfg: &Config, os: Os) -> Vec<(String, String)> {
+    let root = managed_root(os);
+    let mut candidates = vec![(
+        "managed-settings".to_string(),
+        format!("{root}/managed-settings.d/10-{OWNER}.json"),
+    )];
+    if cfg.audit.is_some() {
+        candidates.extend(hook_candidates(&format!("{root}/hooks/{OWNER}"), os));
+    }
+    candidates
+}
+
+pub(crate) fn hook_candidates(hooks_root: &str, os: Os) -> Vec<(String, String)> {
+    let ext = os.flavor().ext();
+    [
+        format!("agent-audit.{ext}"),
+        "agent-audit.conf".to_string(),
+        format!("lib/adapter.{ext}"),
+        format!("lib/agent-audit-core.{ext}"),
+        format!("lib/seal.{ext}"),
+        "recipient.pem".to_string(),
+    ]
+    .into_iter()
+    .map(|rel| (format!("hook:{rel}"), format!("{hooks_root}/{rel}")))
+    .collect()
+}
+
 fn user_entries(
     cfg: &Config,
     cell: &Cell,
