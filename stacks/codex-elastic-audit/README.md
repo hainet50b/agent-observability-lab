@@ -119,15 +119,17 @@ restricted read access.
 > (managed-scope hooks are trusted by policy and need neither). The audit path is independent of
 > telemetry, so it works even though this stack emits no OTLP.
 
-**Deploy this audit bundle into another scope.** `setup-config` deploys the same
+**Deploy this audit bundle into another scope.** The `agent-config` CLI's `place`
+(requires a Rust toolchain; `cargo run` builds on first use) deploys the same
 self-contained bundle (hook entry + shared core + adapter all materialized) to a
-`(target, scope)`; details in [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
+`(target, scope)`, and its `teardown` subcommand removes it; details in
+[`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
 
 | Scope | `--target` | MCP | Codex auth-link | Interactive | Teardown |
 | --- | --- | --- | --- | --- | --- |
-| `local` (default) | rejected (stack dir) | yes | yes (links `~/.codex/auth.json`) | no | `--scope local --teardown` |
-| `project` | required | no | no | no | `--scope project --target <dir> --teardown` |
-| `managed` | n/a | no | no | yes | `--scope managed --teardown` |
+| `local` (default) | rejected (stack dir) | yes | yes (links `~/.codex/auth.json`) | no | `teardown --scope local` |
+| `project` | required | no | no | no | `teardown --scope project --target <dir>` |
+| `managed` | n/a | no | no | yes | `teardown --scope managed` |
 
 **`project`** — the target gets its own `.codex/hooks/` (entry + core + adapter), with
 nothing pointing back into this repo; deploys the audit config **only** and does **not**
@@ -136,8 +138,7 @@ captures that project's prompts and tool I/O into the lab's Elasticsearch — do
 secret-bearing work at it.
 
 ```sh
-scripts/setup-config.sh --scope project --target /path/to/your/project
-# PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config setup.conf --scope project --target /path/to/your/project
 ```
 
 **`managed`** — enforce the audit hooks for **every** user on a machine (highest
@@ -152,15 +153,14 @@ the lab did not place, writes a provenance sidecar keyed on the audit ES url); a
 shell aborts.
 
 ```sh
-scripts/setup-config.sh --scope managed
-# PowerShell: scripts/setup-config.ps1 -Scope managed
-# teardown:   scripts/setup-config.sh --scope managed --teardown
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config setup.conf --scope managed
+# teardown:
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent codex --config setup.conf --scope managed
 ```
 
 > **Caveat — validate the host path.** Confirm on a **real host** that the absolute hook
 > `command` path resolves under the managed root — `/etc/codex` on macOS/Linux and
-> `%ProgramData%\OpenAI\Codex` (Windows `Program Files`-class path). The managed scripts abort
-> under Git Bash / MINGW by design; run them on the real OS entry. See
+> `%ProgramData%\OpenAI\Codex` (Windows `Program Files`-class path). See
 > [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md) "Managed materialize".
 
 ### 3. Verify the audit path (optional)
@@ -236,15 +236,15 @@ codex-elastic-audit/
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (audit api_key secret)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
    ├─ setup-backend.sh / .ps1            # wait for health, provision audit streams + Kibana import
-   ├─ setup-config.sh / .ps1             # deploy the audit bundle (--scope local|project|managed)
    ├─ verify-agent-audit.sh / .ps1       # UserPromptSubmit -> user_prompt stream verification
    └─ verify-tool-call-audit.sh / .ps1   # PostToolUse -> tool_call stream verification
 ```
 
-`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`), each calling
-the component façade scripts directly. The `elastic-audit` backend
+`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
+The `elastic-audit` backend
 (`../../components/backends/elastic-audit/`) is a thin `include:` of the `elasticsearch` /
 `kibana` service fragments plus a composition script that selects its assets — it owns no
 asset files. The service fragments under `../../components/backends/services/` own the service
@@ -254,7 +254,7 @@ Agent Audit data views and saved searches under `kibana/agent-audit/`), and the 
 appliers that load them. The Codex agent component (`../../components/agents/codex/`)
 owns only agent-runtime config — the single audit-hook entry `hooks/agent-audit.{sh,ps1}` over
 its per-agent `hooks/lib/adapter.{sh,ps1}` (the shared hook core lives once under
-`../../components/agents/shared/agent-audit/lib/`), the hook delivery-config template, and the
-render scripts. `setup-config` renders the delivery config into this directory's gitignored
+`../../components/agents/shared/agent-audit/lib/`) and the hook delivery-config template.
+The `agent-config` CLI's `place` renders the delivery config into this directory's gitignored
 `.codex/hooks/agent-audit.conf` and registers the stack-local hooks as inline `[hooks]` (plus the
 Elasticsearch MCP) in `.codex/config.toml`.

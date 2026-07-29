@@ -15,7 +15,7 @@ no credential is needed and the rendered telemetry config carries none by defaul
 A stack can still ship one for a secured endpoint: set the backing service's api_key
 in the gitignored `setup.local.conf` (copy from `setup.local.conf.example`) —
 `telemetry.apm_server.api_key` in `claude-elastic` — and
-`setup-config` renders `OTEL_EXPORTER_OTLP_HEADERS: "Authorization=ApiKey <key>"`
+`agent-config` renders `OTEL_EXPORTER_OTLP_HEADERS: "Authorization=ApiKey <key>"`
 into the settings `env` block. Absent or empty → no header line, byte-identical to
 a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; see
 [`config-deployment.md`](config-deployment.md).

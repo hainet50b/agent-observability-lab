@@ -7,7 +7,8 @@ How code is written in this project. Read before implementing.
 This is an infrastructure / demo repository, not an application codebase. The "code" is container orchestration and glue scripting.
 
 - **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up` (the unit of delivery is a running stack, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
-- **POSIX shell (`sh`/`bash`)** — smoke tests, health waits, and verification queries under each stack's `scripts/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean.
+- **Rust (`components/agent-config/`)** — the config renderer/deployer CLI. Built and run via `cargo run` (a Rust toolchain is assumed; no prebuilt binaries). Keep it `cargo fmt`-formatted, `cargo clippy`-clean, and covered by `cargo test` (golden fixtures pin the rendered bytes).
+- **POSIX shell (`sh`/`bash`)** — smoke tests, health waits, verification queries, and backend setup under each stack's `scripts/`, plus the runtime audit hooks under `components/agents/*/hooks/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean.
 - **PowerShell (`pwsh`)** — each `.sh` script ships a `.ps1` mirror with identical behaviour for Windows hosts; keep the pair in sync and `PSScriptAnalyzer`-clean. `.ps1` files carry **no shebang**: PowerShell does not honour one, these scripts are always invoked via `powershell`/`pwsh -File` or `&` (never executed directly), and a `#!/usr/bin/env pwsh` line both is dead and misleadingly implies a PS7 requirement where Windows fleets run `powershell.exe` (5.1).
 
 ## Comments and leanness
@@ -20,7 +21,7 @@ Keep every artifact **as lean as possible so its load-bearing parts stand out** 
 
 ## Test Pattern
 
-There is no unit-test framework here. "Tests" are smoke / integration checks written as shell scripts that follow the **3A pattern**:
+The Rust crate carries real unit / golden tests (`cargo test`); everything else is smoke / integration checks written as shell scripts that follow the **3A pattern**:
 
 - **Arrange** — bring the stack up and wait for health.
 - **Act** — explicitly perform the action under test (e.g. send telemetry, query an index). The Act step must be visible in the script body, not hidden in a helper.
@@ -40,7 +41,15 @@ for d in stacks/*/; do (cd "$d" && docker compose config -q); done
 Get-ChildItem stacks -Directory | ForEach-Object { Push-Location $_; docker compose config -q; Pop-Location }
 ```
 
-**2. Format → lint scripts** — run if the tools are installed; fix every finding.
+**2. Format → lint → test the Rust crate** — required whenever `components/agent-config/` changed.
+
+```sh
+cargo fmt    --manifest-path components/agent-config/Cargo.toml
+cargo clippy --manifest-path components/agent-config/Cargo.toml --all-targets
+cargo test   --manifest-path components/agent-config/Cargo.toml
+```
+
+**3. Format → lint scripts** — run if the tools are installed; fix every finding.
 
 ```sh
 command -v shfmt      >/dev/null 2>&1 && find stacks components -name '*.sh' -print0 | xargs -0 -r shfmt -w
@@ -57,7 +66,7 @@ if (Get-Module -ListAvailable PSScriptAnalyzer) {
 }
 ```
 
-**3. Run smoke tests** — each must exit 0. Smoke tests are POSIX `sh`; on Windows run them under bash.
+**4. Run smoke tests** — each must exit 0. Smoke tests are POSIX `sh`; on Windows run them under bash.
 
 ```sh
 for f in stacks/*/scripts/smoke-test.sh; do [ -x "$f" ] && "$f"; done

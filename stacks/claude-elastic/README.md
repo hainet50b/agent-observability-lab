@@ -213,67 +213,55 @@ Placement **refuses to overwrite any file the lab did not place** (tracked by a
 sidecar `.managed` marker) and prompts before writing. There is **no `--yes`**; a
 non-interactive shell aborts having changed nothing, and permission errors fail loud
 with the privileged command to run by hand. Place via `setup.sh --scope managed`
-(runs after the normal setup steps) or directly:
+(runs after the normal setup steps) or directly via the `agent-config` CLI
+(requires a Rust toolchain; `cargo run` builds on first use):
 
 ```sh
-../../components/agents/claude/scripts/setup-managed.sh \
-  --logs-endpoint http://localhost:8200/v1/logs \
-  --traces-endpoint http://localhost:8200/v1/traces \
-  --metrics-endpoint http://localhost:8200/v1/metrics
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope managed
 ```
 
-```powershell
-..\..\components\agents\claude\scripts\setup-managed.ps1 `
-  -LogsEndpoint http://localhost:8200/v1/logs `
-  -TracesEndpoint http://localhost:8200/v1/traces `
-  -MetricsEndpoint http://localhost:8200/v1/metrics
-```
-
-**Staged opt-in — also enforce the audit hooks (`--with-hooks`).** Off by default
-(managed enforces telemetry only — "config-only"). Adding `--with-hooks --es-url <es>`
-(sh) / `-WithHooks -EsUrl <es>` (ps1) **materializes** the audit-hook bundle (entry +
+**Staged opt-in — also enforce the audit hooks.** Off by default (managed enforces
+telemetry only — "config-only"): the CLI includes the hook bundle only when the config
+it places from carries `agent_audit.*` keys, and this stack's `setup.conf` declares
+telemetry only. Placing from an audit-bearing config (as the sibling
+[`claude-elastic-audit`](../claude-elastic-audit/) stack's is) **materializes** the audit-hook bundle (entry +
 shared core + adapter, both shells, plus a rendered `agent-audit.conf`) into
 `hooks/agent-observability-lab/` under the **managed root** and adds a `hooks` block
 pointing at it — so the enforced hooks are self-contained on the host, never
 referencing this repo. The owner-scoped subdirectory keeps the bundle from colliding
 with another distribution of the same tooling on a machine-global root.
 
-> **Host-check gate — do this once before relying on `--with-hooks`.** Claude Code has
+> **Host-check gate — do this once before relying on managed hooks.** Claude Code has
 > no managed hooks-directory convention, so the lab picks its own dir under the managed
 > root. Confirm on a **real host** that an absolute hook `command`
 > path actually fires (mind the macOS space in `Application Support` and the Windows
-> `C:\Program Files\ClaudeCode` path) and record the result. Until confirmed, leave
-> `--with-hooks` off and keep managed config-only.
+> `C:\Program Files\ClaudeCode` path) and record the result. Until confirmed, keep
+> managed config-only (place from a telemetry-only config).
 
-Remove it (restores the host, removes only the lab-placed file + its marker; add
-`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle) — either
-`setup-config.sh --scope managed --teardown [--with-hooks]` (the `-Teardown` /
-`-WithHooks` switches on `.ps1`) or directly:
+Remove it (restores the host, removes only the lab-placed files + their markers —
+the CLI enumerates every candidate target, including a materialized hook bundle,
+from the config on its own):
 
 ```sh
-../../components/agents/claude/scripts/teardown-managed.sh
-```
-
-```powershell
-..\..\components\agents\claude\scripts\teardown-managed.ps1
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config setup.conf --scope managed
 ```
 
 Then run `claude` from a configured shell/directory and do a little work (ask a
 question, let it read or edit a file). Telemetry flushes on the export interval, so
 data lands within ~10–30s.
 
-**Deploy this config into another scope.** `setup-config` deploys the same
-self-contained bundle to a `(target, scope)`; details in [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
+**Deploy this config into another scope.** The `agent-config` CLI's `place` deploys
+the same self-contained bundle to a `(target, scope)`, and its `teardown` subcommand
+removes it; details in [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
 
 | Scope | `--target` | MCP | Codex auth-link | Interactive | Teardown |
 | --- | --- | --- | --- | --- | --- |
-| `local` (default) | rejected (stack dir) | yes | n/a (Claude) | no | `--scope local --teardown` |
-| `project` | required | no | n/a | no | `--scope project --target <dir> --teardown` |
-| `managed` | n/a | no | n/a | yes | `--scope managed --teardown [--with-hooks]` |
+| `local` (default) | rejected (stack dir) | yes | n/a (Claude) | no | `teardown --scope local` |
+| `project` | required | no | n/a | no | `teardown --scope project --target <dir>` |
+| `managed` | n/a | no | n/a | yes | `teardown --scope managed` |
 
 ```sh
-scripts/setup-config.sh --scope project --target /path/to/your/project
-# PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope project --target /path/to/your/project
 ```
 
 `project` scope writes a self-contained `.claude/` into that directory (nothing
@@ -392,14 +380,14 @@ claude-elastic/
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
    ├─ setup-backend.sh / .ps1            # wait for health, load ES + Kibana assets
-   ├─ setup-config.sh / .ps1             # deploy the agent config bundle (--scope local|project|managed)
    └─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
 ```
 
-`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`), each
-calling the component façade scripts directly. The `elastic` backend
+`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`agent-config` CLI's `place` (`cargo run` against
+`../../components/agent-config/`). The `elastic` backend
 (`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` /
 `kibana` / `apm-server` service fragments plus a composition script that selects its
 assets — it owns no asset files. The service fragments under
@@ -408,5 +396,5 @@ libraries (the `traces-apm@custom` / `logs-apm.app@custom` ingest pipelines unde
 `elasticsearch/`; the Claude Code data views and saved searches under
 `kibana/claude/`), and the generic appliers that load them. The Claude Code agent
 component (`../../components/agents/claude/`) owns only agent-runtime config — the
-settings template + render scripts (the `.claude/settings.local.json` content), no
-Kibana assets.
+settings templates (the `.claude/settings.local.json` content, rendered by the
+`agent-config` CLI), no Kibana assets.

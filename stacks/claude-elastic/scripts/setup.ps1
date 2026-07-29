@@ -6,20 +6,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$StackDir = Split-Path -Parent $PSScriptRoot
+$Manifest = Join-Path $StackDir '../../components/agent-config/Cargo.toml'
+if (-not $Config) { $Config = Join-Path $StackDir 'setup.conf' }
 
-$backendArgs = @{}
-if ($Config) {
-    $backendArgs['Config'] = $Config
-}
-& (Join-Path $PSScriptRoot 'setup-backend.ps1') @backendArgs
+& (Join-Path $PSScriptRoot 'setup-backend.ps1') -Config $Config
 
 Write-Host ''
 
-$configArgs = @{ Scope = $Scope }
-if ($Target) {
-    $configArgs['Target'] = $Target
-}
-if ($Config) {
-    $configArgs['Config'] = $Config
-}
-& (Join-Path $PSScriptRoot 'setup-config.ps1') @configArgs
+$placeArgs = @('place', '--agent', 'claude', '--config', $Config, '--scope', $Scope)
+if ($Target) { $placeArgs += @('--target', $Target) }
+cargo run -q --manifest-path $Manifest -- @placeArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -2,6 +2,8 @@
 set -euo pipefail
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+stack_dir=$(cd -- "$script_dir/.." && pwd)
+manifest="$stack_dir/../../components/agent-config/Cargo.toml"
 
 scope=local
 target=""
@@ -22,7 +24,8 @@ while [ "$#" -gt 0 ]; do
     ;;
   esac
 done
+config=${config:-$stack_dir/setup.conf}
 
-"$script_dir/setup-backend.sh" ${config:+"$config"}
+"$script_dir/setup-backend.sh" "$config"
 echo
-"$script_dir/setup-config.sh" --scope "$scope" ${target:+--target "$target"} ${config:+"$config"}
+cargo run -q --manifest-path "$manifest" -- place --agent claude --config "$config" --scope "$scope" ${target:+--target "$target"}

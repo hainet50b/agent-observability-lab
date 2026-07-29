@@ -109,15 +109,17 @@ timeout) to the local audit data streams. Lab mode stores the captured text in *
 for searchability; production-oriented deployments should use encrypted content and
 restricted read access.
 
-**Deploy this audit bundle into another scope.** `setup-config` deploys the same
+**Deploy this audit bundle into another scope.** The `agent-config` CLI's `place`
+(requires a Rust toolchain; `cargo run` builds on first use) deploys the same
 self-contained bundle (hook entry + shared core + adapter all materialized) to a
-`(target, scope)`; details in [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
+`(target, scope)`, and its `teardown` subcommand removes it; details in
+[`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
 
 | Scope | `--target` | MCP | Interactive | Teardown |
 | --- | --- | --- | --- | --- |
-| `local` (default) | rejected (stack dir) | yes | no | `--scope local --teardown` |
-| `project` | required | no | no | `--scope project --target <dir> --teardown` |
-| `managed` | n/a | no | yes | `--scope managed --teardown` |
+| `local` (default) | rejected (stack dir) | yes | no | `teardown --scope local` |
+| `project` | required | no | no | `teardown --scope project --target <dir>` |
+| `managed` | n/a | no | yes | `teardown --scope managed` |
 
 **`project`** — the target gets its own `.claude/hooks/` (entry + core + adapter), with
 nothing pointing back into this repo; deploys the audit config **only** and does **not**
@@ -126,8 +128,7 @@ captures that project's prompts and tool I/O into the lab's Elasticsearch — do
 secret-bearing work at it.
 
 ```sh
-scripts/setup-config.sh --scope project --target /path/to/your/project
-# PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope project --target /path/to/your/project
 ```
 
 **`managed`** — enforce the audit hooks for **every** user on a machine (highest
@@ -141,16 +142,15 @@ deploy-only, and marker-aware** (confirms each file, never overwrites a file the
 place, writes a provenance sidecar keyed on the audit ES url); a non-TTY shell aborts.
 
 ```sh
-scripts/setup-config.sh --scope managed
-# PowerShell: scripts/setup-config.ps1 -Scope managed
-# teardown:   scripts/setup-config.sh --scope managed --teardown
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope managed
+# teardown:
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config setup.conf --scope managed
 ```
 
 > **Caveat — validate the host path.** Claude has no managed hooks-directory convention, so confirm
 > on a **real host** that the absolute hook `command` path resolves under the managed root —
 > `/Library/Application Support/ClaudeCode` on macOS (note the space) and
-> `C:\Program Files\ClaudeCode` on Windows. The managed scripts abort under Git Bash / MINGW
-> by design; run them on the real OS entry. See
+> `C:\Program Files\ClaudeCode` on Windows. See
 > [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md) "Managed materialize".
 
 ### 3. Verify the audit path (optional)
@@ -228,15 +228,15 @@ claude-elastic-audit/
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (audit api_key secret)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
    ├─ setup-backend.sh / .ps1            # wait for health, provision audit streams + Kibana import
-   ├─ setup-config.sh / .ps1             # deploy the audit bundle (--scope local|project|managed)
    ├─ verify-agent-audit.sh / .ps1       # UserPromptSubmit -> user_prompt stream verification
    └─ verify-tool-call-audit.sh / .ps1   # PostToolUse -> tool_call stream verification
 ```
 
-`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`), each calling
-the component façade scripts directly. The `elastic-audit` backend
+`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
+The `elastic-audit` backend
 (`../../components/backends/elastic-audit/`) is a thin `include:` of the `elasticsearch` /
 `kibana` service fragments plus a composition script that selects its assets — it owns no
 asset files. The service fragments under `../../components/backends/services/` own the service
@@ -246,9 +246,8 @@ Agent Audit data views and saved searches under `kibana/agent-audit/`), and the 
 appliers that load them. The Claude Code agent component
 (`../../components/agents/claude/`) owns only agent-runtime config — the single
 audit-hook entry `hooks/agent-audit.{sh,ps1}` over its per-agent `hooks/lib/adapter.{sh,ps1}`
-(the shared hook core lives once under `../../components/agents/shared/agent-audit/lib/`), the
-hook delivery-config template, and the render scripts (`render-hook`, `render-agent-audit`,
-`render-mcp`). `setup-config` registers the hooks in this directory's gitignored
-`.claude/settings.local.json` (each command pointed at the absolute `agent-audit.conf` via
-`--config`), renders the delivery config into `.claude/hooks/agent-audit.conf`, and writes
-`.mcp.json`.
+(the shared hook core lives once under `../../components/agents/shared/agent-audit/lib/`) and
+the hook delivery-config template. The `agent-config` CLI's `place` registers the hooks in
+this directory's gitignored `.claude/settings.local.json` (each command pointed at the
+absolute `agent-audit.conf` via `--config`), renders the delivery config into
+`.claude/hooks/agent-audit.conf`, and writes `.mcp.json`.

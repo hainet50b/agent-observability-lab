@@ -14,8 +14,10 @@ have not verified against the current code.
 ## Orientation
 
 - `components/` — reusable building blocks: `backends/` (service fragments +
-  backend compositions), `agents/` (per-agent runtime config), `agents/shared/`
-  (agent-agnostic libraries)
+  backend compositions), `agents/` (per-agent templates + runtime hooks),
+  `agents/shared/` (the shared hook core), `agent-config/` (the Rust CLI that
+  renders, places, tears down, and bundles agent config — one declarative
+  bundle definition per agent under `src/agents/`)
 - `stacks/` — one composition each (Backends × Agents), with a Quick Tour README
 - `README.md` — user-facing entry point
 - `SPEC/` — reference notes that are hard to re-derive from code (telemetry

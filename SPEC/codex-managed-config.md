@@ -3,7 +3,7 @@
 How OpenAI Codex CLI lets an administrator push configuration onto a fleet and
 **enforce** a subset of it, while leaving the user's own `config.toml` in effect
 wherever it does not conflict. In the lab this surface is driven by the audit
-stacks' `setup-config --scope managed` (`--with-hooks`); the shared placement
+stacks' `agent-config place --scope managed`; the shared placement
 model is owned by [`config-deployment.md`](config-deployment.md). It is
 **Codex-specific**: Claude Code has no
 `config.toml` / `requirements.toml` — its org-enforcement surface is

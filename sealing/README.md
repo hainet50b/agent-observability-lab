@@ -21,7 +21,7 @@ flowchart LR
     pem["recipient.pem<br/>PEM cert · public"]
     dec["decrypt<br/>(uses private.key)"]
   end
-  subgraph bundle["Config bundle — config-place (local / project / managed)"]
+  subgraph bundle["Config bundle — agent-config (local / project / managed)"]
     bpem["recipient.pem"]
   end
   subgraph edge["Edges — laptops (script-only)"]

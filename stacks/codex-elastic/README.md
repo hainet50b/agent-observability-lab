@@ -145,73 +145,55 @@ Placement **refuses to overwrite any file the lab did not place** (tracked by a 
 before writing. There is **no `--yes`**; a non-interactive shell aborts having changed
 nothing, and permission errors fail loud with the privileged command to run by hand.
 
-The managed audit hooks run the `agent-audit.{sh,ps1}` scripts from `managed_dir` (the lab
-points it at its repo `components/agents/codex/hooks/`) with
+The managed audit hooks run the `agent-audit.{sh,ps1}` scripts from `managed_dir` with
 `--config <managed_dir>/agent-audit.conf`. Codex validates that `managed_dir` exists but does
-**not** distribute its contents — **delivering them is the operator's job**. The lab ships
-the two scripts there but **not** an `agent-audit.conf` (that file carries the Elasticsearch
-URL and is rendered per-deployment by `render-agent-audit.sh`). So for the enforced hook to
-find its config you must render an `agent-audit.conf` and place it beside the scripts in
-`managed_dir`; without it the audit hook fails open with no config. (The `--with-hooks`
-staged opt-in below removes this caveat.)
+**not** distribute its contents — **delivering them is the operator's job**, which the
+staged opt-in below has the CLI do for you.
 
-Place it via `setup.sh --scope managed` (runs after the normal setup steps) or directly:
+Place it via `setup.sh --scope managed` (runs after the normal setup steps) or directly via
+the `agent-config` CLI (requires a Rust toolchain; `cargo run` builds on first use):
 
 ```sh
-../../components/agents/codex/scripts/setup-managed.sh \
-  --logs-endpoint http://localhost:8200/v1/logs \
-  --traces-endpoint http://localhost:8200/v1/traces \
-  --metrics-endpoint http://localhost:8200/v1/metrics
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config setup.conf --scope managed
 ```
 
-```powershell
-..\..\components\agents\codex\scripts\setup-managed.ps1 `
-  -LogsEndpoint http://localhost:8200/v1/logs `
-  -TracesEndpoint http://localhost:8200/v1/traces `
-  -MetricsEndpoint http://localhost:8200/v1/metrics
-```
-
-**Staged opt-in — materialize the hooks into `managed_dir` (`--with-hooks`).** By default
-`requirements.toml` points `managed_dir` at this repo's `components/agents/codex/hooks/`
-(demo — you must hand-place an `agent-audit.conf` there, as noted above). Adding
-`--with-hooks --es-url <es>` (sh) / `-WithHooks -EsUrl <es>` (ps1) instead **materializes**
+**Staged opt-in — materialize the hooks into `managed_dir`.** Off by default: this stack's
+`setup.conf` declares telemetry only, so managed placement writes `managed_config.toml` and
+no `requirements.toml` (no hooks are pinned). Placing from a config that carries
+`agent_audit.*` keys (as the sibling [`codex-elastic-audit`](../codex-elastic-audit/)
+stack's does) **materializes**
 the full bundle — scripts + shared core + adapter + a rendered `agent-audit.conf` — into the
 host `managed_dir` — an owner-scoped `/etc/codex/hooks/agent-observability-lab`, or
 `%ProgramData%\OpenAI\Codex\hooks\agent-observability-lab` on Windows — and points
-`requirements.toml` there, so the enforced hooks are self-contained and the conf caveat no
-longer applies. The owner-scoped subdirectory keeps the bundle from colliding with another
-distribution of the same tooling on a machine-global root.
+`requirements.toml` there, so the enforced hooks are self-contained on the host, never
+referencing this repo. The owner-scoped subdirectory keeps the bundle from colliding with
+another distribution of the same tooling on a machine-global root.
 
-> **Host-check gate — do this once before relying on `--with-hooks`.** Confirm on a **real
+> **Host-check gate — do this once before relying on managed hooks.** Confirm on a **real
 > host** that the absolute managed hook command actually fires, and record the result. Until
-> confirmed, leave `--with-hooks` off.
+> confirmed, keep managed telemetry-only (place from a config with no `agent_audit.*` keys).
 
-Remove it (restores the host, removes only the lab-placed files + their markers; add
-`--with-hooks` / `-WithHooks` to also remove a materialized hook bundle) — either
-`setup-config.sh --scope managed --teardown [--with-hooks]` (the `-Teardown` / `-WithHooks`
-switches on `.ps1`) or directly:
+Remove it (restores the host, removes only the lab-placed files + their markers — the CLI
+enumerates every candidate target, including a materialized hook bundle, from the config on
+its own):
 
 ```sh
-../../components/agents/codex/scripts/teardown-managed.sh
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent codex --config setup.conf --scope managed
 ```
 
-```powershell
-..\..\components\agents\codex\scripts\teardown-managed.ps1
-```
-
-**Deploy this config into another scope.** `setup-config` deploys the same self-contained
-Codex `[otel]` bundle to a `(target, scope)`; details in
+**Deploy this config into another scope.** The `agent-config` CLI's `place` deploys the
+same self-contained Codex `[otel]` bundle to a `(target, scope)`, and its `teardown`
+subcommand removes it; details in
 [`../../SPEC/config-deployment.md`](../../SPEC/config-deployment.md).
 
 | Scope | `--target` | MCP | Codex auth-link | Interactive | Teardown |
 | --- | --- | --- | --- | --- | --- |
-| `local` (default) | rejected (stack dir) | yes | yes (links `~/.codex/auth.json`) | no | `--scope local --teardown` |
-| `project` | required | no | no | no | `--scope project --target <dir> --teardown` |
-| `managed` | n/a | no | no | yes | `--scope managed --teardown [--with-hooks]` |
+| `local` (default) | rejected (stack dir) | yes | yes (links `~/.codex/auth.json`) | no | `teardown --scope local` |
+| `project` | required | no | no | no | `teardown --scope project --target <dir>` |
+| `managed` | n/a | no | no | yes | `teardown --scope managed` |
 
 ```sh
-scripts/setup-config.sh --scope project --target /path/to/your/project
-# PowerShell: scripts/setup-config.ps1 -Scope project -Target C:\path\to\your\project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config setup.conf --scope project --target /path/to/your/project
 ```
 
 `project` scope writes a self-contained `.codex/` into that directory (nothing pointing back
@@ -303,14 +285,14 @@ codex-elastic/
 ├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
 ├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then setup-config
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
    ├─ setup-backend.sh / .ps1            # wait for health, load ES + Kibana assets
-   ├─ setup-config.sh / .ps1             # render the [otel] config + link auth.json (--scope local|project|managed)
    └─ smoke-test.sh                       # agent-independent OTLP-path verification (stack property)
 ```
 
-`setup.{sh,ps1}` composes the two halves (`setup-backend` then `setup-config`), each calling
-the component façade scripts directly. The `elastic` backend
+`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
+The `elastic` backend
 (`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` / `kibana`
 / `apm-server` service fragments plus a composition script that selects its assets — it owns
 no asset files. The service fragments under `../../components/backends/services/` own the
@@ -318,7 +300,7 @@ service definitions and config, the asset libraries (the `traces-apm@custom` /
 `logs-apm.app@custom` ingest pipelines under `elasticsearch/`; the Codex data views and saved
 searches under `kibana/codex/` — `data-views.ndjson`, `saved-searches.ndjson`), and the
 generic appliers. The Codex agent component (`../../components/agents/codex/`) owns
-only agent-runtime config — the `[otel]` config template and render scripts; `setup.sh`
-renders the telemetry template into this directory's gitignored `.codex/config.toml` and
+only agent-runtime config — the `[otel]` config template; `setup.sh` (via the
+`agent-config` CLI) renders it into this directory's gitignored `.codex/config.toml` and
 imports the Codex Kibana objects. (The direct Agent Audit path — hooks writing straight to
 Elasticsearch — is the sibling `codex-elastic-audit` stack.)

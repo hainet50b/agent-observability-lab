@@ -21,7 +21,7 @@ ship as importable NDJSON in `components/backends/services/kibana/codex/`
 no credential is needed and the rendered `[otel]` config carries none by default. A
 stack can still ship one for a secured endpoint: set `telemetry.apm_server.api_key` in the
 gitignored `setup.local.conf` (copy from `setup.local.conf.example`) and
-`setup-config` renders `headers = { Authorization = "ApiKey <key>" }` into each
+`agent-config` renders `headers = { Authorization = "ApiKey <key>" }` into each
 `[otel.*.otlp-http]` exporter block. Absent or empty → `headers = {}`, byte-identical
 to a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; see
 [`config-deployment.md`](config-deployment.md).
