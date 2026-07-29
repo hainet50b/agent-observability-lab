@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+use crate::model::Scope;
+
 pub struct Telemetry {
     pub endpoint: String,
     pub api_key: String,
@@ -95,6 +97,37 @@ impl Config {
         }
 
         Ok(Config { telemetry, audit })
+    }
+
+    pub fn marker_endpoint(&self, scope: Scope) -> String {
+        match scope {
+            Scope::Managed => format!(
+                "telemetry={};audit={}",
+                self.telemetry
+                    .as_ref()
+                    .map(|t| format!("{}/v1/logs", t.endpoint))
+                    .unwrap_or_default(),
+                self.audit
+                    .as_ref()
+                    .map(|a| a.es_url.clone())
+                    .unwrap_or_default()
+            ),
+            Scope::Local | Scope::Project => match (&self.telemetry, &self.audit) {
+                (Some(t), None) => t.endpoint.clone(),
+                (None, Some(a)) => a.es_url.clone(),
+                _ => format!(
+                    "telemetry={};audit={}",
+                    self.telemetry
+                        .as_ref()
+                        .map(|t| t.endpoint.clone())
+                        .unwrap_or_default(),
+                    self.audit
+                        .as_ref()
+                        .map(|a| a.es_url.clone())
+                        .unwrap_or_default()
+                ),
+            },
+        }
     }
 }
 

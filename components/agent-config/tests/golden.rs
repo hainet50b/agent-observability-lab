@@ -45,7 +45,7 @@ fn render_cell(
         os,
         target: target.map(String::from),
     };
-    let entries = agents::manifest(&cfg, &cell).unwrap();
+    let entries = agents::manifest(&cfg, &cell, None).unwrap();
     render::render(&entries, &out).unwrap();
     out
 }
@@ -319,7 +319,7 @@ fn render_codex_cell(
         os,
         target: target.map(String::from),
     };
-    let entries = agents::manifest(&cfg, &cell).unwrap();
+    let entries = agents::manifest(&cfg, &cell, None).unwrap();
     render::render(&entries, &out).unwrap();
     out
 }

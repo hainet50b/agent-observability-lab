@@ -2,8 +2,9 @@ use serde_json::{Value, json};
 
 use crate::assets;
 use crate::config::{Config, Telemetry};
-use crate::model::{Cell, Entry, Flavor, Location, Os, Scope};
+use crate::model::{Cell, Content, Entry, Flavor, Location, Os, Scope, json_pretty};
 use crate::owner::OWNER;
+use crate::seal::SealSource;
 
 pub fn managed_root(os: Os) -> &'static str {
     match os {
@@ -13,30 +14,73 @@ pub fn managed_root(os: Os) -> &'static str {
     }
 }
 
-pub fn manifest(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
+pub fn manifest(
+    cfg: &Config,
+    cell: &Cell,
+    seal: Option<&SealSource>,
+) -> Result<Vec<Entry>, String> {
     match cell.scope {
-        Scope::Local | Scope::Project => user_entries(cfg, cell),
-        Scope::Managed => managed_entries(cfg, cell),
+        Scope::Local | Scope::Project => user_entries(cfg, cell, seal),
+        Scope::Managed => managed_entries(cfg, cell, seal),
     }
 }
 
-fn user_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
+pub fn teardown_targets() -> (
+    Vec<(&'static str, &'static str)>,
+    &'static str,
+    &'static str,
+) {
+    (
+        vec![
+            ("settings", ".claude/settings.local.json"),
+            ("agent-audit", ".claude/hooks/agent-audit.conf"),
+            ("agent-audit", ".claude/hooks/recipient.pem"),
+            ("mcp", ".mcp.json"),
+            ("gitignore", ".claude/.gitignore"),
+        ],
+        ".claude/hooks",
+        ".claude/settings.local.json",
+    )
+}
+
+fn user_entries(
+    cfg: &Config,
+    cell: &Cell,
+    seal: Option<&SealSource>,
+) -> Result<Vec<Entry>, String> {
     let target = cell.target()?;
-    let mut settings = serde_json::Map::new();
+    let mut settings = Vec::new();
     let mut entries = Vec::new();
 
     if let Some(telemetry) = &cfg.telemetry {
-        settings.insert("env".into(), otel_env(telemetry, EmptyHeaders::Keep)?);
+        settings.push(("env".to_string(), otel_env(telemetry, EmptyHeaders::Keep)?));
     }
 
     if let Some(audit) = &cfg.audit {
         let hooks_dir = format!("{target}/.claude/hooks");
-        settings.insert("hooks".into(), hooks_block(cell.os, &hooks_dir)?);
-        entries.push(Entry::text(
+        settings.push(("hooks".to_string(), hooks_block(cell.os, &hooks_dir)?));
+        let recipients_file = seal.map(|_| format!("{hooks_dir}/recipient.pem"));
+        entries.push(Entry::marked_file(
             "agent-audit",
             Location::InTarget(".claude/hooks/agent-audit.conf".into()),
-            crate::agents::render_conf(assets::AGENT_AUDIT_CONF_TEMPLATE, audit, "", ""),
+            crate::agents::render_conf(
+                assets::AGENT_AUDIT_CONF_TEMPLATE,
+                audit,
+                recipients_file.as_deref().unwrap_or(""),
+                seal.map(|s| s.key_id.as_str()).unwrap_or(""),
+            ),
         ));
+        if let Some(seal) = seal {
+            entries.push(Entry {
+                key: "agent-audit".into(),
+                location: Location::InTarget(".claude/hooks/recipient.pem".into()),
+                content: Content::File {
+                    bytes: seal.cert.clone(),
+                    executable: false,
+                    marked: true,
+                },
+            });
+        }
         entries.extend(hook_asset_entries(cell.os, |rel| {
             Location::InTarget(format!(".claude/hooks/{rel}"))
         }));
@@ -44,13 +88,13 @@ fn user_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
 
     entries.insert(
         0,
-        Entry::text(
-            "settings",
-            Location::InTarget(".claude/settings.local.json".into()),
-            pretty(&Value::Object(settings)),
-        ),
+        Entry {
+            key: "settings".into(),
+            location: Location::InTarget(".claude/settings.local.json".into()),
+            content: Content::JsonKeys(settings),
+        },
     );
-    entries.push(Entry::text(
+    entries.push(Entry::marked_file(
         "gitignore",
         Location::InTarget(".claude/.gitignore".into()),
         "*\n".into(),
@@ -58,18 +102,22 @@ fn user_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
 
     if cell.scope == Scope::Local {
         let mut mcp: Value = parse_template(assets::MCP_TEMPLATE)?;
-        mcp.as_object_mut().unwrap().remove("_comment");
-        entries.push(Entry::text(
+        mcp.as_object_mut().unwrap().shift_remove("_comment");
+        entries.push(Entry::marked_file(
             "mcp",
             Location::InTarget(".mcp.json".into()),
-            pretty(&mcp),
+            json_pretty(&mcp),
         ));
     }
 
     Ok(entries)
 }
 
-fn managed_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
+fn managed_entries(
+    cfg: &Config,
+    cell: &Cell,
+    seal: Option<&SealSource>,
+) -> Result<Vec<Entry>, String> {
     let root = managed_root(cell.os);
     let mut fragment: Value = parse_template(assets::MANAGED_SETTINGS_TEMPLATE)?;
     let mut entries = Vec::new();
@@ -81,11 +129,28 @@ fn managed_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
     if let Some(audit) = &cfg.audit {
         let hooks_root = format!("{root}/hooks/{OWNER}");
         fragment["hooks"] = hooks_block(cell.os, &hooks_root)?;
-        entries.push(Entry::text(
+        let recipients_file = seal.map(|_| format!("{hooks_root}/recipient.pem"));
+        entries.push(Entry::marked_file(
             "hook:agent-audit.conf",
             Location::Host(format!("{hooks_root}/agent-audit.conf")),
-            crate::agents::render_conf(assets::AGENT_AUDIT_CONF_TEMPLATE, audit, "", ""),
+            crate::agents::render_conf(
+                assets::AGENT_AUDIT_CONF_TEMPLATE,
+                audit,
+                recipients_file.as_deref().unwrap_or(""),
+                seal.map(|s| s.key_id.as_str()).unwrap_or(""),
+            ),
         ));
+        if let Some(seal) = seal {
+            entries.push(Entry {
+                key: "hook:recipient.pem".into(),
+                location: Location::Host(format!("{hooks_root}/recipient.pem")),
+                content: Content::File {
+                    bytes: seal.cert.clone(),
+                    executable: false,
+                    marked: true,
+                },
+            });
+        }
         entries.extend(hook_asset_entries(cell.os, |rel| {
             Location::Host(format!("{hooks_root}/{rel}"))
         }));
@@ -93,10 +158,10 @@ fn managed_entries(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
 
     entries.insert(
         0,
-        Entry::text(
+        Entry::marked_file(
             "managed-settings",
             Location::Host(format!("{root}/managed-settings.d/10-{OWNER}.json")),
-            pretty(&fragment),
+            json_pretty(&fragment),
         ),
     );
 
@@ -109,8 +174,11 @@ fn hook_asset_entries(os: Os, location: impl Fn(&str) -> Location) -> impl Itera
         .map(move |asset| Entry {
             key: format!("hook:{}", asset.rel),
             location: location(asset.rel),
-            content: asset.bytes.to_vec(),
-            executable: asset.executable,
+            content: Content::File {
+                bytes: asset.bytes.to_vec(),
+                executable: asset.executable,
+                marked: false,
+            },
         })
 }
 
@@ -186,10 +254,4 @@ fn otel_env(telemetry: &Telemetry, policy: EmptyHeaders) -> Result<Value, String
 
 fn parse_template(text: &str) -> Result<Value, String> {
     serde_json::from_str(text).map_err(|e| format!("invalid template JSON: {e}"))
-}
-
-fn pretty(value: &Value) -> String {
-    let mut out = serde_json::to_string_pretty(value).expect("JSON serialization cannot fail");
-    out.push('\n');
-    out
 }

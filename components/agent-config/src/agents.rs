@@ -3,23 +3,16 @@ pub mod codex;
 
 use crate::config::{Audit, Config};
 use crate::model::{Agent, Cell, Entry};
+use crate::seal::SealSource;
 
-pub fn manifest(cfg: &Config, cell: &Cell) -> Result<Vec<Entry>, String> {
-    if let Some(audit) = &cfg.audit {
-        if (audit.user_prompt.content == "encrypted" || audit.tool_call.content == "encrypted")
-            && audit.seal.epoch.is_empty()
-        {
-            return Err("content=encrypted requires agent_audit.seal.epoch".into());
-        }
-        if !audit.seal.epoch.is_empty() {
-            return Err(
-                "seal rendering is not implemented yet (arrives with the place engine)".into(),
-            );
-        }
-    }
+pub fn manifest(
+    cfg: &Config,
+    cell: &Cell,
+    seal: Option<&SealSource>,
+) -> Result<Vec<Entry>, String> {
     match cell.agent {
-        Agent::Claude => claude::manifest(cfg, cell),
-        Agent::Codex => codex::manifest(cfg, cell),
+        Agent::Claude => claude::manifest(cfg, cell, seal),
+        Agent::Codex => codex::manifest(cfg, cell, seal),
     }
 }
 

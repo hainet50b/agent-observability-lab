@@ -160,17 +160,68 @@ fn host_render_rel(target: &str) -> Result<String, String> {
 pub struct Entry {
     pub key: String,
     pub location: Location,
-    pub content: Vec<u8>,
-    pub executable: bool,
+    pub content: Content,
+}
+
+pub enum Content {
+    File {
+        bytes: Vec<u8>,
+        executable: bool,
+        marked: bool,
+    },
+    JsonKeys(Vec<(String, serde_json::Value)>),
+    TomlSections(Vec<Section>),
+    AuthLink {
+        source: std::path::PathBuf,
+    },
+}
+
+pub struct Section {
+    pub sentinel: String,
+    pub text: String,
 }
 
 impl Entry {
-    pub fn text(key: &str, location: Location, content: String) -> Entry {
+    pub fn marked_file(key: &str, location: Location, content: String) -> Entry {
         Entry {
             key: key.into(),
             location,
-            content: content.into_bytes(),
-            executable: false,
+            content: Content::File {
+                bytes: content.into_bytes(),
+                executable: false,
+                marked: true,
+            },
         }
     }
+}
+
+impl Content {
+    pub fn rendered(&self) -> Option<(Vec<u8>, bool)> {
+        match self {
+            Content::File {
+                bytes, executable, ..
+            } => Some((bytes.clone(), *executable)),
+            Content::JsonKeys(keys) => {
+                let mut object = serde_json::Map::new();
+                for (key, value) in keys {
+                    object.insert(key.clone(), value.clone());
+                }
+                Some((
+                    json_pretty(&serde_json::Value::Object(object)).into_bytes(),
+                    false,
+                ))
+            }
+            Content::TomlSections(sections) => {
+                let texts: Vec<&str> = sections.iter().map(|s| s.text.as_str()).collect();
+                Some((texts.join("\n").into_bytes(), false))
+            }
+            Content::AuthLink { .. } => None,
+        }
+    }
+}
+
+pub fn json_pretty(value: &serde_json::Value) -> String {
+    let mut out = serde_json::to_string_pretty(value).expect("JSON serialization cannot fail");
+    out.push('\n');
+    out
 }
