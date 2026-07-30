@@ -14,8 +14,9 @@ OpenTelemetry straight into Elasticsearch; Codex CLI points at it directly.
 
 > 🚧 **Session wired; data views + curated saved searches in.** This stack stands up the
 > composition, proves the OTLP path with the synthetic smoke test, points a real Codex CLI
-> session at it, and ships the Codex data views plus curated saved searches. A
-> **dashboard, ingest filtering, and normalized summary indices** remain deferred — see
+> session at it, and ships the Codex data views, curated saved searches, and the
+> cross-agent Adoption Overview dashboard. A **per-agent overview dashboard, ingest
+> filtering, and normalized summary indices** remain deferred — see
 > [What's deferred](#whats-deferred). For prompt / tool-call **audit**, see the sibling
 > [`codex-elastic-audit`](../codex-elastic-audit/) stack.
 
@@ -208,12 +209,14 @@ See [Verify the pipeline](#verify-the-pipeline) below.
 
 ### 4. See the telemetry
 
-The Codex **data views** — **Codex — Metrics**, **Codex — Events**, and **Codex —
-Traces** — plus the curated saved searches are imported by `scripts/setup.sh` (step 1).
-Open Discover, pick a data view from the selector or open a saved search from the Open menu.
-(A dashboard is still deferred — see [What's deferred](#whats-deferred); the Traces view and
-traces-based searches stay empty until a Codex session emits spans after trace routing is
-installed.)
+The Kibana saved objects — data views and curated saved searches for **both** agents,
+plus the cross-agent **Agents — Adoption Overview** dashboard — are imported by
+`scripts/setup.sh` (step 1). Open Discover, pick a data view from the selector or open a
+saved search from the Open menu. The Adoption Overview dashboard places Codex (left) and
+Claude (right) side by side; only Codex feeds data in this stack, so the Claude half shows
+no results — expected, not a fault. (A per-agent overview dashboard is still deferred —
+see [What's deferred](#whats-deferred); the Traces view and traces-based searches stay
+empty until a Codex session emits spans after trace routing is installed.)
 
 You can also look directly with a query:
 

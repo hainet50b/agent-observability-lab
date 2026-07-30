@@ -274,7 +274,8 @@ secret-bearing work at it.
 ### 3. Verify the pipeline
 
 See [Verify the pipeline](#verify-the-pipeline) below. The Kibana saved objects
-(Claude Code data views + curated saved searches) are already imported by step 1; to
+(data views + curated saved searches for **both** agents, plus the cross-agent
+**Agents — Adoption Overview** dashboard) are already imported by step 1; to
 re-import after editing the NDJSON, re-run `scripts/setup.sh` (idempotent,
 `overwrite=true`), or import by hand via Stack Management → Saved Objects →
 **Import**.
@@ -285,6 +286,9 @@ re-import after editing the NDJSON, re-run `scripts/setup.sh` (idempotent,
   one of the saved searches from the **Open** menu. Each per-`message` saved search
   opens with its `message` constraint as a removable **filter pill** (the query bar
   stays empty; **Event Overview** opens with no pill at all).
+- **Dashboards** — **Agents — Adoption Overview** places Codex (left) and Claude
+  (right) side by side. Only Claude feeds data in this stack, so the Codex half
+  shows no results — expected, not a fault.
 - **APM UI** (<http://localhost:5601/app/apm>) — Claude Code registers as an APM
   **service** (`claude-code`); open it to see it as a first-class APM entity.
 

@@ -70,8 +70,8 @@ Wait-Ready -Name 'Kibana' -Url "$KibanaUrl/api/status" 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[backend] 2/3 - Elasticsearch backend assets'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -Sources 'codex' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -Sources 'codex', 'claude', 'agents' 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[backend] 3/3 - Kibana saved objects'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex', 'claude', 'agents' 6>&1 | Indent

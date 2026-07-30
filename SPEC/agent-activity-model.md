@@ -50,9 +50,11 @@ Conversations / Turns rollups. Both rollups are also embedded side-by-side in
 the cross-agent **Agents — Adoption Overview** dashboard
 (`kibana/agents/dashboard.ndjson`), which references both agents' data views
 and saved searches and therefore imports only after both agents' bundles.
-No lab stack imports it — each stack stays closed over its single-agent
-concern; `agents/` is a fleet-level bundle for environments running several
-agents (e.g. the live deployment).
+Each telemetry stack imports it — the stack loads **both** agents' data views
+and saved searches (its own first, then the sibling's) and then `agents/`, so
+the dashboard's references resolve even though only one agent feeds data; the
+sibling's half simply shows no results. The audit stacks don't import it (they
+carry no telemetry data views at all).
 
 **The three facets** — each in-turn activity is looked at through up to three
 lenses:
