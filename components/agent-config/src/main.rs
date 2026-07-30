@@ -1,21 +1,94 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use clap::{Args, Parser, Subcommand};
+
 use agent_config::config::Config;
 use agent_config::model::{Agent, Cell, Os, Scope};
 use agent_config::seal::{self, SealSource};
 use agent_config::{agents, bundle, place, render};
 
-const USAGE: &str = "usage:
-  agent-config render   --config <setup.conf> --agent <claude|codex> --out <dir>
-                        [--scope <local|project|managed>] [--os <linux|macos|windows>] [--target <dir>]
-  agent-config place    --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]
-  agent-config teardown --config <setup.conf> --agent <claude|codex> [--scope <local|project|managed>] [--target <dir>]
-  agent-config bundle   --config <setup.conf> --agent <claude|codex> [--scope <s>] [--os <o>] [--target <dir>]
-                        [--out-dir <dir>] [--all]";
+#[derive(Parser)]
+#[command(
+    name = "agent-config",
+    about = "Render, place, tear down, and bundle agent config"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Args)]
+struct Selection {
+    /// Stack setup.conf declaring the telemetry / audit concerns
+    #[arg(long, value_name = "FILE")]
+    config: PathBuf,
+    #[arg(long, value_parser = Agent::parse)]
+    agent: Agent,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Write a rendered bundle tree to a directory
+    Render {
+        #[command(flatten)]
+        selection: Selection,
+        #[arg(long, value_parser = Scope::parse, default_value = "local")]
+        scope: Scope,
+        /// Target OS (defaults to the host OS)
+        #[arg(long, value_parser = Os::parse)]
+        os: Option<Os>,
+        /// Deploy path baked into the rendered content (local/project scopes)
+        #[arg(long, value_name = "DIR")]
+        target: Option<String>,
+        /// Directory the rendered tree is written to
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
+    },
+    /// Deploy the bundle to a live target (marker-aware, fail-if-foreign)
+    Place {
+        #[command(flatten)]
+        selection: Selection,
+        #[arg(long, value_parser = Scope::parse, default_value = "local")]
+        scope: Scope,
+        /// Deploy directory (--scope project only)
+        #[arg(long, value_name = "DIR")]
+        target: Option<String>,
+    },
+    /// Remove a placed bundle (only files whose marker matches this deploy)
+    Teardown {
+        #[command(flatten)]
+        selection: Selection,
+        #[arg(long, value_parser = Scope::parse, default_value = "local")]
+        scope: Scope,
+        /// Deploy directory (--scope project only)
+        #[arg(long, value_name = "DIR")]
+        target: Option<String>,
+    },
+    /// Emit versioned zip archives per scope x OS cell
+    Bundle {
+        #[command(flatten)]
+        selection: Selection,
+        /// Restrict to one scope (default: local and managed; project needs --target)
+        #[arg(long, value_parser = Scope::parse)]
+        scope: Option<Scope>,
+        /// Restrict to one OS (default: all three)
+        #[arg(long, value_parser = Os::parse)]
+        os: Option<Os>,
+        /// Deploy path baked into local/project cells
+        #[arg(long, value_name = "DIR")]
+        target: Option<String>,
+        /// Archive output directory (default: dist/ beside the config)
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+        /// Re-emit unchanged cells too
+        #[arg(long)]
+        all: bool,
+    },
+}
 
 fn main() -> ExitCode {
-    match run() {
+    match run(Cli::parse()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("FAIL: {message}");
@@ -24,194 +97,166 @@ fn main() -> ExitCode {
     }
 }
 
-struct Args {
-    config: PathBuf,
-    agent: Agent,
-    scope: Scope,
-    scope_given: bool,
-    os: Option<Os>,
-    target: Option<String>,
-    out: Option<PathBuf>,
-    out_dir: Option<PathBuf>,
-    emit_all: bool,
-}
-
-fn parse_args(mut args: std::env::Args) -> Result<Args, String> {
-    let mut config = None;
-    let mut agent = None;
-    let mut scope = Scope::Local;
-    let mut scope_given = false;
-    let mut os = None;
-    let mut target = None;
-    let mut out = None;
-    let mut out_dir = None;
-    let mut emit_all = false;
-    while let Some(flag) = args.next() {
-        let mut value = || args.next().ok_or(format!("{flag} needs a value"));
-        match flag.as_str() {
-            "--config" => config = Some(PathBuf::from(value()?)),
-            "--agent" => agent = Some(Agent::parse(&value()?)?),
-            "--scope" => {
-                scope = Scope::parse(&value()?)?;
-                scope_given = true;
-            }
-            "--os" => os = Some(Os::parse(&value()?)?),
-            "--target" => target = Some(value()?),
-            "--out" => out = Some(PathBuf::from(value()?)),
-            "--out-dir" => out_dir = Some(PathBuf::from(value()?)),
-            "--all" => emit_all = true,
-            other => return Err(format!("unknown argument: {other}\n{USAGE}")),
-        }
-    }
-    Ok(Args {
-        config: config.ok_or("--config is required")?,
-        agent: agent.ok_or("--agent is required")?,
-        scope,
-        scope_given,
-        os,
-        target: target.map(|t| t.replace('\\', "/")),
-        out,
-        out_dir,
-        emit_all,
-    })
-}
-
-fn run() -> Result<(), String> {
-    let mut argv = std::env::args();
-    argv.next();
-    let command = argv.next().ok_or(USAGE)?;
-    let args = parse_args(argv)?;
-
-    let cfg = Config::load(&args.config)?;
-    let seal = resolve_seal(&cfg)?;
-
-    match command.as_str() {
-        "render" => {
+fn run(cli: Cli) -> Result<(), String> {
+    match cli.command {
+        Command::Render {
+            selection,
+            scope,
+            os,
+            target,
+            out,
+        } => {
+            let (cfg, seal) = load(&selection)?;
             let cell = Cell {
-                agent: args.agent,
-                scope: args.scope,
-                os: match args.os {
-                    Some(os) => os,
-                    None => Os::detect()?,
-                },
-                target: args.target,
+                agent: selection.agent,
+                scope,
+                os: resolve_os(os)?,
+                target: target.map(normalize_path),
             };
             if cell.scope == Scope::Managed && cell.target.is_some() {
                 return Err("--scope managed does not take --target".into());
             }
             let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
-            render::render(&entries, &args.out.ok_or("--out is required")?)
+            render::render(&entries, &out)
         }
-        "place" | "teardown" => {
-            if args.os.is_some() {
-                return Err(format!("--os does not apply to {command} (host OS only)"));
-            }
-            if args.out.is_some() {
-                return Err(format!("--out does not apply to {command}"));
-            }
-            let endpoint = cfg.marker_endpoint(args.scope);
-            if args.scope == Scope::Managed {
-                if args.target.is_some() {
-                    return Err("--scope managed does not take --target".into());
-                }
-                let os = Os::detect()?;
-                let mut confirm = place::TtyConfirm::new()?;
-                let root = PathBuf::from(match args.agent {
-                    Agent::Claude => agents::claude::managed_root(os),
-                    Agent::Codex => agents::codex::managed_root(os),
-                });
-                if command == "teardown" {
-                    let candidates = match args.agent {
-                        Agent::Claude => agents::claude::managed_candidates(&cfg, os),
-                        Agent::Codex => agents::codex::managed_candidates(&cfg, os),
-                    };
-                    return place::managed_teardown(&candidates, &root, &mut confirm);
-                }
-                let cell = Cell {
-                    agent: args.agent,
-                    scope: args.scope,
-                    os,
-                    target: None,
-                };
-                let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
-                return place::managed_place(&entries, args.agent.name(), &endpoint, &mut confirm);
-            }
-            let target_dir = resolve_target_dir(&args)?;
-            if command == "teardown" {
-                return place::teardown(args.agent, &target_dir, &endpoint);
-            }
-            let cell = Cell {
-                agent: args.agent,
-                scope: args.scope,
-                os: Os::detect()?,
-                target: Some(canonical(&target_dir)?),
-            };
-            let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
-            place::place(&entries, &target_dir, args.agent.name(), &endpoint)
-        }
-        "bundle" => {
-            let config_dir = args
-                .config
-                .parent()
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or(Path::new("."))
-                .to_path_buf();
-            let scopes = if args.scope_given {
-                vec![args.scope]
-            } else if args.target.is_some() {
-                vec![Scope::Local, Scope::Project, Scope::Managed]
-            } else {
-                vec![Scope::Local, Scope::Managed]
+        Command::Place {
+            selection,
+            scope,
+            target,
+        } => deploy(&selection, scope, target, false),
+        Command::Teardown {
+            selection,
+            scope,
+            target,
+        } => deploy(&selection, scope, target, true),
+        Command::Bundle {
+            selection,
+            scope,
+            os,
+            target,
+            out,
+            all,
+        } => {
+            let (cfg, seal) = load(&selection)?;
+            let config_dir = config_dir(&selection.config);
+            let target = target.map(normalize_path);
+            let scopes = match scope {
+                Some(scope) => vec![scope],
+                None if target.is_some() => vec![Scope::Local, Scope::Project, Scope::Managed],
+                None => vec![Scope::Local, Scope::Managed],
             };
             let run = bundle::BundleRun {
                 scopes,
-                oses: match args.os {
+                oses: match os {
                     Some(os) => vec![os],
                     None => Os::ALL.to_vec(),
                 },
-                target: args.target,
-                out_dir: args.out_dir.unwrap_or_else(|| config_dir.join("dist")),
-                emit_all: args.emit_all,
+                target,
+                out_dir: out.unwrap_or_else(|| config_dir.join("dist")),
+                emit_all: all,
             };
-            bundle::bundle(&cfg, seal.as_ref(), args.agent, &config_dir, &run)
+            bundle::bundle(&cfg, seal.as_ref(), selection.agent, &config_dir, &run)
         }
-        _ => Err(USAGE.into()),
     }
 }
 
-fn resolve_seal(cfg: &Config) -> Result<Option<SealSource>, String> {
-    let Some(audit) = &cfg.audit else {
-        return Ok(None);
-    };
-    let recipients_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("sealing/recipients");
-    seal::resolve(&recipients_root, audit)
-}
+fn deploy(
+    selection: &Selection,
+    scope: Scope,
+    target: Option<String>,
+    teardown: bool,
+) -> Result<(), String> {
+    let (cfg, seal) = load(selection)?;
+    let endpoint = cfg.marker_endpoint(scope);
 
-fn resolve_target_dir(args: &Args) -> Result<PathBuf, String> {
-    match args.scope {
+    if scope == Scope::Managed {
+        if target.is_some() {
+            return Err("--scope managed does not take --target".into());
+        }
+        let os = Os::detect()?;
+        let mut confirm = place::TtyConfirm::new()?;
+        let root = PathBuf::from(match selection.agent {
+            Agent::Claude => agents::claude::managed_root(os),
+            Agent::Codex => agents::codex::managed_root(os),
+        });
+        if teardown {
+            let candidates = match selection.agent {
+                Agent::Claude => agents::claude::managed_candidates(&cfg, os),
+                Agent::Codex => agents::codex::managed_candidates(&cfg, os),
+            };
+            return place::managed_teardown(&candidates, &root, &mut confirm);
+        }
+        let cell = Cell {
+            agent: selection.agent,
+            scope,
+            os,
+            target: None,
+        };
+        let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+        return place::managed_place(&entries, selection.agent.name(), &endpoint, &mut confirm);
+    }
+
+    let target_dir = match scope {
         Scope::Local => {
-            if args.target.is_some() {
+            if target.is_some() {
                 return Err(
                     "--scope local does not take --target (use --scope project to deploy into a directory)"
                         .into(),
                 );
             }
-            Ok(args
-                .config
-                .parent()
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or(Path::new("."))
-                .to_path_buf())
+            config_dir(&selection.config)
         }
-        Scope::Project => args
-            .target
-            .as_ref()
-            .map(PathBuf::from)
-            .ok_or("--scope project requires --target <dir>".into()),
-        Scope::Managed => unreachable!("managed scope is handled before target resolution"),
+        Scope::Project => PathBuf::from(
+            target
+                .map(normalize_path)
+                .ok_or("--scope project requires --target <dir>")?,
+        ),
+        Scope::Managed => unreachable!("managed scope is handled above"),
+    };
+    if teardown {
+        return place::teardown(selection.agent, &target_dir, &endpoint);
     }
+    let cell = Cell {
+        agent: selection.agent,
+        scope,
+        os: Os::detect()?,
+        target: Some(canonical(&target_dir)?),
+    };
+    let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+    place::place(&entries, &target_dir, selection.agent.name(), &endpoint)
+}
+
+fn load(selection: &Selection) -> Result<(Config, Option<SealSource>), String> {
+    let cfg = Config::load(&selection.config)?;
+    let seal = match &cfg.audit {
+        Some(audit) => {
+            let recipients_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join("sealing/recipients");
+            seal::resolve(&recipients_root, audit)?
+        }
+        None => None,
+    };
+    Ok((cfg, seal))
+}
+
+fn resolve_os(os: Option<Os>) -> Result<Os, String> {
+    match os {
+        Some(os) => Ok(os),
+        None => Os::detect(),
+    }
+}
+
+fn config_dir(config: &Path) -> PathBuf {
+    config
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
+}
+
+fn normalize_path(path: String) -> String {
+    path.replace('\\', "/")
 }
 
 fn canonical(dir: &Path) -> Result<String, String> {
