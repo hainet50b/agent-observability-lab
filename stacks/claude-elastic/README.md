@@ -40,7 +40,7 @@ The shortest path from clone to "I see Claude Code telemetry in Kibana."
 cd stacks/claude-elastic
 docker compose up -d
 docker compose ps        # wait until all three services report healthy
-# edit setup.conf if your endpoints aren't the localhost defaults, then:
+# edit provision.conf / agent-config.toml if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -48,17 +48,20 @@ Kibana is then at <http://localhost:5601>. `scripts/setup.sh` runs every post-up
 bootstrap step in one shot — loads the Elasticsearch assets (the APM `@custom`
 routers, the ingest pipelines that isolate Claude Code spans into
 `traces-apm-agents_claude_code`, the per-agent ILM/templates) and imports the
-Kibana saved objects — and is idempotent, so re-run it any time. Both scripts
-read their target endpoints (Elasticsearch, the APM OTLP endpoint, Kibana) from
-`setup.conf` at the stack root, or another file you pass (`setup.sh <config>` /
-`setup.ps1 -Config <config>`); they fail fast if the file is missing or a key is
-empty rather than assuming localhost.
+Kibana saved objects — and is idempotent, so re-run it any time. The config is
+split by reader, one file per plane at the stack root: `scripts/provision.{sh,ps1}`
+reads the control plane (`elasticsearch.url` / `kibana.url`) from `provision.conf`,
+and the `agent-config` CLI reads the agent data plane (the APM OTLP `endpoint`
+under `[telemetry.apm_server]`) from the TOML `agent-config.toml`;
+both fail fast if a file is missing or a key is empty rather than assuming
+localhost.
 
 The demo APM Server has auth disabled, so no OTLP credential is needed. For a
-**secured** endpoint, copy `setup.local.conf.example` to the gitignored
-`setup.local.conf` and set `telemetry.apm_server.api_key=<key>` — `setup.sh` then
-adds `Authorization: ApiKey <key>` to the agent's OTLP exports. Absent/empty ships
-no credential.
+**secured** endpoint, copy `agent-config.local.toml.example` to the gitignored
+`agent-config.local.toml` (beside `agent-config.toml`; the `--local-conf <file>`
+CLI flag can point elsewhere) and set `api_key` under `[telemetry.apm_server]` —
+`setup.sh` then adds `Authorization: ApiKey <key>` to the agent's OTLP exports.
+Absent/empty ships no credential.
 
 Optionally prove the pipeline with the smoke test ([Verify the pipeline](#verify-the-pipeline)):
 
@@ -217,12 +220,12 @@ with the privileged command to run by hand. Place via `setup.sh --scope managed`
 (requires a Rust toolchain; `cargo run` builds on first use):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope managed
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope managed
 ```
 
 **Staged opt-in — also enforce the audit hooks.** Off by default (managed enforces
 telemetry only — "config-only"): the CLI includes the hook bundle only when the config
-it places from carries `agent_audit.*` keys, and this stack's `setup.conf` declares
+it places from carries `agent_audit.*` keys, and this stack's `agent-config.toml` declares
 telemetry only. Placing from an audit-bearing config (as the sibling
 [`claude-elastic-audit`](../claude-elastic-audit/) stack's is) **materializes** the audit-hook bundle (entry +
 shared core + adapter, both shells, plus a rendered `agent-audit.conf`) into
@@ -243,7 +246,7 @@ the CLI enumerates every candidate target, including a materialized hook bundle,
 from the config on its own):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config setup.conf --scope managed
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config agent-config.toml --scope managed
 ```
 
 Then run `claude` from a configured shell/directory and do a little work (ask a
@@ -261,7 +264,7 @@ removes it; details in [`../../SPEC/config-deployment.md`](../../SPEC/config-dep
 | `managed` | n/a | no | n/a | yes | `teardown --scope managed` |
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope project --target /path/to/your/project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope project --target /path/to/your/project
 ```
 
 `project` scope writes a self-contained `.claude/` into that directory (nothing
@@ -381,15 +384,16 @@ claude mcp add elasticsearch -- `
 ```
 claude-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
-├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
-├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
+├─ provision.conf                         # control plane provision.{sh,ps1} reads: elasticsearch.url / kibana.url
+├─ agent-config.toml                      # agent data plane the agent-config CLI reads: [telemetry.apm_server] endpoint (APM OTLP)
+├─ agent-config.local.toml.example        # template for the gitignored agent-config.local.toml (optional [telemetry.apm_server] api_key)
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
-   ├─ setup-backend.sh / .ps1            # wait for health, load ES + Kibana assets
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = provision then agent-config place
+   ├─ provision.sh / .ps1                # wait for health, load ES + Kibana assets
    └─ smoke-test.sh                       # end-to-end pipeline verification (stack property)
 ```
 
-`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`setup.{sh,ps1}` composes the two halves: the `provision` façade script, then the
 `agent-config` CLI's `place` (`cargo run` against
 `../../components/agent-config/`). The `elastic` backend
 (`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` /

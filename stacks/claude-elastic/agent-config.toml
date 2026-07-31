@@ -1,0 +1,5 @@
+# Agent data plane — where the agent ships its telemetry. Read by the
+# agent-config CLI; the OTLP api_key secret lives in a gitignored
+# agent-config.local.toml (copy agent-config.local.toml.example).
+[telemetry.apm_server]
+endpoint = "http://localhost:8200"

@@ -5,7 +5,7 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 stack_dir=$(cd -- "$script_dir/.." && pwd)
 components_dir="$script_dir/../../../components"
 
-config=${1:-$stack_dir/setup.conf}
+config=${1:-$stack_dir/provision.conf}
 [ -f "$config" ] || {
   echo "FAIL: config file not found: $config" >&2
   exit 2
@@ -51,8 +51,8 @@ wait_ready Kibana "$KIBANA_URL/api/status" | indent
 
 echo
 echo "[backend] 2/3 — Elasticsearch backend assets"
-"$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" claude | indent
+"$components_dir/backends/elastic/scripts/setup-elasticsearch.sh" codex | indent
 
 echo
 echo "[backend] 3/3 — Kibana saved objects"
-"$components_dir/backends/elastic/scripts/setup-kibana.sh" claude codex agents | indent
+"$components_dir/backends/elastic/scripts/setup-kibana.sh" codex claude agents | indent

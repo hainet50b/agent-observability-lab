@@ -13,7 +13,7 @@ searches** rather than extra data views (a data view holds only an index-pattern
 **Optional OTLP auth.** The local demo APM Server runs with security disabled, so
 no credential is needed and the rendered telemetry config carries none by default.
 A stack can still ship one for a secured endpoint: set the backing service's api_key
-in the gitignored `setup.local.conf` (copy from `setup.local.conf.example`) —
+in the gitignored `agent-config.local.toml` (copy from `agent-config.local.toml.example`) —
 `telemetry.apm_server.api_key` in `claude-elastic` — and
 `agent-config` renders `OTEL_EXPORTER_OTLP_HEADERS: "Authorization=ApiKey <key>"`
 into the settings `env` block. Absent or empty → no header line, byte-identical to

@@ -6,16 +6,19 @@ use agent_config::bundle::{self, BundleRun};
 use agent_config::config::Config;
 use agent_config::model::{Agent, Os, Scope};
 
-const AUDIT_CONF: &str = "\
-agent_audit.elasticsearch.url=http://localhost:9200
-agent_audit.elasticsearch.timeout_ms=2000
-agent_audit.capture.user_prompt.enabled=true
-agent_audit.capture.user_prompt.content=plaintext
-agent_audit.capture.tool_call.enabled=true
-agent_audit.capture.tool_call.content=plaintext
-agent_audit.seal.epoch=
-agent_audit.seal.recipients_file=
-";
+const AUDIT_CONF: &str = r#"
+[agent_audit.elasticsearch]
+url = "http://localhost:9200"
+timeout_ms = 2000
+
+[agent_audit.capture.user_prompt]
+enabled = true
+content = "plaintext"
+
+[agent_audit.capture.tool_call]
+enabled = true
+content = "plaintext"
+"#;
 
 fn workspace(name: &str) -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -25,9 +28,9 @@ fn workspace(name: &str) -> PathBuf {
 }
 
 fn load(dir: &Path, conf: &str) -> Config {
-    let path = dir.join("setup.conf");
+    let path = dir.join("agent-config.toml");
     fs::write(&path, conf).unwrap();
-    Config::load(&path).unwrap()
+    Config::load(&path, None).unwrap()
 }
 
 fn managed_run(dir: &Path, oses: Vec<Os>, emit_all: bool) -> BundleRun {

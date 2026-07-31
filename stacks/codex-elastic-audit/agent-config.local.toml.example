@@ -1,3 +1,4 @@
 # Elasticsearch API key, sent as `Authorization: ApiKey <key>` when posting audit docs.
 # Only needed when Elasticsearch requires authentication.
-agent_audit.elasticsearch.api_key=
+[agent_audit.elasticsearch]
+api_key = ""

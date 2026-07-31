@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::config::Audit;
+use crate::config::{Audit, Content};
 
 #[derive(Debug)]
 pub struct SealSource {
@@ -10,26 +10,34 @@ pub struct SealSource {
     pub key_id: String,
 }
 
-pub fn resolve(conf_dir: &Path, audit: &Audit) -> Result<Option<SealSource>, String> {
-    let encrypted =
-        audit.user_prompt.content == "encrypted" || audit.tool_call.content == "encrypted";
-    let epoch = audit.seal.epoch.as_str();
+pub fn resolve(
+    conf_dir: &Path,
+    audit: &Audit,
+    recipients_root: Option<&Path>,
+    cert_override: Option<&Path>,
+) -> Result<Option<SealSource>, String> {
+    let encrypted = audit.user_prompt.content == Content::Encrypted
+        || audit.tool_call.content == Content::Encrypted;
+    let epoch = audit.seal_epoch.as_str();
     if encrypted && epoch.is_empty() {
         return Err("content=encrypted requires agent_audit.seal.epoch".into());
     }
     if epoch.is_empty() {
+        if recipients_root.is_some() || cert_override.is_some() {
+            return Err(
+                "--seal-recipients/--seal-cert require agent_audit.seal.epoch in the config".into(),
+            );
+        }
         return Ok(None);
     }
 
-    let recipients_root = if audit.seal.recipients_root.is_empty() {
-        conf_dir.join("sealing/recipients")
-    } else {
-        conf_dir.join(&audit.seal.recipients_root)
-    };
-    let src = if audit.seal.recipients_file.is_empty() {
-        recipients_root.join(epoch).join("recipient.pem")
-    } else {
-        conf_dir.join(&audit.seal.recipients_file)
+    let src = match cert_override {
+        Some(cert) => cert.to_path_buf(),
+        None => recipients_root
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| conf_dir.join("sealing/recipients"))
+            .join(epoch)
+            .join("recipient.pem"),
     };
     let src_text = src.display().to_string().replace('\\', "/");
     if src_text.contains("/private/") {

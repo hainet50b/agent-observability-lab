@@ -7,7 +7,6 @@ manifest="$stack_dir/../../components/agent-config/Cargo.toml"
 
 scope=local
 target=""
-config=""
 while [ "$#" -gt 0 ]; do
   case $1 in
   --scope)
@@ -19,13 +18,12 @@ while [ "$#" -gt 0 ]; do
     shift 2
     ;;
   *)
-    config=$1
-    shift
+    echo "usage: setup.sh [--scope local|project|managed] [--target <dir>]" >&2
+    exit 2
     ;;
   esac
 done
-config=${config:-$stack_dir/setup.conf}
 
-"$script_dir/setup-backend.sh" "$config"
+"$script_dir/provision.sh"
 echo
-cargo run -q --manifest-path "$manifest" -- place --agent codex --config "$config" --scope "$scope" ${target:+--target "$target"}
+cargo run -q --manifest-path "$manifest" -- place --agent codex --config "$stack_dir/agent-config.toml" --scope "$scope" ${target:+--target "$target"}

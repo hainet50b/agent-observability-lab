@@ -5,7 +5,7 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 stack_dir=$(cd -- "$script_dir/.." && pwd)
 components_dir="$script_dir/../../../components"
 
-config=${1:-$stack_dir/setup.conf}
+config=${1:-$stack_dir/provision.conf}
 [ -f "$config" ] || {
   echo "FAIL: config file not found: $config" >&2
   exit 2

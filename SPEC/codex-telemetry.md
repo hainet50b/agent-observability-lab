@@ -20,7 +20,7 @@ ship as importable NDJSON in `components/backends/services/kibana/codex/`
 **Optional OTLP auth.** The local demo APM Server runs with security disabled, so
 no credential is needed and the rendered `[otel]` config carries none by default. A
 stack can still ship one for a secured endpoint: set `telemetry.apm_server.api_key` in the
-gitignored `setup.local.conf` (copy from `setup.local.conf.example`) and
+gitignored `agent-config.local.toml` (copy from `agent-config.local.toml.example`) and
 `agent-config` renders `headers = { Authorization = "ApiKey <key>" }` into each
 `[otel.*.otlp-http]` exporter block. Absent or empty → `headers = {}`, byte-identical
 to a no-key run. Symmetric with the audit `agent_audit.elasticsearch.api_key`; see

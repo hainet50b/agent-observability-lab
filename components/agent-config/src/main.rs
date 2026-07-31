@@ -20,11 +20,20 @@ struct Cli {
 
 #[derive(Args)]
 struct Selection {
-    /// Stack setup.conf declaring the telemetry / audit concerns
+    /// Agent data-plane config declaring the telemetry / audit concerns
     #[arg(long, value_name = "FILE")]
     config: PathBuf,
     #[arg(long, value_parser = Agent::parse)]
     agent: Agent,
+    /// Secrets overlay (default: agent-config.local.conf beside --config)
+    #[arg(long, value_name = "FILE")]
+    local_conf: Option<PathBuf>,
+    /// Seal recipients root holding <epoch>/recipient.pem (default: sealing/recipients beside --config)
+    #[arg(long, value_name = "DIR")]
+    seal_recipients: Option<PathBuf>,
+    /// Seal recipient cert, bypassing the recipients root
+    #[arg(long, value_name = "FILE")]
+    seal_cert: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -227,11 +236,30 @@ fn deploy(
 }
 
 fn load(selection: &Selection) -> Result<(Config, Option<SealSource>), String> {
-    let cfg = Config::load(&selection.config)?;
+    let cfg = Config::load(&selection.config, selection.local_conf.as_deref())?;
     let seal = match &cfg.audit {
-        Some(audit) => seal::resolve(&config_dir(&selection.config), audit)?,
-        None => None,
+        Some(audit) => seal::resolve(
+            &config_dir(&selection.config),
+            audit,
+            selection.seal_recipients.as_deref(),
+            selection.seal_cert.as_deref(),
+        )?,
+        None => {
+            if selection.seal_recipients.is_some() || selection.seal_cert.is_some() {
+                return Err(
+                    "--seal-recipients/--seal-cert apply only to a config with agent_audit.* keys"
+                        .into(),
+                );
+            }
+            None
+        }
     };
+    let on_off = |present: bool| if present { "on" } else { "off" };
+    eprintln!(
+        "[agent-config] concerns: telemetry={} audit={}",
+        on_off(cfg.telemetry.is_some()),
+        on_off(cfg.audit.is_some())
+    );
     Ok((cfg, seal))
 }
 

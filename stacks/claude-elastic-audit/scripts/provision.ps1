@@ -9,7 +9,7 @@ $StackDir = Split-Path -Parent $PSScriptRoot
 $ComponentsDir = Join-Path $PSScriptRoot '../../../components'
 
 if (-not $Config) {
-    $Config = Join-Path $StackDir 'setup.conf'
+    $Config = Join-Path $StackDir 'provision.conf'
 }
 if (-not (Test-Path -LiteralPath $Config -PathType Leaf)) {
     [Console]::Error.WriteLine("FAIL: config file not found: $Config")

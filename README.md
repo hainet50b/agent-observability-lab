@@ -21,7 +21,7 @@ Telemetry and audit are **alternatives, not co-run**: each owns its own agent ho
 
 Four stacks — two telemetry, two audit. Pick one, follow its README: `docker compose up -d`, run its `scripts/setup.sh`, point the agent at it, inspect the backend.
 
-| Stack | Agent | Concern | Backend | Data-plane key (`setup.conf`) | Ports |
+| Stack | Agent | Concern | Backend | Data-plane key (`agent-config.toml`) | Ports |
 | --- | --- | --- | --- | --- | --- |
 | [`claude-elastic`](stacks/claude-elastic/) | Claude | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |
 | [`codex-elastic`](stacks/codex-elastic/) | Codex | telemetry | Elasticsearch + Kibana + APM Server | `telemetry.apm_server.endpoint` (direct OTLP) | 9200 / 5601 / 8200 |

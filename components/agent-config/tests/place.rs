@@ -5,18 +5,23 @@ use agent_config::config::Config;
 use agent_config::model::{Agent, Cell, Os, Scope};
 use agent_config::{agents, place};
 
-const AUDIT_CONF: &str = "\
-agent_audit.elasticsearch.url=http://localhost:9200
-agent_audit.elasticsearch.timeout_ms=2000
-agent_audit.capture.user_prompt.enabled=true
-agent_audit.capture.user_prompt.content=plaintext
-agent_audit.capture.tool_call.enabled=true
-agent_audit.capture.tool_call.content=plaintext
-agent_audit.seal.epoch=
-agent_audit.seal.recipients_file=
-";
+const AUDIT_CONF: &str = r#"
+[agent_audit.elasticsearch]
+url = "http://localhost:9200"
+timeout_ms = 2000
 
-const TELEMETRY_CONF: &str = "telemetry.apm_server.endpoint=http://localhost:8200\n";
+[agent_audit.capture.user_prompt]
+enabled = true
+content = "plaintext"
+
+[agent_audit.capture.tool_call]
+enabled = true
+content = "plaintext"
+"#;
+
+const TELEMETRY_CONF: &str = "[telemetry.apm_server]
+endpoint = \"http://localhost:8200\"
+";
 
 fn workspace(name: &str) -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -26,9 +31,9 @@ fn workspace(name: &str) -> PathBuf {
 }
 
 fn load(dir: &Path, conf: &str) -> Config {
-    let conf_path = dir.join("setup.conf");
+    let conf_path = dir.join("agent-config.toml");
     fs::write(&conf_path, conf).unwrap();
-    Config::load(&conf_path).unwrap()
+    Config::load(&conf_path, None).unwrap()
 }
 
 fn place_into(dir: &Path, cfg: &Config, agent: Agent, scope: Scope) -> Result<(), String> {

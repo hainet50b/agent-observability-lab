@@ -54,7 +54,7 @@ The shortest path from clone to "I see Claude prompts in Elasticsearch."
 cd stacks/claude-elastic-audit
 docker compose up -d
 docker compose ps        # wait until both services report healthy
-# edit setup.conf if your endpoints aren't the localhost defaults, then:
+# edit provision.conf / agent-config.toml if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -67,16 +67,15 @@ hook delivery config to `.claude/hooks/agent-audit.conf`, writes the Elasticsear
 `.mcp.json` (all in this directory), and imports the Agent Audit Kibana **data views** and
 **saved searches**. Steps are idempotent / create-if-absent, so re-run it any time.
 
-Both scripts read their endpoints from `setup.conf` at the stack root, or another file you
-pass (`setup.sh <config>` / `setup.ps1 -Config <config>`), and fail fast if the file is
-missing or a required key is empty rather than assuming localhost. `setup.conf` is two
-planes:
+The config is split by reader — one file per plane, both at the stack root — and each
+reader fails fast if its file is missing or a required key is empty rather than assuming
+localhost:
 
 | Plane | Keys | Notes |
 | --- | --- | --- |
-| **Control plane** | `elasticsearch.url`, `kibana.url` | backend + Elasticsearch MCP |
-| **Agent data plane** | `agent_audit.elasticsearch.url`, `.timeout_ms`, `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}` | the audit hook's required keys; no fallback to `elasticsearch.url` |
-| **Secret** (gitignored) | `agent_audit.elasticsearch.api_key` in `setup.local.conf` | copy `setup.local.conf.example`; absent → empty (fine for this security-disabled demo) |
+| **Control plane** — `provision.conf` | `elasticsearch.url`, `kibana.url` | read by `scripts/provision.{sh,ps1}`; backend + Elasticsearch MCP |
+| **Agent data plane** — `agent-config.toml` | `url` / `timeout_ms` under `[agent_audit.elasticsearch]`; `enabled` / `content` under `[agent_audit.capture.user_prompt]` and `[agent_audit.capture.tool_call]`; opt-in commented `[agent_audit.seal]` (`epoch`) | read by the `agent-config` CLI; the audit hook's required keys; no fallback to `elasticsearch.url` |
+| **Secret** (gitignored) | `api_key` under `[agent_audit.elasticsearch]` in `agent-config.local.toml` | copy `agent-config.local.toml.example`; sits beside `agent-config.toml` (`--local-conf <file>` points elsewhere); absent → empty (fine for this security-disabled demo) |
 
 ### 2. Point a Claude session at the stack
 
@@ -106,7 +105,8 @@ OAuth session those fields stay `null` (valid — the workstation `user.id` is s
 Then do a little work in the session. Each prompt you submit and each tool call Claude
 completes is reshaped into a canonical `agent_audit.*` document and POSTed (fail-open, short
 timeout) to the local audit data streams. Lab mode stores the captured text in **plaintext**
-for searchability; production-oriented deployments should use encrypted content and
+for searchability; production-oriented deployments should use the opt-in edge content-sealing
+(`content = "encrypted"` — see [What's deferred](#whats-deferred) for what's wired) and
 restricted read access.
 
 **Deploy this audit bundle into another scope.** The `agent-config` CLI's `place`
@@ -128,7 +128,7 @@ captures that project's prompts and tool I/O into the lab's Elasticsearch — do
 secret-bearing work at it.
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope project --target /path/to/your/project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope project --target /path/to/your/project
 ```
 
 **`managed`** — enforce the audit hooks for **every** user on a machine (highest
@@ -142,9 +142,9 @@ deploy-only, and marker-aware** (confirms each file, never overwrites a file the
 place, writes a provenance sidecar keyed on the audit ES url); a non-TTY shell aborts.
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config setup.conf --scope managed
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope managed
 # teardown:
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config setup.conf --scope managed
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config agent-config.toml --scope managed
 ```
 
 > **Caveat — validate the host path.** Claude has no managed hooks-directory convention, so confirm
@@ -213,28 +213,32 @@ document field (`agent_audit.agent.*`), not a segment of the data-stream name. P
 
 Wired now: the composition (Elasticsearch + Kibana, no APM Server), the Agent Audit data
 streams with strict mappings, the fail-open `UserPromptSubmit` + `PostToolUse` hooks, the
-Elasticsearch MCP, and the Agent Audit data views + saved searches. Authored later, with the
-human:
-
-- **Prompt / tool-I/O sealing** — lab mode stores captured text in plaintext; an encrypted
-  mode (null `text`, populated `encrypted_text`) is reserved in the schema but not built.
+Elasticsearch MCP, the Agent Audit data views + saved searches, and **prompt / tool-I/O
+sealing** (opt-in, off in lab mode): a capture stream set to `content = "encrypted"` has its
+body sealed at the edge to an epoch recipient cert (null `text`, populated `encrypted_text`).
+Select the epoch via the commented `[agent_audit.seal]` table in `agent-config.toml` and point
+the CLI at the cert with `--seal-recipients ../../sealing/recipients` (this repo keeps the
+recipients root at the top level) or `--seal-cert <pem>`; the cert CN must equal the epoch.
+Key issuance and decryption are center-side utilities under the repo-root `sealing/` (see its
+README). Nothing in this stack is currently deferred.
 
 ## Layout
 
 ```
 claude-elastic-audit/
 ├─ docker-compose.yml                     # thin composition: `include:`s the elastic-audit backend component
-├─ setup.conf                             # control plane (Elasticsearch / Kibana) + agent data plane (agent_audit.*)
-├─ setup.local.conf.example               # template for the gitignored setup.local.conf (audit api_key secret)
+├─ provision.conf                         # control plane provision.{sh,ps1} reads (Elasticsearch / Kibana)
+├─ agent-config.toml                      # agent data plane the agent-config CLI reads (the [agent_audit.*] tables)
+├─ agent-config.local.toml.example        # template for the gitignored agent-config.local.toml (audit api_key secret)
 ├─ README.md                              # this Quick Tour
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
-   ├─ setup-backend.sh / .ps1            # wait for health, provision audit streams + Kibana import
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = provision then agent-config place
+   ├─ provision.sh / .ps1                # wait for health, provision audit streams + Kibana import
    ├─ verify-agent-audit.sh / .ps1       # UserPromptSubmit -> user_prompt stream verification
    └─ verify-tool-call-audit.sh / .ps1   # PostToolUse -> tool_call stream verification
 ```
 
-`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`setup.{sh,ps1}` composes the two halves: the `provision` façade script, then the
 `agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
 The `elastic-audit` backend
 (`../../components/backends/elastic-audit/`) is a thin `include:` of the `elasticsearch` /

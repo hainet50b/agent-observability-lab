@@ -9,7 +9,7 @@ $StackDir = Split-Path -Parent $PSScriptRoot
 $ComponentsDir = Join-Path $PSScriptRoot '../../../components'
 
 if (-not $Config) {
-    $Config = Join-Path $StackDir 'setup.conf'
+    $Config = Join-Path $StackDir 'provision.conf'
 }
 if (-not (Test-Path -LiteralPath $Config -PathType Leaf)) {
     [Console]::Error.WriteLine("FAIL: config file not found: $Config")
@@ -69,9 +69,9 @@ Wait-Ready -Name 'Elasticsearch' -Url "$EsUrl/_cluster/health" 6>&1 | Indent
 Wait-Ready -Name 'Kibana' -Url "$KibanaUrl/api/status" 6>&1 | Indent
 
 Write-Host ''
-Write-Host '[backend] 2/3 - Elasticsearch backend assets'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-elasticsearch.ps1') -Sources 'codex', 'claude', 'agents' 6>&1 | Indent
+Write-Host '[backend] 2/3 - Agent Audit data streams'
+& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-elasticsearch.ps1') 6>&1 | Indent
 
 Write-Host ''
 Write-Host '[backend] 3/3 - Kibana saved objects'
-& (Join-Path $ComponentsDir 'backends/elastic/scripts/setup-kibana.ps1') -Sources 'codex', 'claude', 'agents' 6>&1 | Indent
+& (Join-Path $ComponentsDir 'backends/elastic-audit/scripts/setup-kibana.ps1') 6>&1 | Indent

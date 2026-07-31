@@ -6,18 +6,23 @@ use agent_config::config::Config;
 use agent_config::model::{Agent, Cell, Os, Scope};
 use agent_config::render;
 
-const AUDIT_CONF: &str = "\
-agent_audit.elasticsearch.url=http://localhost:9200
-agent_audit.elasticsearch.timeout_ms=2000
-agent_audit.capture.user_prompt.enabled=true
-agent_audit.capture.user_prompt.content=plaintext
-agent_audit.capture.tool_call.enabled=true
-agent_audit.capture.tool_call.content=plaintext
-agent_audit.seal.epoch=
-agent_audit.seal.recipients_file=
-";
+const AUDIT_CONF: &str = r#"
+[agent_audit.elasticsearch]
+url = "http://localhost:9200"
+timeout_ms = 2000
 
-const TELEMETRY_CONF: &str = "telemetry.apm_server.endpoint=http://localhost:8200\n";
+[agent_audit.capture.user_prompt]
+enabled = true
+content = "plaintext"
+
+[agent_audit.capture.tool_call]
+enabled = true
+content = "plaintext"
+"#;
+
+const TELEMETRY_CONF: &str = "[telemetry.apm_server]
+endpoint = \"http://localhost:8200\"
+";
 
 const UNIX_TARGET: &str = "/tmp/agent-config-fixture";
 
@@ -32,13 +37,13 @@ fn render_cell(
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    let conf_path = dir.join("setup.conf");
+    let conf_path = dir.join("agent-config.toml");
     fs::write(&conf_path, conf).unwrap();
     if let Some(overlay) = local_conf {
-        fs::write(dir.join("setup.local.conf"), overlay).unwrap();
+        fs::write(dir.join("agent-config.local.toml"), overlay).unwrap();
     }
     let out = dir.join("out");
-    let cfg = Config::load(&conf_path).unwrap();
+    let cfg = Config::load(&conf_path, None).unwrap();
     let cell = Cell {
         agent: Agent::Claude,
         scope,
@@ -178,7 +183,7 @@ fn local_telemetry_api_key_renders_auth_header() {
     let out = render_cell(
         "local-telemetry-key",
         TELEMETRY_CONF,
-        Some("telemetry.apm_server.api_key=TESTKEY\n"),
+        Some("[telemetry.apm_server]\napi_key = \"TESTKEY\"\n"),
         Scope::Local,
         Os::Linux,
         Some(UNIX_TARGET),
@@ -283,7 +288,7 @@ fn managed_combined_linux() {
     let out = render_cell(
         "managed-combined-linux",
         &conf,
-        Some("telemetry.apm_server.api_key=TESTKEY\n"),
+        Some("[telemetry.apm_server]\napi_key = \"TESTKEY\"\n"),
         Scope::Managed,
         Os::Linux,
         None,
@@ -306,13 +311,13 @@ fn render_codex_cell(
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    let conf_path = dir.join("setup.conf");
+    let conf_path = dir.join("agent-config.toml");
     fs::write(&conf_path, conf).unwrap();
     if let Some(overlay) = local_conf {
-        fs::write(dir.join("setup.local.conf"), overlay).unwrap();
+        fs::write(dir.join("agent-config.local.toml"), overlay).unwrap();
     }
     let out = dir.join("out");
-    let cfg = Config::load(&conf_path).unwrap();
+    let cfg = Config::load(&conf_path, None).unwrap();
     let cell = Cell {
         agent: Agent::Codex,
         scope,
@@ -484,7 +489,7 @@ fn codex_managed_telemetry_linux() {
     let out = render_codex_cell(
         "codex-managed-telemetry-linux",
         TELEMETRY_CONF,
-        Some("telemetry.apm_server.api_key=TESTKEY\n"),
+        Some("[telemetry.apm_server]\napi_key = \"TESTKEY\"\n"),
         Scope::Managed,
         Os::Linux,
         None,
@@ -502,7 +507,7 @@ fn codex_managed_telemetry_windows_targets_userprofile() {
     let out = render_codex_cell(
         "codex-managed-telemetry-windows",
         TELEMETRY_CONF,
-        Some("telemetry.apm_server.api_key=TESTKEY\n"),
+        Some("[telemetry.apm_server]\napi_key = \"TESTKEY\"\n"),
         Scope::Managed,
         Os::Windows,
         None,
@@ -515,27 +520,102 @@ fn codex_managed_telemetry_windows_targets_userprofile() {
 }
 
 #[test]
-fn local_conf_key_redirects_the_secret_overlay() {
-    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("local-conf-redirect");
+fn explicit_local_conf_overrides_the_default_overlay() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("local-conf-explicit");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    let conf_path = dir.join("setup.conf");
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(&conf_path, TELEMETRY_CONF).unwrap();
     fs::write(
-        &conf_path,
-        format!("{TELEMETRY_CONF}local_conf=secrets.prod.conf\n"),
+        dir.join("secrets.prod.toml"),
+        "[telemetry.apm_server]
+api_key = \"PRODKEY\"
+",
     )
     .unwrap();
     fs::write(
-        dir.join("secrets.prod.conf"),
-        "telemetry.apm_server.api_key=PRODKEY\n",
-    )
-    .unwrap();
-    fs::write(
-        dir.join("setup.local.conf"),
-        "telemetry.apm_server.api_key=WRONGKEY\n",
+        dir.join("agent-config.local.toml"),
+        "[telemetry.apm_server]
+api_key = \"DEFAULTKEY\"
+",
     )
     .unwrap();
 
-    let cfg = Config::load(&conf_path).unwrap();
+    let cfg = Config::load(&conf_path, None).unwrap();
+    assert_eq!(cfg.telemetry.as_ref().unwrap().api_key, "DEFAULTKEY");
+
+    let cfg = Config::load(&conf_path, Some(&dir.join("secrets.prod.toml"))).unwrap();
     assert_eq!(cfg.telemetry.as_ref().unwrap().api_key, "PRODKEY");
+
+    let err = Config::load(&conf_path, Some(&dir.join("missing.toml"))).unwrap_err();
+    assert!(err.contains("--local-conf not found"), "{err}");
+}
+
+#[test]
+fn unknown_and_malformed_keys_are_rejected() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("strict-keys");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+
+    fs::write(
+        &conf_path,
+        "[telemetry.apm_server]
+endpoit = \"http://x\"
+",
+    )
+    .unwrap();
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(err.contains("endpoit"), "typo must be rejected: {err}");
+
+    fs::write(
+        &conf_path,
+        format!(
+            "{TELEMETRY_CONF}api_key = \"SECRET\"
+"
+        ),
+    )
+    .unwrap();
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(
+        err.contains("api_key"),
+        "secrets must not live in the main conf: {err}"
+    );
+
+    fs::write(
+        &conf_path,
+        format!(
+            "# comment
+
+{TELEMETRY_CONF}"
+        ),
+    )
+    .unwrap();
+    Config::load(&conf_path, None).unwrap();
+
+    fs::write(
+        &conf_path,
+        format!(
+            "{TELEMETRY_CONF}stray text
+"
+        ),
+    )
+    .unwrap();
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(err.contains("TOML parse error"), "{err}");
+
+    fs::write(
+        &conf_path,
+        AUDIT_CONF.replace("content = \"plaintext\"", "content = \"plane-text\""),
+    )
+    .unwrap();
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(
+        err.contains("plane-text") || err.contains("unknown variant"),
+        "{err}"
+    );
+
+    fs::write(&conf_path, "").unwrap();
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(err.contains("declares neither"), "{err}");
 }

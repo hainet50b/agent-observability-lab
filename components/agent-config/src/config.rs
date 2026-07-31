@@ -1,104 +1,198 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
 
 use crate::model::Scope;
 
+pub const DEFAULT_OVERLAY: &str = "agent-config.local.toml";
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConfFile {
+    telemetry: Option<TelemetryFile>,
+    agent_audit: Option<AuditFile>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TelemetryFile {
+    apm_server: ApmServerFile,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApmServerFile {
+    endpoint: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuditFile {
+    elasticsearch: ElasticsearchFile,
+    capture: CaptureFile,
+    seal: Option<SealFile>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ElasticsearchFile {
+    url: String,
+    timeout_ms: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CaptureFile {
+    user_prompt: Capture,
+    tool_call: Capture,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SealFile {
+    epoch: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OverlayFile {
+    telemetry: Option<TelemetryOverlay>,
+    agent_audit: Option<AuditOverlay>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TelemetryOverlay {
+    apm_server: ApiKeyFile,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuditOverlay {
+    elasticsearch: ApiKeyFile,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApiKeyFile {
+    api_key: String,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(deny_unknown_fields)]
+pub struct Capture {
+    pub enabled: bool,
+    pub content: Content,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Content {
+    Plaintext,
+    Redacted,
+    Encrypted,
+}
+
+impl Content {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Content::Plaintext => "plaintext",
+            Content::Redacted => "redacted",
+            Content::Encrypted => "encrypted",
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Telemetry {
     pub endpoint: String,
     pub api_key: String,
 }
 
-pub struct Capture {
-    pub enabled: String,
-    pub content: String,
-}
-
-pub struct Seal {
-    pub epoch: String,
-    pub recipients_root: String,
-    pub recipients_file: String,
-}
-
+#[derive(Debug)]
 pub struct Audit {
     pub es_url: String,
     pub api_key: String,
-    pub timeout_ms: String,
+    pub timeout_ms: u64,
     pub user_prompt: Capture,
     pub tool_call: Capture,
-    pub seal: Seal,
+    pub seal_epoch: String,
 }
 
+#[derive(Debug)]
 pub struct Config {
     pub telemetry: Option<Telemetry>,
     pub audit: Option<Audit>,
 }
 
 impl Config {
-    pub fn load(path: &Path) -> Result<Config, String> {
+    pub fn load(path: &Path, local_conf: Option<&Path>) -> Result<Config, String> {
         let text = fs::read_to_string(path)
             .map_err(|_| format!("config file not found: {}", path.display()))?;
-        let pairs = parse_pairs(&text);
-        let get = |key: &str| last_value(&pairs, key);
+        let file: ConfFile =
+            toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
 
-        let mut telemetry = match get("telemetry.apm_server.endpoint") {
-            Some(endpoint) if !endpoint.is_empty() => Some(Telemetry {
-                endpoint,
-                api_key: String::new(),
-            }),
-            _ => None,
-        };
-
-        let mut audit = if pairs.iter().any(|(k, _)| k.starts_with("agent_audit.")) {
-            let require = |key: &str| {
-                get(key)
-                    .filter(|v| !v.is_empty())
-                    .ok_or_else(|| format!("{}: missing or empty key '{key}'.", path.display()))
-            };
-            Some(Audit {
-                es_url: require("agent_audit.elasticsearch.url")?,
-                api_key: String::new(),
-                timeout_ms: require("agent_audit.elasticsearch.timeout_ms")?,
-                user_prompt: Capture {
-                    enabled: require("agent_audit.capture.user_prompt.enabled")?,
-                    content: require("agent_audit.capture.user_prompt.content")?,
-                },
-                tool_call: Capture {
-                    enabled: require("agent_audit.capture.tool_call.enabled")?,
-                    content: require("agent_audit.capture.tool_call.content")?,
-                },
-                seal: Seal {
-                    epoch: get("agent_audit.seal.epoch").unwrap_or_default(),
-                    recipients_root: get("agent_audit.seal.recipients_root").unwrap_or_default(),
-                    recipients_file: get("agent_audit.seal.recipients_file").unwrap_or_default(),
-                },
+        let mut telemetry = file
+            .telemetry
+            .map(|t| -> Result<Telemetry, String> {
+                require(
+                    path,
+                    "telemetry.apm_server.endpoint",
+                    &t.apm_server.endpoint,
+                )?;
+                Ok(Telemetry {
+                    endpoint: t.apm_server.endpoint,
+                    api_key: String::new(),
+                })
             })
-        } else {
-            None
-        };
+            .transpose()?;
+
+        let mut audit = file
+            .agent_audit
+            .map(|a| -> Result<Audit, String> {
+                require(path, "agent_audit.elasticsearch.url", &a.elasticsearch.url)?;
+                Ok(Audit {
+                    es_url: a.elasticsearch.url,
+                    api_key: String::new(),
+                    timeout_ms: a.elasticsearch.timeout_ms,
+                    user_prompt: a.capture.user_prompt,
+                    tool_call: a.capture.tool_call,
+                    seal_epoch: a.seal.map(|s| s.epoch).unwrap_or_default(),
+                })
+            })
+            .transpose()?;
 
         if telemetry.is_none() && audit.is_none() {
             return Err(format!(
-                "{}: declares neither telemetry.apm_server.endpoint nor agent_audit.* keys",
+                "{}: declares neither a [telemetry] nor an [agent_audit] table",
                 path.display()
             ));
         }
 
-        let overlay = match get("local_conf") {
-            Some(name) if !name.is_empty() => conf_dir(path).join(name),
-            _ => path.with_file_name("setup.local.conf"),
+        let overlay = match local_conf {
+            Some(overlay) => overlay.to_path_buf(),
+            None => conf_dir(path).join(DEFAULT_OVERLAY),
         };
-        if let Ok(text) = fs::read_to_string(&overlay) {
-            let pairs = parse_pairs(&text);
-            if let Some(t) = telemetry.as_mut()
-                && let Some(v) = last_value(&pairs, "telemetry.apm_server.api_key")
-            {
-                t.api_key = v;
+        match fs::read_to_string(&overlay) {
+            Ok(text) => {
+                let file: OverlayFile =
+                    toml::from_str(&text).map_err(|e| format!("{}: {e}", overlay.display()))?;
+                if let Some(t) = telemetry.as_mut()
+                    && let Some(o) = file.telemetry
+                {
+                    t.api_key = o.apm_server.api_key;
+                }
+                if let Some(a) = audit.as_mut()
+                    && let Some(o) = file.agent_audit
+                {
+                    a.api_key = o.elasticsearch.api_key;
+                }
             }
-            if let Some(a) = audit.as_mut()
-                && let Some(v) = last_value(&pairs, "agent_audit.elasticsearch.api_key")
-            {
-                a.api_key = v;
+            Err(_) if local_conf.is_some() => {
+                return Err(format!("--local-conf not found: {}", overlay.display()));
             }
+            Err(_) => {}
         }
 
         Ok(Config { telemetry, audit })
@@ -136,7 +230,7 @@ impl Config {
     }
 }
 
-pub fn conf_dir(config: &Path) -> std::path::PathBuf {
+pub fn conf_dir(config: &Path) -> PathBuf {
     config
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -144,17 +238,9 @@ pub fn conf_dir(config: &Path) -> std::path::PathBuf {
         .to_path_buf()
 }
 
-fn parse_pairs(text: &str) -> Vec<(String, String)> {
-    text.lines()
-        .filter_map(|line| line.trim_end_matches('\r').split_once('='))
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
-}
-
-fn last_value(pairs: &[(String, String)], key: &str) -> Option<String> {
-    pairs
-        .iter()
-        .rev()
-        .find(|(k, _)| k == key)
-        .map(|(_, v)| v.clone())
+fn require(path: &Path, key: &str, value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{}: '{key}' is empty", path.display()));
+    }
+    Ok(())
 }

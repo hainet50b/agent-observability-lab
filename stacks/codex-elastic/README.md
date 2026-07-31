@@ -54,7 +54,7 @@ The shortest path from clone to "I see Codex CLI telemetry in Elasticsearch."
 cd stacks/codex-elastic
 docker compose up -d
 docker compose ps        # wait until all three services report healthy
-# edit setup.conf if your endpoints aren't the localhost defaults, then:
+# edit provision.conf / agent-config.toml if your endpoints aren't the localhost defaults, then:
 scripts/setup.sh         # bash/zsh/sh  (or ./setup.ps1 on Windows)
 ```
 
@@ -66,14 +66,17 @@ spans into `traces-apm-agents_codex_cli_rs`, the per-agent ILM/templates), rende
 `[otel]` config to `.codex/config.toml` in this directory (pointed at the `:8200` APM Server
 OTLP endpoint) and links your `~/.codex/auth.json` into it, and imports the Codex Kibana
 **data views** (Metrics / Events / Traces) and **saved searches**. Steps are idempotent /
-create-if-absent, so re-run it any time. Both scripts read their target endpoints
-(Elasticsearch, the APM OTLP endpoint, Kibana) from `setup.conf` at the stack root, or
-another file you pass (`setup.sh <config>` / `setup.ps1 -Config <config>`); they fail fast
-if the file is missing or a key is empty rather than assuming localhost.
+create-if-absent, so re-run it any time. The config is split by reader, one file per plane
+at the stack root: `scripts/provision.{sh,ps1}` reads the control plane
+(`elasticsearch.url` / `kibana.url`) from `provision.conf`, and the `agent-config` CLI reads
+the agent data plane (the APM OTLP `endpoint` under `[telemetry.apm_server]`) from the TOML
+`agent-config.toml`; both fail fast if a file is missing or a key is empty rather than
+assuming localhost.
 
 The demo APM Server has auth disabled, so no OTLP credential is needed. For a **secured**
-endpoint, copy `setup.local.conf.example` to the gitignored `setup.local.conf` and set
-`telemetry.apm_server.api_key=<key>` — `setup.sh` then adds `Authorization: ApiKey <key>`
+endpoint, copy `agent-config.local.toml.example` to the gitignored `agent-config.local.toml`
+(beside `agent-config.toml`; the `--local-conf <file>` CLI flag can point elsewhere) and set
+`api_key` under `[telemetry.apm_server]` — `setup.sh` then adds `Authorization: ApiKey <key>`
 to the agent's OTLP exports. Absent/empty ships no credential.
 
 ### 2. Point a Codex session at the stack
@@ -155,11 +158,11 @@ Place it via `setup.sh --scope managed` (runs after the normal setup steps) or d
 the `agent-config` CLI (requires a Rust toolchain; `cargo run` builds on first use):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config setup.conf --scope managed
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config agent-config.toml --scope managed
 ```
 
 **Staged opt-in — materialize the hooks into `managed_dir`.** Off by default: this stack's
-`setup.conf` declares telemetry only, so managed placement writes `managed_config.toml` and
+`agent-config.toml` declares telemetry only, so managed placement writes `managed_config.toml` and
 no `requirements.toml` (no hooks are pinned). Placing from a config that carries
 `agent_audit.*` keys (as the sibling [`codex-elastic-audit`](../codex-elastic-audit/)
 stack's does) **materializes**
@@ -179,7 +182,7 @@ enumerates every candidate target, including a materialized hook bundle, from th
 its own):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent codex --config setup.conf --scope managed
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent codex --config agent-config.toml --scope managed
 ```
 
 **Deploy this config into another scope.** The `agent-config` CLI's `place` deploys the
@@ -194,7 +197,7 @@ subcommand removes it; details in
 | `managed` | n/a | no | no | yes | `teardown --scope managed` |
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config setup.conf --scope project --target /path/to/your/project
+cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config agent-config.toml --scope project --target /path/to/your/project
 ```
 
 `project` scope writes a self-contained `.codex/` into that directory (nothing pointing back
@@ -285,15 +288,16 @@ later, with the human:
 ```
 codex-elastic/
 ├─ docker-compose.yml                     # thin composition: `include:`s the Elastic backend component
-├─ setup.conf                             # endpoints setup.{sh,ps1} target: elasticsearch.url / kibana.url + telemetry.apm_server.endpoint (APM OTLP)
-├─ setup.local.conf.example               # template for the gitignored setup.local.conf (optional telemetry.apm_server.api_key)
+├─ provision.conf                         # control plane provision.{sh,ps1} reads: elasticsearch.url / kibana.url
+├─ agent-config.toml                      # agent data plane the agent-config CLI reads: [telemetry.apm_server] endpoint (APM OTLP)
+├─ agent-config.local.toml.example        # template for the gitignored agent-config.local.toml (optional [telemetry.apm_server] api_key)
 └─ scripts/
-   ├─ setup.sh / setup.ps1               # one-shot bootstrap = setup-backend then agent-config place
-   ├─ setup-backend.sh / .ps1            # wait for health, load ES + Kibana assets
+   ├─ setup.sh / setup.ps1               # one-shot bootstrap = provision then agent-config place
+   ├─ provision.sh / .ps1                # wait for health, load ES + Kibana assets
    └─ smoke-test.sh                       # agent-independent OTLP-path verification (stack property)
 ```
 
-`setup.{sh,ps1}` composes the two halves: the `setup-backend` façade script, then the
+`setup.{sh,ps1}` composes the two halves: the `provision` façade script, then the
 `agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
 The `elastic` backend
 (`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` / `kibana`

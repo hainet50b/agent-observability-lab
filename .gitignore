@@ -5,7 +5,7 @@
 
 .claude/
 .codex/
-**/setup.local.conf
+**/agent-config.local.toml
 /stacks/*/dist/
 
 # Bare `.mcp.json` would over-ignore committable project MCP configs — scope to the generated Claude-stack ones.
