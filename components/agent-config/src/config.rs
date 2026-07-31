@@ -15,6 +15,7 @@ pub struct Capture {
 
 pub struct Seal {
     pub epoch: String,
+    pub recipients_root: String,
     pub recipients_file: String,
 }
 
@@ -67,6 +68,7 @@ impl Config {
                 },
                 seal: Seal {
                     epoch: get("agent_audit.seal.epoch").unwrap_or_default(),
+                    recipients_root: get("agent_audit.seal.recipients_root").unwrap_or_default(),
                     recipients_file: get("agent_audit.seal.recipients_file").unwrap_or_default(),
                 },
             })
@@ -81,7 +83,10 @@ impl Config {
             ));
         }
 
-        let overlay = path.with_file_name("setup.local.conf");
+        let overlay = match get("local_conf") {
+            Some(name) if !name.is_empty() => conf_dir(path).join(name),
+            _ => path.with_file_name("setup.local.conf"),
+        };
         if let Ok(text) = fs::read_to_string(&overlay) {
             let pairs = parse_pairs(&text);
             if let Some(t) = telemetry.as_mut()
@@ -129,6 +134,14 @@ impl Config {
             },
         }
     }
+}
+
+pub fn conf_dir(config: &Path) -> std::path::PathBuf {
+    config
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
 }
 
 fn parse_pairs(text: &str) -> Vec<(String, String)> {

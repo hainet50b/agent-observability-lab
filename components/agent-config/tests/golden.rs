@@ -513,3 +513,29 @@ fn codex_managed_telemetry_windows_targets_userprofile() {
         include_str!("fixtures/codex-managed-config.toml"),
     );
 }
+
+#[test]
+fn local_conf_key_redirects_the_secret_overlay() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("local-conf-redirect");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("setup.conf");
+    fs::write(
+        &conf_path,
+        format!("{TELEMETRY_CONF}local_conf=secrets.prod.conf\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("secrets.prod.conf"),
+        "telemetry.apm_server.api_key=PRODKEY\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("setup.local.conf"),
+        "telemetry.apm_server.api_key=WRONGKEY\n",
+    )
+    .unwrap();
+
+    let cfg = Config::load(&conf_path).unwrap();
+    assert_eq!(cfg.telemetry.as_ref().unwrap().api_key, "PRODKEY");
+}

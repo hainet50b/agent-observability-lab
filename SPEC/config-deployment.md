@@ -104,7 +104,7 @@ Each stack's `setup.conf` is the single source for the values the setup scripts 
 
 `agent-config` builds the three `/v1/{logs,traces,metrics}` URLs from the telemetry OTLP base. The data-plane key names the actual backing service rather than a generic `otlp` (the architecture is already exposed via the control-plane `elasticsearch.url` / `kibana.url`). Audit details: see [`agent-audit.md`](agent-audit.md).
 
-**Secret values are never in `setup.conf`.** Each lives only in a gitignored **`setup.local.conf`** (covered by `**/setup.local.conf`); each stack with one ships a committed **`setup.local.conf.example`** with an empty value. Absent file or key → empty, no error (the value is everything after the first `=`, so a trailing `=` in a base64 key is preserved). Two symmetric secrets:
+**Secret values are never in `setup.conf`.** Each lives only in a gitignored **`setup.local.conf`** (covered by `**/setup.local.conf`); each stack with one ships a committed **`setup.local.conf.example`** with an empty value. The overlay is looked up **beside the conf file that was passed** (keyed on the directory, not the conf's name — two confs sharing a directory share the overlay); a `local_conf=<path>` key in the main conf redirects it, resolved relative to the conf (e.g. a `setup.prod.conf` naming `setup.local.prod.conf`). Absent file or key → empty, no error (the value is everything after the first `=`, so a trailing `=` in a base64 key is preserved). Two symmetric secrets:
 
 | Stacks | Secret key | Threaded to | Rendered header |
 |---|---|---|---|

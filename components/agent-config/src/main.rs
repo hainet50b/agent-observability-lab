@@ -229,12 +229,7 @@ fn deploy(
 fn load(selection: &Selection) -> Result<(Config, Option<SealSource>), String> {
     let cfg = Config::load(&selection.config)?;
     let seal = match &cfg.audit {
-        Some(audit) => {
-            let recipients_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .join("sealing/recipients");
-            seal::resolve(&recipients_root, audit)?
-        }
+        Some(audit) => seal::resolve(&config_dir(&selection.config), audit)?,
         None => None,
     };
     Ok((cfg, seal))
@@ -248,11 +243,7 @@ fn resolve_os(os: Option<Os>) -> Result<Os, String> {
 }
 
 fn config_dir(config: &Path) -> PathBuf {
-    config
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."))
-        .to_path_buf()
+    agent_config::config::conf_dir(config)
 }
 
 fn normalize_path(path: String) -> String {

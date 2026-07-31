@@ -10,7 +10,7 @@ pub struct SealSource {
     pub key_id: String,
 }
 
-pub fn resolve(recipients_root: &Path, audit: &Audit) -> Result<Option<SealSource>, String> {
+pub fn resolve(conf_dir: &Path, audit: &Audit) -> Result<Option<SealSource>, String> {
     let encrypted =
         audit.user_prompt.content == "encrypted" || audit.tool_call.content == "encrypted";
     let epoch = audit.seal.epoch.as_str();
@@ -21,10 +21,15 @@ pub fn resolve(recipients_root: &Path, audit: &Audit) -> Result<Option<SealSourc
         return Ok(None);
     }
 
+    let recipients_root = if audit.seal.recipients_root.is_empty() {
+        conf_dir.join("sealing/recipients")
+    } else {
+        conf_dir.join(&audit.seal.recipients_root)
+    };
     let src = if audit.seal.recipients_file.is_empty() {
         recipients_root.join(epoch).join("recipient.pem")
     } else {
-        Path::new(&audit.seal.recipients_file).to_path_buf()
+        conf_dir.join(&audit.seal.recipients_file)
     };
     let src_text = src.display().to_string().replace('\\', "/");
     if src_text.contains("/private/") {
