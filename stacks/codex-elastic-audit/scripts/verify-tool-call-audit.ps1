@@ -60,7 +60,7 @@ try {
     } | ConvertTo-Json -Compress
 
     $env:CODEX_HOME = $CodexHome
-    $conf = Join-Path $CodexHome 'agent-audit.conf'
+    $conf = Join-Path $CodexHome 'hooks/agent-audit.conf'
     try { $payload | & pwsh -NoProfile -File $HookPs1 -Stream tool_call -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
     Write-Host "[assert] querying $DataStream for the audit document…"

@@ -59,7 +59,7 @@ try {
     # Invoke as a real child pwsh process (not & script.ps1, which would hang) so the
     # payload reaches the hook's stdin.
     $env:CODEX_HOME = $CodexHome
-    $conf = Join-Path $CodexHome 'agent-audit.conf'
+    $conf = Join-Path $CodexHome 'hooks/agent-audit.conf'
     try { $payload | & pwsh -NoProfile -File $HookPs1 -Stream user_prompt -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
     Write-Host "[assert] querying $DataStream for the audit document…"
