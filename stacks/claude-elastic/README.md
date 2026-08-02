@@ -320,6 +320,12 @@ scripts/smoke-test.sh    # from anywhere — it locates its own stack directory
 Needs `docker` (running daemon), `curl`, `jq`; it **SKIPs** (exit 0) when the daemon
 is unreachable. Override endpoints with `ES_URL` / `APM_OTLP_URL`.
 
+> **The probe writes into the stack and is not cleaned up.** The metrics/logs documents
+> create `*_aol_smoke_test-default` data streams that stay visible in Kibana, and the
+> trace span lands in the shared `traces-apm-default` stream next to real agent traces.
+> Don't run it against an environment you are inspecting by hand; `docker compose down -v`
+> is the reset.
+
 ## Data streams & assets
 
 | Asset | Where | Notes |
