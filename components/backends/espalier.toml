@@ -1,0 +1,34 @@
+[project]
+name = "agent-observability-lab"
+
+[targets.stack]
+elasticsearch = "http://elasticsearch:9200"
+kibana        = "http://kibana:5601"
+
+[groups.claude-elastic]
+include = [
+  "services/elasticsearch/shared/**",
+  "services/elasticsearch/claude/**",
+  "services/kibana/claude/**",
+  "services/kibana/agents/**",
+]
+
+[groups.codex-elastic]
+include = [
+  "services/elasticsearch/shared/**",
+  "services/elasticsearch/codex/**",
+  "services/kibana/codex/**",
+  "services/kibana/agents/**",
+]
+
+[groups.claude-elastic-audit]
+include = [
+  "services/elasticsearch/agent-audit/**",
+  "services/kibana/agent-audit/**",
+]
+
+[groups.codex-elastic-audit]
+include = [
+  "services/elasticsearch/agent-audit/**",
+  "services/kibana/agent-audit/**",
+]
