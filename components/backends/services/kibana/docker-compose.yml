@@ -6,7 +6,7 @@ services:
       elasticsearch:
         condition: service_healthy
     volumes:
-      - ./config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro
     ports:
       - "127.0.0.1:5601:5601"
     healthcheck:
