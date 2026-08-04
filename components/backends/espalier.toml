@@ -10,7 +10,7 @@ include = [
   "services/elasticsearch/shared/**",
   "services/elasticsearch/claude/**",
   "services/kibana/claude/**",
-  "services/kibana/agents/**",
+  "services/kibana/shared/**",
 ]
 
 [groups.codex-elastic]
@@ -18,7 +18,7 @@ include = [
   "services/elasticsearch/shared/**",
   "services/elasticsearch/codex/**",
   "services/kibana/codex/**",
-  "services/kibana/agents/**",
+  "services/kibana/shared/**",
 ]
 
 [groups.claude-elastic-audit]

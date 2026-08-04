@@ -55,4 +55,4 @@ echo "[backend] 2/3 — Elasticsearch backend assets"
 
 echo
 echo "[backend] 3/3 — Kibana saved objects"
-"$components_dir/backends/elastic/scripts/setup-kibana.sh" codex claude agents | indent
+"$components_dir/backends/elastic/scripts/setup-kibana.sh" codex claude shared | indent
