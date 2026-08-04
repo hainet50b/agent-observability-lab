@@ -35,11 +35,12 @@ The audit data streams are provisioned (strict templates + data streams) and vie
 | ILM policy | `logs-agent_audit.<s>-policy.ilm.json` | `_ilm/policy/logs-agent_audit.<s>-policy` |
 | lifecycle component template | `logs-agent_audit.<s>@lifecycle.component.json` | `_component_template/…@lifecycle` (sets `index.lifecycle.name` only) |
 | mappings component template | `logs-agent_audit.<s>@mappings.component.json` | `_component_template/…@mappings` (strict mappings) |
-| index template | `logs-agent_audit.<s>.template.json` | `_index_template/…` — thin `composed_of: [@mappings, @lifecycle]` |
+| index template | `logs-agent_audit.<s>.index-template.json` | `_index_template/…` — thin `composed_of: [@mappings, @lifecycle]` |
+| data stream | `logs-agent_audit.<s>-default.data-stream.json` | `_data_stream/…` — created eagerly at provision time |
 | data views | `data-views.ndjson` | Kibana saved objects |
 | saved searches | `saved-searches.ndjson` | Kibana saved objects |
 
-The ES importer applies by kind — **ilm → component templates → pipelines → index templates** — so composed/referenced objects exist first, then re-syncs the resolved composed mapping onto the live stream via `_simulate_index`. (Audit has no pipelines.) See `SPEC.md` "Lifecycle (ILM)".
+Provisioning (espalier) orders these by their references — component templates before the index template that composes them, the index template before its data stream. Mappings of an existing stream are not re-synced: template changes take effect on rollover, which is Elasticsearch's own contract. See `SPEC.md` "Lifecycle (ILM)".
 
 ## User prompt documents
 
