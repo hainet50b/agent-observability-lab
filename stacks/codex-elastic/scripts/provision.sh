@@ -6,7 +6,7 @@ backends_dir=$(cd -- "$script_dir/../../../components/backends" && pwd)
 
 group=codex-elastic
 network=codex-elastic_default
-image=ghcr.io/hainet50b/espalier:v0.1.0
+image=ghcr.io/hainet50b/espalier:v0.1.2
 
 if command -v cygpath >/dev/null 2>&1; then
   backends_dir=$(cygpath -m "$backends_dir")

@@ -32,7 +32,3 @@ include = [
   "services/elasticsearch/agent-audit/**",
   "services/kibana/agent-audit/**",
 ]
-
-[deps]
-"data-stream:logs-agent_audit.user_prompt-default" = ["index-template:logs-agent_audit.user_prompt"]
-"data-stream:logs-agent_audit.tool_call-default" = ["index-template:logs-agent_audit.tool_call"]

@@ -64,6 +64,18 @@ function Wait-Healthy {
     }
 }
 
+function Invoke-EsPutEmpty {
+    param([string]$Path)
+    $headers = @{}
+    if ($ElasticsearchAuth) { $headers['Authorization'] = $ElasticsearchAuth }
+    try {
+        Invoke-RestMethod -Method Put -Uri "$ElasticsearchUrl$Path" -Headers $headers | Out-Null
+    } catch {
+        Write-Error "PUT $Path failed: $($_.Exception.Message)"
+        exit 1
+    }
+}
+
 function Invoke-KibanaPost {
     param([string]$Path, [string]$Body)
     $headers = @{ 'kbn-xsrf' = 'true'; 'Content-Type' = 'application/json' }
@@ -99,7 +111,7 @@ function Invoke-KibanaImport {
 Wait-Healthy
 
 Write-Output '+ ilm:logs-agent_audit.tool_call-policy'
-Invoke-EsPut -Path '/_ilm/policy/logs-agent_audit.tool_call-policy' -Body '{"policy":{"phases":{"hot":{"actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
+Invoke-EsPut -Path '/_ilm/policy/logs-agent_audit.tool_call-policy' -Body '{"policy":{"phases":{"hot":{"min_age":"0ms","actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{"delete_searchable_snapshot":true}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
 
 Write-Output '+ component:logs-agent_audit.tool_call@lifecycle'
 Invoke-EsPut -Path '/_component_template/logs-agent_audit.tool_call@lifecycle' -Body '{"template":{"settings":{"index.lifecycle.name":"logs-agent_audit.tool_call-policy"}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
@@ -108,7 +120,7 @@ Write-Output '+ component:logs-agent_audit.tool_call@mappings'
 Invoke-EsPut -Path '/_component_template/logs-agent_audit.tool_call@mappings' -Body '{"template":{"mappings":{"dynamic":"strict","properties":{"@timestamp":{"type":"date"},"event":{"properties":{"action":{"type":"keyword"},"created":{"type":"date"},"dataset":{"type":"keyword"},"kind":{"type":"keyword"}}},"user":{"properties":{"id":{"type":"keyword"},"name":{"type":"keyword"}}},"host":{"properties":{"name":{"type":"keyword"},"hostname":{"type":"keyword"}}},"agent_audit":{"properties":{"agent":{"properties":{"provider":{"type":"keyword"},"name":{"type":"keyword"},"account":{"properties":{"id":{"type":"keyword"},"name":{"type":"keyword"},"email":{"type":"keyword"}}},"organization":{"properties":{"id":{"type":"keyword"},"name":{"type":"keyword"}}}}},"conversation_id":{"type":"keyword"},"turn_id":{"type":"keyword"},"seal":{"properties":{"key_id":{"type":"keyword"}}},"tool_call":{"properties":{"tool":{"properties":{"name":{"type":"keyword"},"call_id":{"type":"keyword"}}},"input":{"properties":{"text":{"type":"wildcard"},"encrypted_text":{"type":"binary"},"length":{"type":"long"}}},"output":{"properties":{"text":{"type":"wildcard"},"encrypted_text":{"type":"binary"},"length":{"type":"long"}}}}}}}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
 
 Write-Output '+ ilm:logs-agent_audit.user_prompt-policy'
-Invoke-EsPut -Path '/_ilm/policy/logs-agent_audit.user_prompt-policy' -Body '{"policy":{"phases":{"hot":{"actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
+Invoke-EsPut -Path '/_ilm/policy/logs-agent_audit.user_prompt-policy' -Body '{"policy":{"phases":{"hot":{"min_age":"0ms","actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{"delete_searchable_snapshot":true}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
 
 Write-Output '+ component:logs-agent_audit.user_prompt@lifecycle'
 Invoke-EsPut -Path '/_component_template/logs-agent_audit.user_prompt@lifecycle' -Body '{"template":{"settings":{"index.lifecycle.name":"logs-agent_audit.user_prompt-policy"}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
@@ -120,13 +132,13 @@ Write-Output '+ index-template:logs-agent_audit.tool_call'
 Invoke-EsPut -Path '/_index_template/logs-agent_audit.tool_call' -Body '{"index_patterns":["logs-agent_audit.tool_call-*"],"data_stream":{},"priority":200,"composed_of":["logs-agent_audit.tool_call@mappings","logs-agent_audit.tool_call@lifecycle"],"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
 
 Write-Output '+ data-stream:logs-agent_audit.tool_call-default'
-Invoke-EsPut -Path '/_data_stream/logs-agent_audit.tool_call-default' -Body '{}'
+Invoke-EsPutEmpty -Path '/_data_stream/logs-agent_audit.tool_call-default'
 
 Write-Output '+ index-template:logs-agent_audit.user_prompt'
 Invoke-EsPut -Path '/_index_template/logs-agent_audit.user_prompt' -Body '{"index_patterns":["logs-agent_audit.user_prompt-*"],"data_stream":{},"priority":200,"composed_of":["logs-agent_audit.user_prompt@mappings","logs-agent_audit.user_prompt@lifecycle"],"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
 
 Write-Output '+ data-stream:logs-agent_audit.user_prompt-default'
-Invoke-EsPut -Path '/_data_stream/logs-agent_audit.user_prompt-default' -Body '{}'
+Invoke-EsPutEmpty -Path '/_data_stream/logs-agent_audit.user_prompt-default'
 
 Write-Output '+ kibana import (4): data-view:agent-audit-tool-calls, data-view:agent-audit-user-prompts, search:agent-audit-tool-calls-search, search:agent-audit-user-prompts-search'
 Invoke-KibanaPost -Path '/api/saved_objects/tag/espalier:agent-observability-lab?overwrite=true' -Body '{"attributes":{"name":"agent-observability-lab","color":"#6E9BF7"}}'

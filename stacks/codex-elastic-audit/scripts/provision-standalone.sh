@@ -58,6 +58,21 @@ wait_healthy() {
   done
 }
 
+put_es_empty() {
+  local path="$1"
+  local args=(-sS -w '\n%{http_code}' -X PUT "${ELASTICSEARCH_URL}${path}")
+  if [ -n "$ELASTICSEARCH_AUTH" ]; then
+    args+=(-H "Authorization: ${ELASTICSEARCH_AUTH}")
+  fi
+  local response status
+  response="$(curl "${args[@]}")"
+  status="${response##*$'\n'}"
+  if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+    echo "error: PUT ${path} failed with HTTP ${status}" >&2
+    exit 1
+  fi
+}
+
 post_kibana() {
   local path="$1" body="$2"
   local args=(-sS -w '\n%{http_code}' -X POST "${KIBANA_URL}${path}" -H 'kbn-xsrf: true' -H 'Content-Type: application/json' --data-binary "$body")
@@ -98,7 +113,7 @@ import_kibana() {
 wait_healthy
 
 echo '+ ilm:logs-agent_audit.tool_call-policy'
-put_es '/_ilm/policy/logs-agent_audit.tool_call-policy' '{"policy":{"phases":{"hot":{"actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
+put_es '/_ilm/policy/logs-agent_audit.tool_call-policy' '{"policy":{"phases":{"hot":{"min_age":"0ms","actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{"delete_searchable_snapshot":true}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
 
 echo '+ component:logs-agent_audit.tool_call@lifecycle'
 put_es '/_component_template/logs-agent_audit.tool_call@lifecycle' '{"template":{"settings":{"index.lifecycle.name":"logs-agent_audit.tool_call-policy"}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
@@ -107,7 +122,7 @@ echo '+ component:logs-agent_audit.tool_call@mappings'
 put_es '/_component_template/logs-agent_audit.tool_call@mappings' '{"template":{"mappings":{"dynamic":"strict","properties":{"@timestamp":{"type":"date"},"event":{"properties":{"action":{"type":"keyword"},"created":{"type":"date"},"dataset":{"type":"keyword"},"kind":{"type":"keyword"}}},"user":{"properties":{"id":{"type":"keyword"},"name":{"type":"keyword"}}},"host":{"properties":{"name":{"type":"keyword"},"hostname":{"type":"keyword"}}},"agent_audit":{"properties":{"agent":{"properties":{"provider":{"type":"keyword"},"name":{"type":"keyword"},"account":{"properties":{"id":{"type":"keyword"},"name":{"type":"keyword"},"email":{"type":"keyword"}}},"organization":{"properties":{"id":{"type":"keyword"},"name":{"type":"keyword"}}}}},"conversation_id":{"type":"keyword"},"turn_id":{"type":"keyword"},"seal":{"properties":{"key_id":{"type":"keyword"}}},"tool_call":{"properties":{"tool":{"properties":{"name":{"type":"keyword"},"call_id":{"type":"keyword"}}},"input":{"properties":{"text":{"type":"wildcard"},"encrypted_text":{"type":"binary"},"length":{"type":"long"}}},"output":{"properties":{"text":{"type":"wildcard"},"encrypted_text":{"type":"binary"},"length":{"type":"long"}}}}}}}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
 
 echo '+ ilm:logs-agent_audit.user_prompt-policy'
-put_es '/_ilm/policy/logs-agent_audit.user_prompt-policy' '{"policy":{"phases":{"hot":{"actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
+put_es '/_ilm/policy/logs-agent_audit.user_prompt-policy' '{"policy":{"phases":{"hot":{"min_age":"0ms","actions":{"rollover":{"max_age":"1d","max_primary_shard_size":"50gb"}}},"delete":{"min_age":"3d","actions":{"delete":{"delete_searchable_snapshot":true}}}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}}'
 
 echo '+ component:logs-agent_audit.user_prompt@lifecycle'
 put_es '/_component_template/logs-agent_audit.user_prompt@lifecycle' '{"template":{"settings":{"index.lifecycle.name":"logs-agent_audit.user_prompt-policy"}},"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
@@ -119,13 +134,13 @@ echo '+ index-template:logs-agent_audit.tool_call'
 put_es '/_index_template/logs-agent_audit.tool_call' '{"index_patterns":["logs-agent_audit.tool_call-*"],"data_stream":{},"priority":200,"composed_of":["logs-agent_audit.tool_call@mappings","logs-agent_audit.tool_call@lifecycle"],"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
 
 echo '+ data-stream:logs-agent_audit.tool_call-default'
-put_es '/_data_stream/logs-agent_audit.tool_call-default' '{}'
+put_es_empty '/_data_stream/logs-agent_audit.tool_call-default'
 
 echo '+ index-template:logs-agent_audit.user_prompt'
 put_es '/_index_template/logs-agent_audit.user_prompt' '{"index_patterns":["logs-agent_audit.user_prompt-*"],"data_stream":{},"priority":200,"composed_of":["logs-agent_audit.user_prompt@mappings","logs-agent_audit.user_prompt@lifecycle"],"_meta":{"espalier":{"project":"agent-observability-lab"}}}'
 
 echo '+ data-stream:logs-agent_audit.user_prompt-default'
-put_es '/_data_stream/logs-agent_audit.user_prompt-default' '{}'
+put_es_empty '/_data_stream/logs-agent_audit.user_prompt-default'
 
 echo '+ kibana import (4): data-view:agent-audit-tool-calls, data-view:agent-audit-user-prompts, search:agent-audit-tool-calls-search, search:agent-audit-user-prompts-search'
 post_kibana '/api/saved_objects/tag/espalier:agent-observability-lab?overwrite=true' '{"attributes":{"name":"agent-observability-lab","color":"#6E9BF7"}}'
