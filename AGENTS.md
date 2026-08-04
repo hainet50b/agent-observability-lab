@@ -29,6 +29,3 @@ have not verified against the current code.
 
 - Docs follow implementation: when a change makes a README or SPEC section
   stale, update it in the same change — or say explicitly that it is stale.
-- Sibling repos: `agent-audit` (flat distribution; backport by matching
-  diffs, direction agent-audit → lab) and `agent-trace-handoff` (extracted
-  `callers/`).
