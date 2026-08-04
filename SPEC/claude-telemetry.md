@@ -185,8 +185,8 @@ This stack therefore **physically isolates the agent's spans by routing**: a
 `reroute` processor in the per-agent **`traces-apm@custom-claude-code`** sub-pipeline
 — which the agent-agnostic **`traces-apm@custom`** router (the managed
 `traces-apm@default-pipeline`'s extension point) dispatches to on
-`service.name: claude-code`, installed by the `elastic` backend's
-`setup-elasticsearch` — sends those spans to a dedicated
+`service.name: claude-code`, provisioned with the rest of
+the backend assets — sends those spans to a dedicated
 **`traces-apm-agents_claude_code`** data stream — it still matches `traces-apm-*`,
 so it keeps the full APM trace mappings; everything else (including any co-tenant
 production app traces) stays in `traces-apm-default`. The traces data view is

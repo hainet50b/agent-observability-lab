@@ -49,9 +49,11 @@ day, last used). It is an adoption lens keyed by identity, not a revival of the
 Conversations / Turns rollups. Both rollups are also embedded side-by-side in
 the cross-agent **Agents — Adoption Overview** dashboard
 (`kibana/shared/dashboard.ndjson`), which references both agents' data views
-and saved searches and therefore imports only after both agents' bundles.
-Each telemetry stack imports it — the stack loads **both** agents' data views
-and saved searches (its own first, then the sibling's) and then `agents/`, so
+and saved searches.
+Each telemetry stack's espalier group includes it, and the dependency closure
+pulls in exactly what it references — both agents' data views and the two
+user-activity searches (the sibling's other saved searches no longer ride
+along), so
 the dashboard's references resolve even though only one agent feeds data; the
 sibling's half simply shows no results. The audit stacks don't import it (they
 carry no telemetry data views at all).

@@ -87,18 +87,18 @@ A **teardown script is mandatory** — the counterpart to placement, since a hos
 
 Two concerns, kept separate:
 
-- **`provision`** (`scripts/provision.{sh,ps1}`, reading `provision.conf`) — wait for the (already-up) backend to be healthy, then load its assets (ES pipelines / templates / ILM, Kibana saved objects). Docker lifecycle (up/down) is the **user's**, via plain `docker compose up -d` / `docker compose down`; setup does not run it. Polls Elasticsearch/Kibana with a bounded timeout and fails fast if the stack is not up.
+- **`provision`** (`scripts/provision.{sh,ps1}`) — a thin wrapper that joins the stack's compose network and runs `ghcr.io/hainet50b/espalier` `apply --group <stack> --yes` against the espalier project at `components/backends/` (targets, groups, and dependency edges live in its `espalier.toml`). Health waiting, ordering, and selection are the tool's; the wrapper only names the group. Docker lifecycle (up/down) is the **user's**, via plain `docker compose up -d` / `docker compose down`; setup does not run it. `scripts/provision-standalone.{sh,ps1}` — rendered by `espalier render-script`, payloads embedded, `curl`-only — are the equally supported no-Docker path; they read `ESPALIER_ELASTICSEARCH_URL` / `ESPALIER_KIBANA_URL` (and optional `ESPALIER_ELASTICSEARCH_API_KEY`) at run time and are regenerated whenever assets change.
 - **`agent-config place`** — deploy a bundle to a `(target, scope)`. **Backend-independent**: can run with no backend (e.g. managed placement onto a host whose backend is elsewhere or already running).
 
 `setup.sh` is their **composition** (`provision` then `agent-config place`) and forwards `--scope` / `--target` unchanged (a `project`-scope run is just `--scope project --target <dir>` flowing through). `--scope` defaults to `local`; the backend must already be up (`docker compose up -d`) before running it. Managed-only **without** a backend is the standalone **`agent-config place --scope managed`**.
 
 ## Two config files — one per plane
 
-Each stack splits its configuration by consumer: **`provision.conf`** (flat key=value) carries the control plane read by `scripts/provision.{sh,ps1}`, and **`agent-config.toml`** (TOML) carries the agent data plane read by the `agent-config` CLI. The CLI deserializes the TOML into typed structures with unknown keys rejected (serde `deny_unknown_fields`) — a typo or a misplaced key is an error, not a silent no-op — and logs the resolved concerns (`telemetry=on audit=off`) at the start of every run:
+Each stack splits its configuration by consumer: the **espalier project** (`components/backends/espalier.toml`, shared by all stacks) carries the backend control plane — targets, per-stack groups, dependency edges — and **`agent-config.toml`** (TOML) carries the agent data plane read by the `agent-config` CLI. The CLI deserializes the TOML into typed structures with unknown keys rejected (serde `deny_unknown_fields`) — a typo or a misplaced key is an error, not a silent no-op — and logs the resolved concerns (`telemetry=on audit=off`) at the start of every run:
 
 | Plane | Key(s) | Stacks |
 |---|---|---|
-| **Control plane** | `elasticsearch.url`, `kibana.url` — endpoints `provision` waits on / loads assets into. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) placed verbatim | all |
+| **Control plane** | `espalier.toml` `[targets.stack]` — in-network endpoints (`http://elasticsearch:9200`, `http://kibana:5601`) the espalier container provisions into; `[groups.<stack>]` names each stack's selection. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) placed verbatim | all |
 | **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | `claude-elastic`, `codex-elastic` |
 | **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | `claude-elastic-audit`, `codex-elastic-audit` |
 
