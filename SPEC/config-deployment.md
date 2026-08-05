@@ -98,7 +98,7 @@ Each stack splits its configuration by consumer: the **espalier project** (`comp
 
 | Plane | Key(s) | Stacks |
 |---|---|---|
-| **Control plane** | `espalier.toml` `[targets.stack]` — in-network endpoints (`http://elasticsearch:9200`, `http://kibana:5601`) the espalier container provisions into; `[groups.<stack>]` names each stack's selection. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) placed verbatim | all |
+| **Control plane** | `espalier.toml` `[targets.local]` — in-network endpoints (`http://elasticsearch:9200`, `http://kibana:5601`) the espalier container provisions into; `[groups.<stack>]` names each stack's selection. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) placed verbatim | all |
 | **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | `claude-elastic`, `codex-elastic` |
 | **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | `claude-elastic-audit`, `codex-elastic-audit` |
 

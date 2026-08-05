@@ -71,7 +71,7 @@ localhost:
 
 | Plane | Keys | Notes |
 | --- | --- | --- |
-| **Control plane** — `../../components/backends/espalier.toml` | `[targets.stack]` in-network endpoints, `[groups.codex-elastic-audit]` selection | run by `scripts/provision.{sh,ps1}` via the espalier container |
+| **Control plane** — `../../components/backends/espalier.toml` | `[targets.local]` in-network endpoints, `[groups.codex-elastic-audit]` selection | run by `scripts/provision.{sh,ps1}` via the espalier container |
 | **Agent data plane** — `agent-config.toml` | `url` / `timeout_ms` under `[agent_audit.elasticsearch]`; `enabled` / `content` under `[agent_audit.capture.user_prompt]` and `[agent_audit.capture.tool_call]`; opt-in commented `[agent_audit.seal]` (`epoch`) | read by the `agent-config` CLI; the audit hook's required keys; no fallback to `elasticsearch.url` |
 | **Secret** (gitignored) | `api_key` under `[agent_audit.elasticsearch]` in `agent-config.local.toml` | copy `agent-config.local.toml.example`; sits beside `agent-config.toml` (`--local-conf <file>` points elsewhere); absent → empty (fine for this security-disabled demo) |
 

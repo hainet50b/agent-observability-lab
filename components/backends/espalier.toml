@@ -1,7 +1,7 @@
 [project]
 name = "agent-observability-lab"
 
-[targets.stack]
+[targets.local]
 elasticsearch = "http://elasticsearch:9200"
 kibana        = "http://kibana:5601"
 
