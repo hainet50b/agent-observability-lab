@@ -6,7 +6,7 @@ from a live session (`service.name = codex_cli_rs`, Codex **0.137.0**,
 the source of truth for the version you run — names and fields change fast (Codex
 is high-churn). This is the agent-knowledge companion to the stack's Quick Tour
 (`stacks/codex-elastic/README.md`); the Kibana views built on these signals
-ship as importable NDJSON in `components/backends/services/kibana/codex/`
+ship as importable NDJSON in `backends/elastic/kibana/codex/`
 (Kibana-consumed assets live in the kibana service component — see `SPEC.md`
 "Placement rule").
 

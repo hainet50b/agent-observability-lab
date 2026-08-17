@@ -13,12 +13,17 @@ have not verified against the current code.
 
 ## Orientation
 
-- `components/` — reusable building blocks: `backends/` (service fragments +
-  backend compositions), `agents/` (per-agent templates + runtime hooks),
-  `agents/shared/` (the shared hook core)
-- `agent-config/` — the Rust CLI that renders, places, tears down, and bundles
-  agent config — one declarative bundle definition per agent under
-  `src/agents/`; its templates live in `components/agents/`
+- `agent-config/` — mechanism: the Rust CLI that renders, places, tears
+  down, and bundles agent config — one declarative bundle definition per
+  agent under `src/agents/`; the content it embeds lives in `agents/`
+- `agents/` — policy, agent side: everything delivered to an agent's machine
+  (per-agent config templates + runtime hooks, `shared/` = the shared hook
+  core)
+- `backends/` — backend side: one self-contained directory per backend
+  family. `elastic/` holds the service fragments (compose + config + the
+  ES/Kibana assets they consume), the espalier project (`espalier.toml`),
+  and the `provision.{sh,ps1}` wrappers; its `docker-compose.yml`
+  (project name `aol-elastic`) is the runnable composition
 - `stacks/` — one composition each (Backends × Agents), with a Quick Tour README
 - `README.md` — user-facing entry point
 - `SPEC/` — reference notes that are hard to re-derive from code (telemetry

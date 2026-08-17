@@ -1,4 +1,0 @@
-include:
-  - ../services/elasticsearch/docker-compose.yml
-  - ../services/kibana/docker-compose.yml
-  - ../services/apm-server/docker-compose.yml

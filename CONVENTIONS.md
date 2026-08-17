@@ -8,7 +8,7 @@ This is an infrastructure / demo repository, not an application codebase. The "c
 
 - **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up` (the unit of delivery is a running stack, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
 - **Rust (`agent-config/`)** — the config renderer/deployer CLI. Built and run via `cargo run` (a Rust toolchain is assumed; no prebuilt binaries). Keep it `cargo fmt`-formatted, `cargo clippy`-clean, and covered by `cargo test` (golden fixtures pin the rendered bytes).
-- **POSIX shell (`sh`/`bash`)** — smoke tests and verification queries under each stack's `scripts/`, plus the runtime audit hooks under `components/agents/*/hooks/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean. (Backend provisioning is espalier's: thin `provision.{sh,ps1}` wrappers plus generated `provision-standalone.{sh,ps1}` — regenerate the latter with `espalier render-script` when assets change, never edit them.)
+- **POSIX shell (`sh`/`bash`)** — smoke tests and verification queries under each stack's `scripts/`, plus the runtime audit hooks under `agents/*/hooks/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean. (Backend provisioning is espalier's: thin `provision.{sh,ps1}` wrappers plus generated `provision-standalone.{sh,ps1}` — regenerate the latter with `espalier render-script` when assets change, never edit them.)
 - **PowerShell (`pwsh`)** — each `.sh` script ships a `.ps1` mirror with identical behaviour for Windows hosts; keep the pair in sync and `PSScriptAnalyzer`-clean. `.ps1` files carry **no shebang**: PowerShell does not honour one, these scripts are always invoked via `powershell`/`pwsh -File` or `&` (never executed directly), and a `#!/usr/bin/env pwsh` line both is dead and misleadingly implies a PS7 requirement where Windows fleets run `powershell.exe` (5.1).
 
 ## Comments and leanness
@@ -52,14 +52,14 @@ cargo test   --manifest-path agent-config/Cargo.toml
 **3. Format → lint scripts** — run if the tools are installed; fix every finding.
 
 ```sh
-command -v shfmt      >/dev/null 2>&1 && find stacks components -name '*.sh' -print0 | xargs -0 -r shfmt -w
-command -v shellcheck >/dev/null 2>&1 && find stacks components -name '*.sh' -print0 | xargs -0 -r shellcheck
+command -v shfmt      >/dev/null 2>&1 && find stacks backends agents -name '*.sh' -print0 | xargs -0 -r shfmt -w
+command -v shellcheck >/dev/null 2>&1 && find stacks backends agents -name '*.sh' -print0 | xargs -0 -r shellcheck
 ```
 
 ```powershell
 if (Get-Module -ListAvailable PSScriptAnalyzer) {
   $settings = 'PSScriptAnalyzerSettings.psd1'
-  Get-ChildItem -Recurse stacks, components -Filter *.ps1 | ForEach-Object {
+  Get-ChildItem -Recurse stacks, backends, agents -Filter *.ps1 | ForEach-Object {
     Set-Content -Path $_.FullName -Value (Invoke-Formatter -Settings $settings -ScriptDefinition (Get-Content -Raw $_.FullName))
     Invoke-ScriptAnalyzer -Settings $settings -Path $_.FullName
   }

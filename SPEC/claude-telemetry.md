@@ -6,7 +6,7 @@ from live sessions (`service.name = claude-code`, Claude Code 2.1.159, Stack
 fields can change. This is the agent-knowledge companion to the stack's Quick
 Tour (`stacks/claude-elastic/README.md`); the Kibana views built on these
 signals ship as importable NDJSON in
-`components/backends/services/kibana/claude/` — curated Discover **saved
+`backends/elastic/kibana/claude/` — curated Discover **saved
 searches** rather than extra data views (a data view holds only an index-pattern
 + time field, not a stored query or columns).
 

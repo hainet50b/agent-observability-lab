@@ -1,0 +1,18 @@
+[project]
+name = "agent-observability-lab"
+
+[targets.local]
+elasticsearch = "http://elasticsearch:9200"
+kibana        = "http://kibana:5601"
+
+[groups.elastic]
+include = [
+  "elasticsearch/shared/**",
+  "elasticsearch/claude/**",
+  "elasticsearch/codex/**",
+  "elasticsearch/agent-audit/**",
+  "kibana/shared/**",
+  "kibana/claude/**",
+  "kibana/codex/**",
+  "kibana/agent-audit/**",
+]

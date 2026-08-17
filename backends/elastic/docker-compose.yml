@@ -1,0 +1,6 @@
+name: aol-elastic
+
+include:
+  - elasticsearch/docker-compose.yml
+  - kibana/docker-compose.yml
+  - apm-server/docker-compose.yml
