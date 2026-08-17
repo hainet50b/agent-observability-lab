@@ -159,7 +159,7 @@ Place it via `setup.sh --scope managed` (runs after the normal setup steps) or d
 the `agent-config` CLI (requires a Rust toolchain; `cargo run` builds on first use):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config agent-config.toml --scope managed
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- place --agent codex --config agent-config.toml --scope managed
 ```
 
 **Staged opt-in — materialize the hooks into `managed_dir`.** Off by default: this stack's
@@ -183,7 +183,7 @@ enumerates every candidate target, including a materialized hook bundle, from th
 its own):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent codex --config agent-config.toml --scope managed
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- teardown --agent codex --config agent-config.toml --scope managed
 ```
 
 **Deploy this config into another scope.** The `agent-config` CLI's `place` deploys the
@@ -198,7 +198,7 @@ subcommand removes it; details in
 | `managed` | n/a | no | no | yes | `teardown --scope managed` |
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent codex --config agent-config.toml --scope project --target /path/to/your/project
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- place --agent codex --config agent-config.toml --scope project --target /path/to/your/project
 ```
 
 `project` scope writes a self-contained `.codex/` into that directory (nothing pointing back
@@ -305,7 +305,7 @@ codex-elastic/
 ```
 
 `setup.{sh,ps1}` composes the two halves: the `provision` façade script, then the
-`agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
+`agent-config` CLI's `place` (`cargo run` against `../../agent-config/`).
 The `elastic` backend
 (`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` / `kibana`
 / `apm-server` service fragments plus a composition script that selects its assets — it owns

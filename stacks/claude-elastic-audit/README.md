@@ -129,7 +129,7 @@ captures that project's prompts and tool I/O into the lab's Elasticsearch — do
 secret-bearing work at it.
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope project --target /path/to/your/project
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope project --target /path/to/your/project
 ```
 
 **`managed`** — enforce the audit hooks for **every** user on a machine (highest
@@ -143,9 +143,9 @@ deploy-only, and marker-aware** (confirms each file, never overwrites a file the
 place, writes a provenance sidecar keyed on the audit ES url); a non-TTY shell aborts.
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope managed
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope managed
 # teardown:
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config agent-config.toml --scope managed
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- teardown --agent claude --config agent-config.toml --scope managed
 ```
 
 > **Caveat — validate the host path.** Claude has no managed hooks-directory convention, so confirm
@@ -240,7 +240,7 @@ claude-elastic-audit/
 ```
 
 `setup.{sh,ps1}` composes the two halves: the `provision` façade script, then the
-`agent-config` CLI's `place` (`cargo run` against `../../components/agent-config/`).
+`agent-config` CLI's `place` (`cargo run` against `../../agent-config/`).
 The `elastic-audit` backend
 (`../../components/backends/elastic-audit/`) is a thin `include:` of the `elasticsearch` /
 `kibana` service fragments plus a composition script that selects its assets — it owns no

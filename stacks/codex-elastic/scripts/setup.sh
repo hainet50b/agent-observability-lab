@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 stack_dir=$(cd -- "$script_dir/.." && pwd)
-manifest="$stack_dir/../../components/agent-config/Cargo.toml"
+manifest="$stack_dir/../../agent-config/Cargo.toml"
 
 scope=local
 target=""

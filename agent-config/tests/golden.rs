@@ -64,19 +64,19 @@ fn assert_hook_assets(out: &Path, hooks_dir: &str, ext: &str) {
     let sources = [
         (
             format!("agent-audit.{ext}"),
-            format!("agents/claude/hooks/agent-audit.{ext}"),
+            format!("components/agents/claude/hooks/agent-audit.{ext}"),
         ),
         (
             format!("lib/adapter.{ext}"),
-            format!("agents/claude/hooks/lib/adapter.{ext}"),
+            format!("components/agents/claude/hooks/lib/adapter.{ext}"),
         ),
         (
             format!("lib/agent-audit-core.{ext}"),
-            format!("agents/shared/agent-audit/lib/agent-audit-core.{ext}"),
+            format!("components/agents/shared/agent-audit/lib/agent-audit-core.{ext}"),
         ),
         (
             format!("lib/seal.{ext}"),
-            format!("agents/shared/agent-audit/lib/seal.{ext}"),
+            format!("components/agents/shared/agent-audit/lib/seal.{ext}"),
         ),
     ];
     for (rel, source) in sources {
@@ -333,19 +333,19 @@ fn assert_codex_hook_assets(out: &Path, hooks_dir: &str, ext: &str) {
     let sources = [
         (
             format!("agent-audit.{ext}"),
-            format!("agents/codex/hooks/agent-audit.{ext}"),
+            format!("components/agents/codex/hooks/agent-audit.{ext}"),
         ),
         (
             format!("lib/adapter.{ext}"),
-            format!("agents/codex/hooks/lib/adapter.{ext}"),
+            format!("components/agents/codex/hooks/lib/adapter.{ext}"),
         ),
         (
             format!("lib/agent-audit-core.{ext}"),
-            format!("agents/shared/agent-audit/lib/agent-audit-core.{ext}"),
+            format!("components/agents/shared/agent-audit/lib/agent-audit-core.{ext}"),
         ),
         (
             format!("lib/seal.{ext}"),
-            format!("agents/shared/agent-audit/lib/seal.{ext}"),
+            format!("components/agents/shared/agent-audit/lib/seal.{ext}"),
         ),
     ];
     for (rel, source) in sources {

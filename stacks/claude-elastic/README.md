@@ -221,7 +221,7 @@ with the privileged command to run by hand. Place via `setup.sh --scope managed`
 (requires a Rust toolchain; `cargo run` builds on first use):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope managed
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope managed
 ```
 
 **Staged opt-in — also enforce the audit hooks.** Off by default (managed enforces
@@ -247,7 +247,7 @@ the CLI enumerates every candidate target, including a materialized hook bundle,
 from the config on its own):
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- teardown --agent claude --config agent-config.toml --scope managed
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- teardown --agent claude --config agent-config.toml --scope managed
 ```
 
 Then run `claude` from a configured shell/directory and do a little work (ask a
@@ -265,7 +265,7 @@ removes it; details in [`../../SPEC/config-deployment.md`](../../SPEC/config-dep
 | `managed` | n/a | no | n/a | yes | `teardown --scope managed` |
 
 ```sh
-cargo run -q --manifest-path ../../components/agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope project --target /path/to/your/project
+cargo run -q --manifest-path ../../agent-config/Cargo.toml -- place --agent claude --config agent-config.toml --scope project --target /path/to/your/project
 ```
 
 `project` scope writes a self-contained `.claude/` into that directory (nothing
@@ -402,7 +402,7 @@ claude-elastic/
 
 `setup.{sh,ps1}` composes the two halves: the `provision` façade script, then the
 `agent-config` CLI's `place` (`cargo run` against
-`../../components/agent-config/`). The `elastic` backend
+`../../agent-config/`). The `elastic` backend
 (`../../components/backends/elastic/`) is a thin `include:` of the `elasticsearch` /
 `kibana` / `apm-server` service fragments plus a composition script that selects its
 assets — it owns no asset files. The service fragments under

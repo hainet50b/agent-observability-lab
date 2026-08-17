@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $StackDir = Split-Path -Parent $PSScriptRoot
-$Manifest = Join-Path $StackDir '../../components/agent-config/Cargo.toml'
+$Manifest = Join-Path $StackDir '../../agent-config/Cargo.toml'
 
 & (Join-Path $PSScriptRoot 'provision.ps1')
 
