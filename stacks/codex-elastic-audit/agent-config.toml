@@ -2,6 +2,9 @@
 # the agent-config CLI; the api_key secret lives in a gitignored
 # agent-config.local.toml (copy agent-config.local.toml.example).
 # content: "plaintext" | "redacted" | "encrypted"
+[agent_config]
+executor = "agent-observability-lab"
+
 [agent_audit.elasticsearch]
 url = "http://localhost:9200"
 timeout_ms = 2000

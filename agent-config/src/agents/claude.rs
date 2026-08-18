@@ -3,7 +3,6 @@ use serde_json::{Value, json};
 use crate::assets;
 use crate::config::{Config, Telemetry};
 use crate::model::{Cell, Content, Entry, Flavor, Location, Os, Scope, json_pretty};
-use crate::owner::OWNER;
 use crate::seal::SealSource;
 
 pub fn managed_root(os: Os) -> &'static str {
@@ -47,10 +46,13 @@ pub fn managed_candidates(cfg: &Config, os: Os) -> Vec<(String, String)> {
     let root = managed_root(os);
     let mut candidates = vec![(
         "managed-settings".to_string(),
-        format!("{root}/managed-settings.d/10-{OWNER}.json"),
+        format!("{root}/managed-settings.d/10-{}.json", cfg.executor),
     )];
     if cfg.audit.is_some() {
-        candidates.extend(hook_candidates(&format!("{root}/hooks/{OWNER}"), os));
+        candidates.extend(hook_candidates(
+            &format!("{root}/hooks/{}", cfg.executor),
+            os,
+        ));
     }
     candidates
 }
@@ -154,7 +156,7 @@ fn managed_entries(
     }
 
     if let Some(audit) = &cfg.audit {
-        let hooks_root = format!("{root}/hooks/{OWNER}");
+        let hooks_root = format!("{root}/hooks/{}", cfg.executor);
         fragment["hooks"] = hooks_block(cell.os, &hooks_root)?;
         let recipients_file = seal.map(|_| format!("{hooks_root}/recipient.pem"));
         entries.push(Entry::marked_file(
@@ -187,7 +189,10 @@ fn managed_entries(
         0,
         Entry::marked_file(
             "managed-settings",
-            Location::Host(format!("{root}/managed-settings.d/10-{OWNER}.json")),
+            Location::Host(format!(
+                "{root}/managed-settings.d/10-{}.json",
+                cfg.executor
+            )),
             json_pretty(&fragment),
         ),
     );

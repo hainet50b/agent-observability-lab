@@ -130,7 +130,7 @@ completeness.
 
 ## Placement in this lab
 
-Managed placement follows the shared **deploy-only, human-gated, never-overwrite** model owned by [`config-deployment.md`](config-deployment.md) "Managed placement" — always interactive with no `--yes`, non-TTY aborts, fail-loud on permission errors, a sidecar provenance marker keyed on the endpoint, a hard refusal to touch any file without a lab marker (the path may hold the operator's **real organization's** MDM-pushed config), and a mandatory interactive teardown. One Codex-specific caveat: managed config cannot be isolated per-stack with `CODEX_HOME` the way the stacks isolate user config — `CODEX_HOME` never reaches the managed layer.
+Managed placement follows the shared **deploy-only, human-gated, never-overwrite** model owned by [`config-deployment.md`](config-deployment.md) "Managed placement" — always interactive with no `--yes`, non-TTY aborts, fail-loud on permission errors, a sidecar provenance marker keyed on the executor, a hard refusal to touch any file without a lab marker (the path may hold the operator's **real organization's** MDM-pushed config), and a mandatory interactive teardown. One Codex-specific caveat: managed config cannot be isolated per-stack with `CODEX_HOME` the way the stacks isolate user config — `CODEX_HOME` never reaches the managed layer.
 
 ### What can actually be enforced (state it honestly)
 

@@ -46,7 +46,7 @@ fn place_into(dir: &Path, cfg: &Config, agent: Agent, scope: Scope) -> Result<()
         target: Some(target.display().to_string().replace('\\', "/")),
     };
     let entries = agents::manifest(cfg, &cell, None)?;
-    place::place(&entries, &target, agent.name(), &cfg.marker_endpoint(scope))
+    place::place(&entries, &target, &cfg.executor)
 }
 
 fn marker_lines(path: &Path) -> Vec<(String, String)> {
@@ -75,9 +75,18 @@ fn place_local_audit_writes_files_and_markers() {
         let marker = target.join(format!("{marked}.managed"));
         assert!(marker.is_file(), "missing marker for {marked}");
         let fields = marker_lines(&marker);
-        assert!(fields.contains(&("tool".into(), "agent-observability-lab".into())));
-        assert!(fields.contains(&("agent".into(), "claude".into())));
-        assert!(fields.contains(&("endpoint".into(), "http://localhost:9200".into())));
+        assert!(fields.contains(&("executor".into(), "agent-config".into())));
+        assert!(
+            fields.iter().any(|(k, _)| k == "placed_at"),
+            "missing placed_at"
+        );
+        assert!(fields.iter().any(|(k, _)| k == "target"), "missing target");
+        assert!(
+            !fields
+                .iter()
+                .any(|(k, _)| k == "tool" || k == "agent" || k == "endpoint"),
+            "legacy marker fields must be gone: {fields:?}"
+        );
     }
 
     let flavor = if cfg!(windows) { "ps1" } else { "sh" };
@@ -123,16 +132,49 @@ fn place_refuses_foreign_target_before_writing_anything() {
 }
 
 #[test]
-fn place_refuses_a_different_deploy_endpoint() {
-    let dir = workspace("place-endpoint-mismatch");
+fn place_converges_after_a_config_edit() {
+    let dir = workspace("place-converge");
     let cfg = load(&dir, AUDIT_CONF);
     place_into(&dir, &cfg, Agent::Claude, Scope::Local).unwrap();
 
-    let other = load(&dir, &AUDIT_CONF.replace("localhost:9200", "other:9200"));
+    let edited = load(&dir, &AUDIT_CONF.replace("localhost:9200", "other:9200"));
+    place_into(&dir, &edited, Agent::Claude, Scope::Local).unwrap();
+    let conf = fs::read_to_string(dir.join("target/.claude/hooks/agent-audit.conf")).unwrap();
+    assert!(
+        conf.contains("other:9200"),
+        "re-place must converge: {conf}"
+    );
+}
+
+#[test]
+fn place_refuses_a_different_executor() {
+    let dir = workspace("place-executor-mismatch");
+    let cfg = load(&dir, AUDIT_CONF);
+    place_into(&dir, &cfg, Agent::Claude, Scope::Local).unwrap();
+
+    let other = load(
+        &dir,
+        &format!("[agent_config]\nexecutor = \"someone-else\"\n{AUDIT_CONF}"),
+    );
     let err = place_into(&dir, &other, Agent::Claude, Scope::Local).unwrap_err();
     assert!(
-        err.contains("different endpoint"),
+        err.contains("owned by executor 'agent-config'"),
         "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn executor_key_names_the_marker_owner() {
+    let dir = workspace("place-executor-key");
+    let cfg = load(
+        &dir,
+        &format!("[agent_config]\nexecutor = \"custom-exec\"\n{AUDIT_CONF}"),
+    );
+    place_into(&dir, &cfg, Agent::Claude, Scope::Local).unwrap();
+    let marker = dir.join("target/.claude/settings.local.json.managed");
+    assert!(
+        marker_lines(&marker).contains(&("executor".into(), "custom-exec".into())),
+        "marker must carry the declared executor"
     );
 }
 
@@ -178,7 +220,7 @@ fn teardown_removes_only_lab_files() {
     let target = dir.join("target");
     fs::write(target.join(".claude/own.txt"), "mine\n").unwrap();
 
-    place::teardown(Agent::Claude, &target, &cfg.marker_endpoint(Scope::Local)).unwrap();
+    place::teardown(Agent::Claude, &target, &cfg.executor).unwrap();
 
     assert!(!target.join(".claude/settings.local.json").exists());
     assert!(!target.join(".claude/settings.local.json.managed").exists());
@@ -189,7 +231,7 @@ fn teardown_removes_only_lab_files() {
         "user file must survive"
     );
 
-    place::teardown(Agent::Claude, &target, &cfg.marker_endpoint(Scope::Local)).unwrap();
+    place::teardown(Agent::Claude, &target, &cfg.executor).unwrap();
 }
 
 #[test]
@@ -200,7 +242,7 @@ fn teardown_leaves_unmarked_files_and_reports_success() {
     fs::create_dir_all(&target).unwrap();
     fs::write(target.join(".mcp.json"), "{}\n").unwrap();
 
-    place::teardown(Agent::Claude, &target, &cfg.marker_endpoint(Scope::Local)).unwrap();
+    place::teardown(Agent::Claude, &target, &cfg.executor).unwrap();
     assert!(
         target.join(".mcp.json").is_file(),
         "unmarked file is the user's own"
@@ -208,13 +250,13 @@ fn teardown_leaves_unmarked_files_and_reports_success() {
 }
 
 #[test]
-fn teardown_refuses_a_different_deploy_endpoint() {
-    let dir = workspace("teardown-endpoint-mismatch");
+fn teardown_refuses_a_different_executor() {
+    let dir = workspace("teardown-executor-mismatch");
     let cfg = load(&dir, AUDIT_CONF);
     place_into(&dir, &cfg, Agent::Claude, Scope::Local).unwrap();
     let target = dir.join("target");
 
-    let err = place::teardown(Agent::Claude, &target, "http://other:9200").unwrap_err();
+    let err = place::teardown(Agent::Claude, &target, "someone-else").unwrap_err();
     assert!(err.contains("refused"), "unexpected error: {err}");
     assert!(
         target.join(".claude/settings.local.json").is_file(),

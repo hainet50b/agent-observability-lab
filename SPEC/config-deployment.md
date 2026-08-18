@@ -2,7 +2,7 @@
 
 How the lab puts an agent's configuration in place. The unit is a **config bundle** deployed to a **(target, scope)**; one bundle definition serves local development, an arbitrary project directory, and org-enforced managed placement.
 
-The deployment tool is **`agent-config`**, a Rust CLI at `agent-config/` run via `cargo run` (the lab assumes a Rust toolchain, not prebuilt binaries). Each agent's bundle — which templates render into which files, per scope and per OS — is declared in one function per agent (`src/agents/claude.rs`, `src/agents/codex.rs`); the placement rules below live in `src/place.rs`. Subcommands: `render` (write a bundle tree to a directory), `place` / `teardown` (deploy to / remove from a live target), `bundle` (zip archives per scope × OS with a version ledger — see [Bundles](#bundles)).
+The deployment tool is **`agent-config`**, a Rust CLI at `agent-config/` run via `cargo run` (the lab assumes a Rust toolchain, not prebuilt binaries). Each agent's bundle — which templates render into which files, per scope and per OS — is declared in one function per agent (`src/agents/claude.rs`, `src/agents/codex.rs`); the placement rules below live in `src/place.rs`. Subcommands: `render` (write a bundle tree to a directory), `place` / `teardown` (deploy to / remove from a live target), `bundle` (zip archives per scope × OS with a version ledger — see [Bundles](#bundles)). `--agent` takes one or more agents (repeatable or comma-separated: `--agent claude,codex`) and runs the subcommand per agent. `render` and `place` also take `--concern telemetry,audit` — a pure **content filter** over what the config declares (naming an undeclared concern fails loud; omitting the flag deploys everything declared, which is also how a narrowed deployment is later converged to full). `teardown` and `bundle` take no `--concern`: teardown's ownership test needs none, and bundles always carry the full declaration.
 
 ## The bundle
 
@@ -34,21 +34,21 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 
 ## Placement is marker-aware and fail-if-foreign — across all scopes
 
-Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — five lines `tool=`, `agent=`, `endpoint=`, `placed_at=` (UTC ISO8601), `target=`. `tool=` names the **owning distribution** (`agent-observability-lab` here; other distributions use their own slug), because a managed root is machine-global and can hold bundles from more than one owner; `agent=` names the agent, which does not distinguish them. `endpoint` is the deploy's data-plane endpoint, computed once per deploy from `agent-config.toml`: for a single-concern `local`/`project` deploy the concern's own endpoint (the OTLP base for telemetry, the audit ES url for audit); a deploy carrying **both** concerns, and every **`managed`** deploy, writes a composite `telemetry=…;audit=…` value (managed uses the full logs OTLP endpoint in the telemetry half; the unused half stays empty). It is what teardown matches on to recognize its own work, and keying every file of one deploy on the same value is what lets telemetry + audit **co-own** the shared `settings.local.json` / `config.toml`.
+Every bundle file the lab writes carries a **per-file provenance sidecar** `<target>.managed`, one shared format across all scopes — three lines: `executor=` (the ownership key), `placed_at=` (UTC ISO8601) and `target=` (forensic information, written but never matched on). The **executor** names the owning distribution: it is read from the optional `[agent_config] executor` key in `agent-config.toml` (`agent-observability-lab` in this repo's configs; other distributions declare their own) and defaults to the tool's own name, `agent-config`, when undeclared — a managed root is machine-global and can hold bundles from more than one owner, and two undeclared distributions are deliberately indistinguishable. Executor match is the **single ownership test everywhere** (place gate, teardown, managed placement, the hooks-directory sweep): the agent needs no line of its own because the agent home is already in the path, and the deploy's endpoints need none because ownership is about *who placed a file*, not *where it pointed*.
 
 `managed` placement is **interactive** (confirm each file — or answer `a` once to accept the rest — non-TTY aborts; the `a` shortcut is still interactive, not a `--yes` bypass). `local` and `project` are **non-interactive**, and every marked target is ownership-checked **before anything is written** (a foreign file aborts the whole deploy untouched). Both paths live in `agent-config/src/place.rs` and share the marker format and the fail-if-foreign rule. The per-bundle-file rule for `local`/`project`:
 
 | Target state | Action |
 |---|---|
 | **absent** | write rendered content, then write the sidecar marker |
-| **lab marker, `endpoint` matches** | ours — write, **merging only this concern's own key** (Claude `settings.local.json`: set `.env` or `.hooks`, preserving sibling lab keys so the two concerns co-own one home; Codex `config.toml`: append the section, skipping one already present). Idempotent, updatable |
-| **no lab marker, or `endpoint` differs** | **fail loud** (non-zero, clear message); never merge/append/overwrite |
+| **marker with matching `executor`** | ours — write, **merging only this concern's own key** (Claude `settings.local.json`: set `.env` or `.hooks`, preserving sibling lab keys so the two concerns co-own one home; Codex `config.toml`: append the section, skipping one already present). Idempotent, updatable — a config edit followed by a re-place **converges** the deployment, no teardown ritual |
+| **no marker, or a different `executor`** | **fail loud** (non-zero, clear message); never merge/append/overwrite |
 
 Nothing is written on the fail path, so there is nothing to roll back; the foreign check runs over every marked target **before** the first byte is copied. The merge/append is strictly **marker-gated** — it only ever edits a file this tool already owns (matching marker) and fails loud on a foreign one. That is unlike the older permissive behaviour, which merged/skipped/appended into a target **regardless of ownership** (env-merge into any existing `settings.local.json`, create-if-absent skips, blind `[hooks]`/`[mcp_servers]` appends) and could silently corrupt a user's pre-existing assets.
 
 **Codex's single `config.toml`.** Codex keeps `[otel]`, `[[hooks.*]]`, and `[mcp_servers.*]` in one file. The first lab section written in a run (otel for telemetry, hooks for audit) **creates and marks** the file (or fails if a pre-existing file is unmarked); later sections in the same run **append** onto the now-marked file. A re-run is idempotent: each section is skipped if its sentinel table header is already present.
 
-The materialized agent home also gets a **self-ignore `.gitignore` = `*`**, placed as a normal bundle file (marker-keyed on the deploy endpoint, foreign-refused), so a `project` deploy never dirties the host project's git tree.
+The materialized agent home also gets a **self-ignore `.gitignore` = `*`**, placed as a normal bundle file (executor-marked, foreign-refused), so a `project` deploy never dirties the host project's git tree.
 
 ## Managed placement (deploy-only, human-gated)
 
@@ -64,15 +64,15 @@ Placement is **always interactive:**
 
 ### Never overwrite; track provenance; provide teardown
 
-Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** (Claude is the exception to the singleton framing: its target is a lab-named **fragment** in a drop-in directory, so the lab coexists with a foreign `managed-settings.json` rather than contending for it — and therefore no longer detects one. See [`claude-managed-config.md`](claude-managed-config.md) "Placement & teardown".) Placement records the sidecar provenance marker beside the managed file (agent / endpoint / placed-at / target — the shared format above, with the managed composite `endpoint`). Ownership is keyed on the **endpoint** — what the host is enforced *toward* — not a stack name (a managed deploy is a host act, not a per-stack one):
+Managed config is a host **singleton** per file, and the path may already hold the operator's **real organization's** MDM-pushed managed config. Clobbering that is a real-world security incident, not a lab inconvenience — so the lab **never overwrites a file it does not own.** (Claude is the exception to the singleton framing: its target is a lab-named **fragment** in a drop-in directory, so the lab coexists with a foreign `managed-settings.json` rather than contending for it — and therefore no longer detects one. See [`claude-managed-config.md`](claude-managed-config.md) "Placement & teardown".) Placement records the sidecar provenance marker beside the managed file (the shared three-line format above). Ownership is keyed on the **executor** — who placed the file — with the interactive per-file confirmation carrying the judgment about content:
 
 | Existing file | Verdict |
 | --- | --- |
 | none | place after confirm, write the marker |
-| lab-placed, same endpoint, same content | no-op (already placed) |
-| lab-placed, same endpoint, changed content | update after explicit confirm |
-| lab-placed, **different endpoint** | refuse — "this host already enforces &lt;endpoint&gt;; run teardown first" |
-| present with **no lab marker** (foreign / real org config) | **hard refuse — never touch it** |
+| ours (executor matches), same content | no-op (already placed) |
+| ours (executor matches), changed content | update after explicit confirm (diff shown) |
+| marked by a **different executor** | refuse — owned by another distribution; its own tooling removes it |
+| present with **no marker** (foreign / real org config) | **hard refuse — never touch it** |
 
 A **teardown script is mandatory** — the counterpart to placement, since a host-global change otherwise persists after the experiment (the machine stays enforced). Teardown removes **only** files the marker confirms the lab placed (restoring the host), **refuses to remove a foreign file**, and is itself interactive + fail-loud (no `--yes`).
 
@@ -81,7 +81,7 @@ A **teardown script is mandatory** — the counterpart to placement, since a hos
 `agent-config teardown` is valid for every scope (`local` resolves the target to the stack dir; `project` requires `--target`, like `project` deploy; `managed` takes neither).
 
 - **`managed`** → **interactive** teardown: it enumerates every candidate target the stack's `agent-config.toml` could have placed (hook bundle, settings fragment / `requirements.toml`, and always Codex's `managed_config.toml`), confirms each marker-bearing file, and treats one never placed as a harmless no-op.
-- **`local` / `project`** → **non-interactive**: remove each bundle file carrying a lab marker whose `endpoint` matches this deploy, plus its marker (and the copied `hooks/` tree when the hook-bearing file was lab-owned, the linked Codex `auth.json` when lab-placed, and the agent home's self-ignore `.gitignore`). A target **lacking a lab marker is a benign skip** — left untouched, no error — because it is the user's own file, not the lab's (e.g. a `codex login` `auth.json`, or a project's own `.mcp.json`; these are never placed in `project` scope). A target carrying a **different** deploy's `endpoint` is **refused and the run ends non-zero** (it belongs to another deploy). Only ever removes lab-marked files.
+- **`local` / `project`** → **non-interactive**: remove each bundle file carrying a marker with this config's `executor`, plus its marker (and the copied `hooks/` tree when the hook-bearing file was ours, the linked Codex `auth.json` when we placed it, and the agent home's self-ignore `.gitignore`). A target **lacking a marker is a benign skip** — left untouched, no error — because it is the user's own file, not ours (e.g. a `codex login` `auth.json`, or a project's own `.mcp.json`; these are never placed in `project` scope). A target marked by a **different executor** is **refused and the run ends non-zero** (it belongs to another distribution). Teardown needs no concern or endpoint knowledge — it enumerates every candidate target and removes what the executor test confirms is ours.
 
 ## Backend vs config
 
@@ -94,7 +94,7 @@ Two concerns, kept separate:
 
 ## Two config files — one per plane
 
-Each stack splits its configuration by consumer: the **espalier project** (`backends/elastic/espalier.toml`, shared by all stacks) carries the backend control plane — targets, the single all-assets group, dependency edges — and **`agent-config.toml`** (TOML) carries the agent data plane read by the `agent-config` CLI. The CLI deserializes the TOML into typed structures with unknown keys rejected (serde `deny_unknown_fields`) — a typo or a misplaced key is an error, not a silent no-op — and logs the resolved concerns (`telemetry=on audit=off`) at the start of every run:
+Each stack splits its configuration by consumer: the **espalier project** (`backends/elastic/espalier.toml`, shared by all stacks) carries the backend control plane — targets, the single all-assets group, dependency edges — and **`agent-config.toml`** (TOML) carries the agent data plane read by the `agent-config` CLI — plus the tool-directed `[agent_config]` table (`executor`, the ownership name written into provenance markers; defaults to `agent-config` when undeclared, and this repo's configs declare `agent-observability-lab`). The CLI deserializes the TOML into typed structures with unknown keys rejected (serde `deny_unknown_fields`) — a typo or a misplaced key is an error, not a silent no-op — and logs the resolved concerns (`telemetry=on audit=off`) at the start of every run:
 
 | Plane | Key(s) | Stacks |
 |---|---|---|
@@ -127,7 +127,7 @@ A managed deploy carries telemetry, hooks, or both, driven by which concerns the
 - **Hooks** materialize the **hook scripts** to a stable host location and point the managed config at them. Codex has a first-class **`managed_dir`**; Claude has **no such convention**, so the lab picks a `hooks/` dir at the managed root (beside `managed-settings.d/`) and must confirm **on a real host** that an absolute hook `command` path works (the macOS space / Windows `Program Files` caveats). For **both** agents the bundle goes one level deeper, into an **owner-scoped** `hooks/<tool>/` — the managed root is machine-global, and two distributions of this tooling would otherwise write the same `hooks/agent-audit.{sh,ps1}` and collide. Fragment names are derived from the same `tool` slug, so one constant governs every owner-scoped path.
 - For hooks-only, Codex omits `managed_config.toml` because with no telemetry it would be just a comment.
 
-**Managed marker endpoint.** A managed deploy keys the provenance marker on the composite `telemetry=<logs OTLP endpoint>;audit=<audit ES url>` value (see [Placement is marker-aware](#placement-is-marker-aware-and-fail-if-foreign--across-all-scopes)) — a telemetry-only deploy leaves the audit half empty, an audit-only deploy the telemetry half — so `place`/`teardown` and the marker stay meaningful for every combination. (`teardown` carries no endpoints and enumerates every candidate target; an unplaced one is a harmless no-op.)
+**Managed marker.** A managed deploy writes the same three-line executor marker as every other scope; `teardown` enumerates every candidate target the config could have placed and treats an unplaced one as a harmless no-op.
 
 ## Bundles
 

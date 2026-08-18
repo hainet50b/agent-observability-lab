@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand};
 
 use agent_config::config::Config;
-use agent_config::model::{Agent, Cell, Os, Scope};
+use agent_config::model::{Agent, Cell, Concern, Os, Scope};
 use agent_config::seal::{self, SealSource};
 use agent_config::{agents, bundle, place, render};
 
@@ -23,8 +23,9 @@ struct Selection {
     /// Agent data-plane config declaring the telemetry / audit concerns
     #[arg(long, value_name = "FILE")]
     config: PathBuf,
-    #[arg(long, value_parser = Agent::parse)]
-    agent: Agent,
+    /// One or more agents (repeatable or comma-separated)
+    #[arg(long, value_parser = Agent::parse, value_delimiter = ',', required = true)]
+    agent: Vec<Agent>,
     /// Secrets overlay (default: agent-config.local.conf beside --config)
     #[arg(long, value_name = "FILE")]
     local_conf: Option<PathBuf>,
@@ -42,6 +43,9 @@ enum Command {
     Render {
         #[command(flatten)]
         selection: Selection,
+        /// Restrict to these concerns (repeatable or comma-separated; default: all declared)
+        #[arg(long, value_parser = Concern::parse, value_delimiter = ',')]
+        concern: Vec<Concern>,
         #[arg(long, value_parser = Scope::parse, default_value = "local")]
         scope: Scope,
         /// Target OS (defaults to the host OS)
@@ -58,13 +62,16 @@ enum Command {
     Place {
         #[command(flatten)]
         selection: Selection,
+        /// Restrict to these concerns (repeatable or comma-separated; default: all declared)
+        #[arg(long, value_parser = Concern::parse, value_delimiter = ',')]
+        concern: Vec<Concern>,
         #[arg(long, value_parser = Scope::parse, default_value = "local")]
         scope: Scope,
         /// Deploy directory (--scope project only)
         #[arg(long, value_name = "DIR")]
         target: Option<String>,
     },
-    /// Remove a placed bundle (only files whose marker matches this deploy)
+    /// Remove a placed bundle (only files whose marker carries this executor)
     Teardown {
         #[command(flatten)]
         selection: Selection,
@@ -110,34 +117,41 @@ fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::Render {
             selection,
+            concern,
             scope,
             os,
             target,
             out,
         } => {
-            let (cfg, seal) = load(&selection)?;
-            let cell = Cell {
-                agent: selection.agent,
-                scope,
-                os: resolve_os(os)?,
-                target: target.map(normalize_path),
-            };
-            if cell.scope == Scope::Managed && cell.target.is_some() {
+            let (cfg, seal) = load(&selection, &concern)?;
+            let os = resolve_os(os)?;
+            let target = target.map(normalize_path);
+            if scope == Scope::Managed && target.is_some() {
                 return Err("--scope managed does not take --target".into());
             }
-            let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
-            render::render(&entries, &out)
+            for agent in agents_of(&selection) {
+                let cell = Cell {
+                    agent,
+                    scope,
+                    os,
+                    target: target.clone(),
+                };
+                let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+                render::render(&entries, &out)?;
+            }
+            Ok(())
         }
         Command::Place {
             selection,
+            concern,
             scope,
             target,
-        } => deploy(&selection, scope, target, false),
+        } => deploy(&selection, &concern, scope, target, false),
         Command::Teardown {
             selection,
             scope,
             target,
-        } => deploy(&selection, scope, target, true),
+        } => deploy(&selection, &[], scope, target, true),
         Command::Bundle {
             selection,
             scope,
@@ -146,7 +160,7 @@ fn run(cli: Cli) -> Result<(), String> {
             out,
             all,
         } => {
-            let (cfg, seal) = load(&selection)?;
+            let (cfg, seal) = load(&selection, &[])?;
             let config_dir = config_dir(&selection.config);
             let target = target.map(normalize_path);
             let scopes = match scope {
@@ -164,19 +178,22 @@ fn run(cli: Cli) -> Result<(), String> {
                 out_dir: out.unwrap_or_else(|| config_dir.join("dist")),
                 emit_all: all,
             };
-            bundle::bundle(&cfg, seal.as_ref(), selection.agent, &config_dir, &run)
+            for agent in agents_of(&selection) {
+                bundle::bundle(&cfg, seal.as_ref(), agent, &config_dir, &run)?;
+            }
+            Ok(())
         }
     }
 }
 
 fn deploy(
     selection: &Selection,
+    concerns: &[Concern],
     scope: Scope,
     target: Option<String>,
     teardown: bool,
 ) -> Result<(), String> {
-    let (cfg, seal) = load(selection)?;
-    let endpoint = cfg.marker_endpoint(scope);
+    let (cfg, seal) = load(selection, concerns)?;
 
     if scope == Scope::Managed {
         if target.is_some() {
@@ -184,25 +201,29 @@ fn deploy(
         }
         let os = Os::detect()?;
         let mut confirm = place::TtyConfirm::new()?;
-        let root = PathBuf::from(match selection.agent {
-            Agent::Claude => agents::claude::managed_root(os),
-            Agent::Codex => agents::codex::managed_root(os),
-        });
-        if teardown {
-            let candidates = match selection.agent {
-                Agent::Claude => agents::claude::managed_candidates(&cfg, os),
-                Agent::Codex => agents::codex::managed_candidates(&cfg, os),
+        for agent in agents_of(selection) {
+            let root = PathBuf::from(match agent {
+                Agent::Claude => agents::claude::managed_root(os),
+                Agent::Codex => agents::codex::managed_root(os),
+            });
+            if teardown {
+                let candidates = match agent {
+                    Agent::Claude => agents::claude::managed_candidates(&cfg, os),
+                    Agent::Codex => agents::codex::managed_candidates(&cfg, os),
+                };
+                place::managed_teardown(&candidates, &root, &cfg.executor, &mut confirm)?;
+                continue;
+            }
+            let cell = Cell {
+                agent,
+                scope,
+                os,
+                target: None,
             };
-            return place::managed_teardown(&candidates, &root, &mut confirm);
+            let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+            place::managed_place(&entries, &cfg.executor, &mut confirm)?;
         }
-        let cell = Cell {
-            agent: selection.agent,
-            scope,
-            os,
-            target: None,
-        };
-        let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
-        return place::managed_place(&entries, selection.agent.name(), &endpoint, &mut confirm);
+        return Ok(());
     }
 
     let target_dir = match scope {
@@ -222,21 +243,39 @@ fn deploy(
         ),
         Scope::Managed => unreachable!("managed scope is handled above"),
     };
-    if teardown {
-        return place::teardown(selection.agent, &target_dir, &endpoint);
+    for agent in agents_of(selection) {
+        if teardown {
+            place::teardown(agent, &target_dir, &cfg.executor)?;
+            continue;
+        }
+        let cell = Cell {
+            agent,
+            scope,
+            os: Os::detect()?,
+            target: Some(canonical(&target_dir)?),
+        };
+        let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+        place::place(&entries, &target_dir, &cfg.executor)?;
     }
-    let cell = Cell {
-        agent: selection.agent,
-        scope,
-        os: Os::detect()?,
-        target: Some(canonical(&target_dir)?),
-    };
-    let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
-    place::place(&entries, &target_dir, selection.agent.name(), &endpoint)
+    Ok(())
 }
 
-fn load(selection: &Selection) -> Result<(Config, Option<SealSource>), String> {
-    let cfg = Config::load(&selection.config, selection.local_conf.as_deref())?;
+fn agents_of(selection: &Selection) -> Vec<Agent> {
+    let mut agents = Vec::new();
+    for &agent in &selection.agent {
+        if !agents.contains(&agent) {
+            agents.push(agent);
+        }
+    }
+    agents
+}
+
+fn load(
+    selection: &Selection,
+    concerns: &[Concern],
+) -> Result<(Config, Option<SealSource>), String> {
+    let mut cfg = Config::load(&selection.config, selection.local_conf.as_deref())?;
+    cfg.retain_concerns(concerns)?;
     let seal = match &cfg.audit {
         Some(audit) => seal::resolve(
             &config_dir(&selection.config),

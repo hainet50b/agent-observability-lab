@@ -29,6 +29,31 @@ impl Agent {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Concern {
+    Telemetry,
+    Audit,
+}
+
+impl Concern {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "telemetry" => Ok(Concern::Telemetry),
+            "audit" => Ok(Concern::Audit),
+            other => Err(format!(
+                "--concern must be telemetry or audit (got '{other}')"
+            )),
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Concern::Telemetry => "telemetry",
+            Concern::Audit => "audit",
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Scope {
     Local,
     Project,

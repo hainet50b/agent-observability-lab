@@ -9,7 +9,6 @@ use zip::write::SimpleFileOptions;
 
 use crate::config::Config;
 use crate::model::{Agent, Cell, Os, Scope};
-use crate::owner::OWNER;
 use crate::seal::SealSource;
 
 const LEDGER_NAME: &str = "bundle-versions.conf";
@@ -99,12 +98,18 @@ pub fn bundle(
             }
 
             files.push(RenderedFile {
-                rel: version_file_rel(agent, &cell)?,
+                rel: version_file_rel(&cfg.executor, agent, &cell)?,
                 bytes: format!("{version}\n").into_bytes(),
                 executable: false,
             });
 
-            let prefix = format!("{OWNER}-{}-{}-{}-", agent.name(), scope.name(), os.name());
+            let prefix = format!(
+                "{}-{}-{}-{}-",
+                cfg.executor,
+                agent.name(),
+                scope.name(),
+                os.name()
+            );
             remove_stale_archives(&run.out_dir, &prefix)?;
             let archive = run.out_dir.join(format!("{prefix}{version}.zip"));
             write_zip(&archive, &files)?;
@@ -154,8 +159,8 @@ fn rendered_files(
     Ok(files)
 }
 
-fn version_file_rel(agent: Agent, cell: &Cell) -> Result<String, String> {
-    let version_file = format!("{OWNER}.version");
+fn version_file_rel(executor: &str, agent: Agent, cell: &Cell) -> Result<String, String> {
+    let version_file = format!("{executor}.version");
     match cell.scope {
         Scope::Managed => {
             let root = match agent {

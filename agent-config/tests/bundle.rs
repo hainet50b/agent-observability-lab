@@ -75,7 +75,7 @@ fn bundles_managed_cells_with_a_version_ledger() {
     assert!(
         archives
             .iter()
-            .all(|n| n.starts_with("agent-observability-lab-claude-managed-")),
+            .all(|n| n.starts_with("agent-config-claude-managed-")),
         "{archives:?}"
     );
 
@@ -153,18 +153,16 @@ fn archive_carries_the_rendered_tree_and_version_file() {
         .map(|i| zip.by_index(i).unwrap().name().to_string())
         .collect();
     assert!(
-        names.contains(
-            &"etc/claude-code/managed-settings.d/10-agent-observability-lab.json".to_string()
-        ),
+        names.contains(&"etc/claude-code/managed-settings.d/10-agent-config.json".to_string()),
         "{names:?}"
     );
     assert!(
-        names.contains(&"etc/claude-code/agent-observability-lab.version".to_string()),
+        names.contains(&"etc/claude-code/agent-config.version".to_string()),
         "{names:?}"
     );
 
     let mut fragment = String::new();
-    zip.by_name("etc/claude-code/managed-settings.d/10-agent-observability-lab.json")
+    zip.by_name("etc/claude-code/managed-settings.d/10-agent-config.json")
         .unwrap()
         .read_to_string(&mut fragment)
         .unwrap();
@@ -194,7 +192,7 @@ fn local_bundle_bakes_the_stack_dir_and_project_needs_a_target() {
         "project without --target is skipped: {archives:?}"
     );
     assert!(
-        archives[0].starts_with("agent-observability-lab-claude-local-linux-"),
+        archives[0].starts_with("agent-config-claude-local-linux-"),
         "{archives:?}"
     );
 

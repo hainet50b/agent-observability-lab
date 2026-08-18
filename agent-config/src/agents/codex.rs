@@ -1,7 +1,6 @@
 use crate::assets;
 use crate::config::{Config, Telemetry};
 use crate::model::{Cell, Content, Entry, Flavor, Location, Os, Scope, Section};
-use crate::owner::OWNER;
 use crate::seal::SealSource;
 
 pub fn managed_root(os: Os) -> &'static str {
@@ -49,7 +48,7 @@ pub fn managed_candidates(cfg: &Config, os: Os) -> Vec<(String, String)> {
             format!("{root}/requirements.toml"),
         ));
         candidates.extend(crate::agents::claude::hook_candidates(
-            &format!("{root}/hooks/{OWNER}"),
+            &format!("{root}/hooks/{}", cfg.executor),
             os,
         ));
     }
@@ -147,7 +146,7 @@ fn managed_entries(cfg: &Config, cell: &Cell, seal: Option<&SealSource>) -> Vec<
     let mut entries = Vec::new();
 
     if let Some(audit) = &cfg.audit {
-        let hooks_root = format!("{root}/hooks/{OWNER}");
+        let hooks_root = format!("{root}/hooks/{}", cfg.executor);
         entries.push(Entry::marked_file(
             "requirements",
             Location::Host(format!("{root}/requirements.toml")),

@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/etc/claude-code/hooks/agent-observability-lab/agent-audit.sh' --stream user_prompt --config '/etc/claude-code/hooks/agent-observability-lab/agent-audit.conf'",
+            "command": "'/etc/claude-code/hooks/agent-config/agent-audit.sh' --stream user_prompt --config '/etc/claude-code/hooks/agent-config/agent-audit.conf'",
             "timeout": 10
           }
         ]
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/etc/claude-code/hooks/agent-observability-lab/agent-audit.sh' --stream tool_call --config '/etc/claude-code/hooks/agent-observability-lab/agent-audit.conf'",
+            "command": "'/etc/claude-code/hooks/agent-config/agent-audit.sh' --stream tool_call --config '/etc/claude-code/hooks/agent-config/agent-audit.conf'",
             "timeout": 10
           }
         ]

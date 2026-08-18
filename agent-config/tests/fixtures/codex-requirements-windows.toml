@@ -2,7 +2,7 @@
 # schema: https://github.com/openai/codex/blob/main/codex-rs/config/src/hook_config.rs
 
 allow_managed_hooks_only = false
-windows_managed_dir = 'C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab'
+windows_managed_dir = 'C:\ProgramData\OpenAI\Codex\hooks\agent-config'
 
 [features]
 hooks = true
@@ -14,8 +14,8 @@ hooks = true
 
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = '"C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.sh" --stream user_prompt --config "C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.conf"'
-commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.ps1" -Stream user_prompt -Config "C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.conf"'
+command = '"C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.sh" --stream user_prompt --config "C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.ps1" -Stream user_prompt -Config "C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.conf"'
 timeout = 10
 statusMessage = "Delivering UserPromptSubmit audit document"
 
@@ -23,7 +23,7 @@ statusMessage = "Delivering UserPromptSubmit audit document"
 
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = '"C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.sh" --stream tool_call --config "C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.conf"'
-commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.ps1" -Stream tool_call -Config "C:\ProgramData\OpenAI\Codex\hooks\agent-observability-lab\agent-audit.conf"'
+command = '"C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.sh" --stream tool_call --config "C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.conf"'
+commandWindows = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.ps1" -Stream tool_call -Config "C:\ProgramData\OpenAI\Codex\hooks\agent-config\agent-audit.conf"'
 timeout = 10
 statusMessage = "Delivering PostToolUse audit document"

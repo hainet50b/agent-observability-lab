@@ -2,20 +2,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::model::{Agent, Content, Entry, Location};
-use crate::owner::OWNER;
 
 const MARKER_SUFFIX: &str = ".managed";
 
-pub fn place(
-    entries: &[Entry],
-    target_dir: &Path,
-    agent: &str,
-    endpoint: &str,
-) -> Result<(), String> {
+pub fn place(entries: &[Entry], target_dir: &Path, executor: &str) -> Result<(), String> {
     for entry in entries {
         let path = target_path(entry, target_dir)?;
         if entry_is_marked(entry) {
-            assert_ours_or_absent(&entry.key, endpoint, &path)?;
+            assert_ours_or_absent(&entry.key, executor, &path)?;
         }
     }
 
@@ -29,7 +23,7 @@ pub fn place(
             } => {
                 write_file(&entry.key, &path, bytes, *executable)?;
                 if *marked {
-                    write_marker(agent, endpoint, &path)?;
+                    write_marker(executor, &path)?;
                 }
                 log(&format!("{}: wrote {}", entry.key, path.display()));
             }
@@ -54,7 +48,7 @@ pub fn place(
                     crate::model::json_pretty(&merged).as_bytes(),
                     false,
                 )?;
-                write_marker(agent, endpoint, &path)?;
+                write_marker(executor, &path)?;
                 log(&format!("{}: wrote {}", entry.key, path.display()));
             }
             Content::TomlSections(sections) => {
@@ -85,31 +79,31 @@ pub fn place(
                 } else {
                     let texts: Vec<&str> = sections.iter().map(|s| s.text.as_str()).collect();
                     write_file(&entry.key, &path, texts.join("\n").as_bytes(), false)?;
-                    write_marker(agent, endpoint, &path)?;
+                    write_marker(executor, &path)?;
                     log(&format!("{}: wrote {}", entry.key, path.display()));
                 }
             }
             Content::AuthLink { source } => {
-                place_auth_link(&entry.key, source, &path, agent, endpoint)?;
+                place_auth_link(&entry.key, source, &path, executor)?;
             }
         }
     }
     Ok(())
 }
 
-pub fn teardown(agent: Agent, target_dir: &Path, endpoint: &str) -> Result<(), String> {
+pub fn teardown(agent: Agent, target_dir: &Path, executor: &str) -> Result<(), String> {
     let (targets, hooks_dir, anchor) = match agent {
         Agent::Claude => crate::agents::claude::teardown_targets(),
         Agent::Codex => crate::agents::codex::teardown_targets(),
     };
 
     let anchor_path = target_dir.join(anchor);
-    let hooks_owned = marker_field(&marker_path(&anchor_path), "endpoint")
-        .is_some_and(|marker_endpoint| marker_endpoint == endpoint);
+    let hooks_owned = marker_field(&marker_path(&anchor_path), "executor")
+        .is_some_and(|marker_executor| marker_executor == executor);
 
     let mut failed = false;
     for (key, rel) in targets {
-        remove_file(key, endpoint, &target_dir.join(rel), &mut failed);
+        remove_file(key, executor, &target_dir.join(rel), &mut failed);
     }
 
     let hooks_path = target_dir.join(hooks_dir);
@@ -182,8 +176,7 @@ impl Confirm for TtyConfirm {
 
 pub fn managed_place(
     entries: &[Entry],
-    agent: &str,
-    endpoint: &str,
+    executor: &str,
     confirm: &mut dyn Confirm,
 ) -> Result<(), String> {
     let mut failed = false;
@@ -205,7 +198,7 @@ pub fn managed_place(
                 continue;
             }
             install_file(key, &path, &bytes, executable)?;
-            if let Err(e) = write_marker(agent, endpoint, &path) {
+            if let Err(e) = write_marker(executor, &path) {
                 let _ = fs::remove_file(&path);
                 return Err(format!(
                     "{key}: {e} — rolled back {} so it is not left unmarked",
@@ -224,10 +217,11 @@ pub fn managed_place(
             failed = true;
             continue;
         }
-        let existing_endpoint = marker_field(&marker, "endpoint").unwrap_or_default();
-        if existing_endpoint != endpoint {
+        let existing_executor = marker_field(&marker, "executor").unwrap_or_default();
+        if existing_executor != executor {
             log(&format!(
-                "{key}: REFUSED — this host already enforces {existing_endpoint}; run teardown first."
+                "{key}: REFUSED — {} is owned by executor '{existing_executor}', not '{executor}'. Not touched.",
+                path.display()
             ));
             failed = true;
             continue;
@@ -247,7 +241,7 @@ pub fn managed_place(
             continue;
         }
         install_file(key, &path, &bytes, executable)?;
-        write_marker(agent, endpoint, &path).map_err(|e| {
+        write_marker(executor, &path).map_err(|e| {
             format!(
                 "{key}: updated {} but {e} — remove it manually",
                 path.display()
@@ -267,6 +261,7 @@ pub fn managed_place(
 pub fn managed_teardown(
     candidates: &[(String, String)],
     root: &Path,
+    executor: &str,
     confirm: &mut dyn Confirm,
 ) -> Result<(), String> {
     let mut failed = false;
@@ -288,11 +283,18 @@ pub fn managed_teardown(
             failed = true;
             continue;
         }
-        let tool = marker_field(&marker, "tool").unwrap_or_default();
-        let agent = marker_field(&marker, "agent").unwrap_or_default();
-        let endpoint = marker_field(&marker, "endpoint").unwrap_or_default();
+        let marker_executor = marker_field(&marker, "executor").unwrap_or_default();
+        if marker_executor != executor {
+            log(&format!(
+                "{key}: REFUSED — {} is owned by executor '{marker_executor}', not '{executor}'. Not removed.",
+                path.display()
+            ));
+            failed = true;
+            continue;
+        }
+        let placed_at = marker_field(&marker, "placed_at").unwrap_or_default();
         if !confirm.confirm(&format!(
-            "Remove managed {key} at {} (tool='{tool}' agent='{agent}' endpoint='{endpoint}')?",
+            "Remove managed {key} at {} (executor='{marker_executor}' placed_at='{placed_at}')?",
             path.display()
         ))? {
             continue;
@@ -403,7 +405,7 @@ fn install_file(key: &str, path: &Path, bytes: &[u8], executable: bool) -> Resul
     Ok(())
 }
 
-fn remove_file(key: &str, endpoint: &str, path: &Path, failed: &mut bool) {
+fn remove_file(key: &str, executor: &str, path: &Path, failed: &mut bool) {
     let marker = marker_path(path);
     let exists = path.symlink_metadata().is_ok();
     if !exists && !marker.is_file() {
@@ -420,11 +422,11 @@ fn remove_file(key: &str, endpoint: &str, path: &Path, failed: &mut bool) {
         ));
         return;
     }
-    if marker_field(&marker, "endpoint").as_deref() != Some(endpoint) {
+    if marker_field(&marker, "executor").as_deref() != Some(executor) {
         log(&format!(
-            "{key}: REFUSED — {} carries a different endpoint ({}). Not removed.",
+            "{key}: REFUSED — {} is owned by executor '{}', not '{executor}'. Not removed.",
             path.display(),
-            marker_field(&marker, "endpoint").unwrap_or_default()
+            marker_field(&marker, "executor").unwrap_or_default()
         ));
         *failed = true;
         return;
@@ -447,13 +449,7 @@ fn remove_file(key: &str, endpoint: &str, path: &Path, failed: &mut bool) {
     log(&format!("{key}: removed {} and its marker", path.display()));
 }
 
-fn place_auth_link(
-    key: &str,
-    source: &Path,
-    path: &Path,
-    agent: &str,
-    endpoint: &str,
-) -> Result<(), String> {
+fn place_auth_link(key: &str, source: &Path, path: &Path, executor: &str) -> Result<(), String> {
     if !source.exists() {
         log(&format!(
             "{key}: no {} found; run 'codex login' under CODEX_HOME ({})",
@@ -493,7 +489,7 @@ fn place_auth_link(
             path.display()
         ));
     }
-    write_marker(agent, endpoint, path)?;
+    write_marker(executor, path)?;
     Ok(())
 }
 
@@ -524,7 +520,7 @@ fn entry_is_marked(entry: &Entry) -> bool {
     }
 }
 
-fn assert_ours_or_absent(key: &str, endpoint: &str, path: &Path) -> Result<(), String> {
+fn assert_ours_or_absent(key: &str, executor: &str, path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
@@ -535,10 +531,10 @@ fn assert_ours_or_absent(key: &str, endpoint: &str, path: &Path) -> Result<(), S
             path.display()
         ));
     }
-    let marker_endpoint = marker_field(&marker, "endpoint").unwrap_or_default();
-    if marker_endpoint != endpoint {
+    let marker_executor = marker_field(&marker, "executor").unwrap_or_default();
+    if marker_executor != executor {
         return Err(format!(
-            "{key}: REFUSED — {} carries a different endpoint ({marker_endpoint}); run teardown first. Not touched.",
+            "{key}: REFUSED — {} is owned by executor '{marker_executor}', not '{executor}'. Not touched.",
             path.display()
         ));
     }
@@ -559,10 +555,10 @@ fn marker_field(marker: &Path, field: &str) -> Option<String> {
         .map(|(_, value)| value.to_string())
 }
 
-fn write_marker(agent: &str, endpoint: &str, target: &Path) -> Result<(), String> {
+fn write_marker(executor: &str, target: &Path) -> Result<(), String> {
     let marker = marker_path(target);
     let content = format!(
-        "tool={OWNER}\nagent={agent}\nendpoint={endpoint}\nplaced_at={}\ntarget={}\n",
+        "executor={executor}\nplaced_at={}\ntarget={}\n",
         crate::clock::utc_now_iso(),
         target.display()
     );

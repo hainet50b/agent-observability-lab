@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use agent_config::agents;
 use agent_config::config::Config;
-use agent_config::model::{Agent, Cell, Os, Scope};
+use agent_config::model::{Agent, Cell, Concern, Os, Scope};
 use agent_config::render;
 
 const AUDIT_CONF: &str = r#"
@@ -208,15 +208,15 @@ fn managed_audit_linux() {
     let root = "etc/claude-code";
     assert_file(
         &out,
-        &format!("{root}/managed-settings.d/10-agent-observability-lab.json"),
+        &format!("{root}/managed-settings.d/10-agent-config.json"),
         include_str!("fixtures/managed-audit-linux.fragment.json"),
     );
     assert_file(
         &out,
-        &format!("{root}/hooks/agent-observability-lab/agent-audit.conf"),
+        &format!("{root}/hooks/agent-config/agent-audit.conf"),
         include_str!("fixtures/agent-audit-basic.conf"),
     );
-    assert_hook_assets(&out, &format!("{root}/hooks/agent-observability-lab"), "sh");
+    assert_hook_assets(&out, &format!("{root}/hooks/agent-config"), "sh");
 }
 
 #[test]
@@ -232,14 +232,10 @@ fn managed_audit_windows() {
     let root = "C/Program Files/ClaudeCode";
     assert_file(
         &out,
-        &format!("{root}/managed-settings.d/10-agent-observability-lab.json"),
+        &format!("{root}/managed-settings.d/10-agent-config.json"),
         include_str!("fixtures/managed-audit-windows.fragment.json"),
     );
-    assert_hook_assets(
-        &out,
-        &format!("{root}/hooks/agent-observability-lab"),
-        "ps1",
-    );
+    assert_hook_assets(&out, &format!("{root}/hooks/agent-config"), "ps1");
 }
 
 #[test]
@@ -252,12 +248,12 @@ fn managed_audit_macos_paths() {
         Os::Macos,
         None,
     );
-    let fragment = fs::read_to_string(out.join(
-        "Library/Application Support/ClaudeCode/managed-settings.d/10-agent-observability-lab.json",
-    ))
+    let fragment = fs::read_to_string(
+        out.join("Library/Application Support/ClaudeCode/managed-settings.d/10-agent-config.json"),
+    )
     .unwrap();
     assert!(fragment.contains(
-        "'/Library/Application Support/ClaudeCode/hooks/agent-observability-lab/agent-audit.sh' --stream user_prompt"
+        "'/Library/Application Support/ClaudeCode/hooks/agent-config/agent-audit.sh' --stream user_prompt"
     ));
 }
 
@@ -273,7 +269,7 @@ fn managed_telemetry_linux_drops_empty_headers() {
     );
     assert_file(
         &out,
-        "etc/claude-code/managed-settings.d/10-agent-observability-lab.json",
+        "etc/claude-code/managed-settings.d/10-agent-config.json",
         include_str!("fixtures/managed-telemetry-linux.fragment.json"),
     );
     assert!(
@@ -295,7 +291,7 @@ fn managed_combined_linux() {
     );
     assert_file(
         &out,
-        "etc/claude-code/managed-settings.d/10-agent-observability-lab.json",
+        "etc/claude-code/managed-settings.d/10-agent-config.json",
         include_str!("fixtures/managed-combined-linux.fragment.json"),
     );
 }
@@ -455,10 +451,10 @@ fn codex_managed_audit_linux() {
     );
     assert_file(
         &out,
-        "etc/codex/hooks/agent-observability-lab/agent-audit.conf",
+        "etc/codex/hooks/agent-config/agent-audit.conf",
         include_str!("fixtures/agent-audit-basic.conf"),
     );
-    assert_codex_hook_assets(&out, "etc/codex/hooks/agent-observability-lab", "sh");
+    assert_codex_hook_assets(&out, "etc/codex/hooks/agent-config", "sh");
     assert!(!out.join("etc/codex/managed_config.toml").exists());
 }
 
@@ -477,11 +473,7 @@ fn codex_managed_audit_windows() {
         "C/ProgramData/OpenAI/Codex/requirements.toml",
         include_str!("fixtures/codex-requirements-windows.toml"),
     );
-    assert_codex_hook_assets(
-        &out,
-        "C/ProgramData/OpenAI/Codex/hooks/agent-observability-lab",
-        "ps1",
-    );
+    assert_codex_hook_assets(&out, "C/ProgramData/OpenAI/Codex/hooks/agent-config", "ps1");
 }
 
 #[test]
@@ -618,4 +610,74 @@ endpoit = \"http://x\"
     fs::write(&conf_path, "").unwrap();
     let err = Config::load(&conf_path, None).unwrap_err();
     assert!(err.contains("declares neither"), "{err}");
+}
+
+#[test]
+fn executor_key_renames_managed_artifacts() {
+    let conf = format!("[agent_config]\nexecutor = \"custom-exec\"\n{AUDIT_CONF}");
+    let out = render_cell(
+        "managed-executor-key",
+        &conf,
+        None,
+        Scope::Managed,
+        Os::Linux,
+        None,
+    );
+    let fragment =
+        fs::read_to_string(out.join("etc/claude-code/managed-settings.d/10-custom-exec.json"))
+            .unwrap();
+    assert!(
+        fragment.contains("/etc/claude-code/hooks/custom-exec/agent-audit.sh"),
+        "{fragment}"
+    );
+    assert_hook_assets(&out, "etc/claude-code/hooks/custom-exec", "sh");
+}
+
+#[test]
+fn empty_executor_is_rejected() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("empty-executor");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(
+        &conf_path,
+        format!("[agent_config]\nexecutor = \"\"\n{TELEMETRY_CONF}"),
+    )
+    .unwrap();
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(err.contains("agent_config.executor"), "{err}");
+}
+
+#[test]
+fn concern_filter_drops_the_unselected_plane() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("concern-filter");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(&conf_path, format!("{TELEMETRY_CONF}{AUDIT_CONF}")).unwrap();
+
+    let mut cfg = Config::load(&conf_path, None).unwrap();
+    cfg.retain_concerns(&[Concern::Telemetry]).unwrap();
+    assert!(cfg.telemetry.is_some());
+    assert!(cfg.audit.is_none(), "unselected concern must be dropped");
+
+    let mut cfg = Config::load(&conf_path, None).unwrap();
+    cfg.retain_concerns(&[]).unwrap();
+    assert!(
+        cfg.telemetry.is_some() && cfg.audit.is_some(),
+        "no filter keeps everything declared"
+    );
+}
+
+#[test]
+fn concern_filter_rejects_an_undeclared_concern() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("concern-undeclared");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(&conf_path, TELEMETRY_CONF).unwrap();
+
+    let mut cfg = Config::load(&conf_path, None).unwrap();
+    let err = cfg.retain_concerns(&[Concern::Audit]).unwrap_err();
+    assert!(err.contains("[agent_audit]"), "{err}");
 }

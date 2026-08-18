@@ -3,15 +3,23 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::model::Scope;
+use crate::model::Concern;
 
 pub const DEFAULT_OVERLAY: &str = "agent-config.local.toml";
+pub const DEFAULT_EXECUTOR: &str = "agent-config";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ConfFile {
+    agent_config: Option<AgentConfigFile>,
     telemetry: Option<TelemetryFile>,
     agent_audit: Option<AuditFile>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgentConfigFile {
+    executor: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,6 +130,7 @@ pub struct Audit {
 
 #[derive(Debug)]
 pub struct Config {
+    pub executor: String,
     pub telemetry: Option<Telemetry>,
     pub audit: Option<Audit>,
 }
@@ -132,6 +141,14 @@ impl Config {
             .map_err(|_| format!("config file not found: {}", path.display()))?;
         let file: ConfFile =
             toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+
+        let executor = match file.agent_config {
+            Some(a) => {
+                require(path, "agent_config.executor", &a.executor)?;
+                a.executor
+            }
+            None => DEFAULT_EXECUTOR.into(),
+        };
 
         let mut telemetry = file
             .telemetry
@@ -195,38 +212,40 @@ impl Config {
             Err(_) => {}
         }
 
-        Ok(Config { telemetry, audit })
+        Ok(Config {
+            executor,
+            telemetry,
+            audit,
+        })
     }
 
-    pub fn marker_endpoint(&self, scope: Scope) -> String {
-        match scope {
-            Scope::Managed => format!(
-                "telemetry={};audit={}",
-                self.telemetry
-                    .as_ref()
-                    .map(|t| format!("{}/v1/logs", t.endpoint))
-                    .unwrap_or_default(),
-                self.audit
-                    .as_ref()
-                    .map(|a| a.es_url.clone())
-                    .unwrap_or_default()
-            ),
-            Scope::Local | Scope::Project => match (&self.telemetry, &self.audit) {
-                (Some(t), None) => t.endpoint.clone(),
-                (None, Some(a)) => a.es_url.clone(),
-                _ => format!(
-                    "telemetry={};audit={}",
-                    self.telemetry
-                        .as_ref()
-                        .map(|t| t.endpoint.clone())
-                        .unwrap_or_default(),
-                    self.audit
-                        .as_ref()
-                        .map(|a| a.es_url.clone())
-                        .unwrap_or_default()
-                ),
-            },
+    pub fn retain_concerns(&mut self, concerns: &[Concern]) -> Result<(), String> {
+        if concerns.is_empty() {
+            return Ok(());
         }
+        for &concern in concerns {
+            let declared = match concern {
+                Concern::Telemetry => self.telemetry.is_some(),
+                Concern::Audit => self.audit.is_some(),
+            };
+            if !declared {
+                return Err(format!(
+                    "--concern {} requested but the config declares no {} table",
+                    concern.name(),
+                    match concern {
+                        Concern::Telemetry => "[telemetry]",
+                        Concern::Audit => "[agent_audit]",
+                    }
+                ));
+            }
+        }
+        if !concerns.contains(&Concern::Telemetry) {
+            self.telemetry = None;
+        }
+        if !concerns.contains(&Concern::Audit) {
+            self.audit = None;
+        }
+        Ok(())
     }
 }
 

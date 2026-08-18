@@ -62,13 +62,7 @@ fn managed_place_confirms_and_marks_each_file() {
         host_entry("fragment", &root, "managed-settings.d/10-lab.json", "{}\n"),
         host_entry("hook:conf", &root, "hooks/lab/agent-audit.conf", "a=1\n"),
     ];
-    place::managed_place(
-        &entries,
-        "claude",
-        "telemetry=;audit=http://x:9200",
-        &mut YesAll,
-    )
-    .unwrap();
+    place::managed_place(&entries, "agent-config", &mut YesAll).unwrap();
 
     for rel in [
         "managed-settings.d/10-lab.json",
@@ -76,11 +70,9 @@ fn managed_place_confirms_and_marks_each_file() {
     ] {
         assert!(root.join(rel).is_file(), "missing {rel}");
         let marker = fs::read_to_string(root.join(format!("{rel}.managed"))).unwrap();
-        assert!(marker.contains("tool=agent-observability-lab"), "{marker}");
-        assert!(
-            marker.contains("endpoint=telemetry=;audit=http://x:9200"),
-            "{marker}"
-        );
+        assert!(marker.contains("executor=agent-config"), "{marker}");
+        assert!(marker.contains("placed_at="), "{marker}");
+        assert!(!marker.contains("endpoint="), "{marker}");
     }
 }
 
@@ -91,7 +83,7 @@ fn managed_place_decline_skips_the_file() {
         host_entry("one", &root, "one.json", "1\n"),
         host_entry("two", &root, "two.json", "2\n"),
     ];
-    place::managed_place(&entries, "claude", "e", &mut Scripted(vec!["n", "y"])).unwrap();
+    place::managed_place(&entries, "agent-config", &mut Scripted(vec!["n", "y"])).unwrap();
     assert!(
         !root.join("one.json").exists(),
         "declined file must not be placed"
@@ -115,7 +107,7 @@ fn managed_place_refuses_foreign_files() {
         "managed-settings.d/10-lab.json",
         "{}\n",
     )];
-    let err = place::managed_place(&entries, "claude", "e", &mut NeverAsked).unwrap_err();
+    let err = place::managed_place(&entries, "agent-config", &mut NeverAsked).unwrap_err();
     assert!(err.contains("refused"), "{err}");
     assert_eq!(
         fs::read_to_string(root.join("managed-settings.d/10-lab.json")).unwrap(),
@@ -125,12 +117,12 @@ fn managed_place_refuses_foreign_files() {
 }
 
 #[test]
-fn managed_place_refuses_a_different_enforced_endpoint() {
-    let root = workspace("managed-place-endpoint");
+fn managed_place_refuses_a_different_executor() {
+    let root = workspace("managed-place-executor");
     let entries = vec![host_entry("fragment", &root, "10-lab.json", "{}\n")];
-    place::managed_place(&entries, "claude", "endpoint-A", &mut YesAll).unwrap();
+    place::managed_place(&entries, "executor-a", &mut YesAll).unwrap();
 
-    let err = place::managed_place(&entries, "claude", "endpoint-B", &mut NeverAsked).unwrap_err();
+    let err = place::managed_place(&entries, "executor-b", &mut NeverAsked).unwrap_err();
     assert!(err.contains("refused"), "{err}");
 }
 
@@ -138,8 +130,8 @@ fn managed_place_refuses_a_different_enforced_endpoint() {
 fn managed_place_identical_content_is_a_noop_without_confirm() {
     let root = workspace("managed-place-noop");
     let entries = vec![host_entry("fragment", &root, "10-lab.json", "{}\n")];
-    place::managed_place(&entries, "claude", "e", &mut YesAll).unwrap();
-    place::managed_place(&entries, "claude", "e", &mut NeverAsked).unwrap();
+    place::managed_place(&entries, "agent-config", &mut YesAll).unwrap();
+    place::managed_place(&entries, "agent-config", &mut NeverAsked).unwrap();
 }
 
 #[test]
@@ -147,15 +139,13 @@ fn managed_place_update_needs_a_fresh_confirm() {
     let root = workspace("managed-place-update");
     place::managed_place(
         &[host_entry("fragment", &root, "10-lab.json", "old\n")],
-        "claude",
-        "e",
+        "agent-config",
         &mut YesAll,
     )
     .unwrap();
     place::managed_place(
         &[host_entry("fragment", &root, "10-lab.json", "new\n")],
-        "claude",
-        "e",
+        "agent-config",
         &mut Scripted(vec!["y"]),
     )
     .unwrap();
@@ -172,7 +162,7 @@ fn managed_teardown_removes_marked_files_and_sweeps_empty_dirs() {
         host_entry("fragment", &root, "managed-settings.d/10-lab.json", "{}\n"),
         host_entry("hook:conf", &root, "hooks/lab/agent-audit.conf", "a=1\n"),
     ];
-    place::managed_place(&entries, "claude", "e", &mut YesAll).unwrap();
+    place::managed_place(&entries, "agent-config", &mut YesAll).unwrap();
 
     let candidates: Vec<(String, String)> = [
         ("fragment", "managed-settings.d/10-lab.json"),
@@ -188,7 +178,7 @@ fn managed_teardown_removes_marked_files_and_sweeps_empty_dirs() {
     })
     .collect();
 
-    place::managed_teardown(&candidates, &root, &mut YesAll).unwrap();
+    place::managed_teardown(&candidates, &root, "agent-config", &mut YesAll).unwrap();
     assert!(!root.exists(), "empty managed root must be swept away");
 }
 
@@ -203,10 +193,30 @@ fn managed_teardown_refuses_unmarked_files() {
             root.display().to_string().replace('\\', "/")
         ),
     )];
-    let err = place::managed_teardown(&candidates, &root, &mut NeverAsked).unwrap_err();
+    let err =
+        place::managed_teardown(&candidates, &root, "agent-config", &mut NeverAsked).unwrap_err();
     assert!(err.contains("refused"), "{err}");
     assert!(
         root.join("10-lab.json").is_file(),
         "foreign file must remain"
     );
+}
+
+#[test]
+fn managed_teardown_refuses_a_different_executor() {
+    let root = workspace("managed-teardown-executor");
+    let entries = vec![host_entry("fragment", &root, "10-lab.json", "{}\n")];
+    place::managed_place(&entries, "executor-a", &mut YesAll).unwrap();
+
+    let candidates = vec![(
+        "fragment".to_string(),
+        format!(
+            "{}/10-lab.json",
+            root.display().to_string().replace('\\', "/")
+        ),
+    )];
+    let err =
+        place::managed_teardown(&candidates, &root, "executor-b", &mut NeverAsked).unwrap_err();
+    assert!(err.contains("refused"), "{err}");
+    assert!(root.join("10-lab.json").is_file(), "file must remain");
 }
