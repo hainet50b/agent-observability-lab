@@ -1,0 +1,11 @@
+# Secrets overlay for a copied agent-config.toml — copy this file beside your
+# copy as agent-config.local.toml (gitignored). Only needed when the backend
+# requires authentication; absent/empty keys ship no credential.
+
+# Sent as `Authorization: ApiKey <key>` on OTLP exports.
+[telemetry.apm_server]
+api_key = ""
+
+# Sent as `Authorization: ApiKey <key>` when posting audit docs.
+[agent_audit.elasticsearch]
+api_key = ""
