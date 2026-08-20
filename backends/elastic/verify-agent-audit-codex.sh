@@ -79,20 +79,18 @@ assert_landed() {
   fail "no audit document landed in $stream for conversation_id=$cid within timeout"
 }
 
-fetch_src() {
+fetch_hit() {
   stream=$1 cid=$2
   curl -s "$ES_URL/$stream/_search?ignore_unavailable=true&allow_no_indices=true" \
     -H 'Content-Type: application/json' \
     --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-    jq -c '.hits.hits[0]._source'
+    jq -c '.hits.hits[0]'
 }
 
 cleanup_doc() {
-  stream=$1 cid=$2
-  curl -s -X POST "$ES_URL/$stream/_delete_by_query?refresh=true&ignore_unavailable=true" \
-    -H 'Content-Type: application/json' \
-    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-    jq -r '"[cleanup] deleted \(.deleted // 0) document(s)"'
+  idx=$1 id=$2
+  curl -s -X DELETE "$ES_URL/$idx/_doc/$id?refresh=true" |
+    jq -r '"[cleanup] deleted \(._id) (result=\(.result))"'
 }
 
 assert_account_id() {
@@ -125,7 +123,8 @@ payload=$(jq -nc --arg cid "$cid" '{
 printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --stream user_prompt --config "$CODEX_HOME_DIR/hooks/agent-audit.conf" || true
 
 assert_landed "$UP_STREAM" "$cid"
-src=$(fetch_src "$UP_STREAM" "$cid")
+hit=$(fetch_hit "$UP_STREAM" "$cid")
+src=$(echo "$hit" | jq -c '._source')
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) host.name=\(.host.name) host.hostname=\(.host.hostname) provider=\(.agent_audit.agent.provider) model=\(.agent_audit.agent.model) user_prompt.length=\(.agent_audit.user_prompt.length)"'
 hhost=$(echo "$src" | jq -r '.host.hostname // empty')
 [ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
@@ -143,8 +142,8 @@ echo "[assert] user.id derived (user.id=$uid) ✓"
 
 assert_account_id "$src"
 
-echo "[cleanup] removing the synthetic verification document…"
-cleanup_doc "$UP_STREAM" "$cid"
+echo "[cleanup] removing the synthetic verification document by id…"
+cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
 # --- tool_call stream ---
 
@@ -168,7 +167,8 @@ payload=$(jq -nc --arg cid "$cid" '{
 printf '%s' "$payload" | CODEX_HOME="$CODEX_HOME_DIR" bash "$HOOK" --stream tool_call --config "$CODEX_HOME_DIR/hooks/agent-audit.conf" || true
 
 assert_landed "$TC_STREAM" "$cid"
-src=$(fetch_src "$TC_STREAM" "$cid")
+hit=$(fetch_hit "$TC_STREAM" "$cid")
+src=$(echo "$hit" | jq -c '._source')
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) tool=\(.agent_audit.tool_call.tool.name) call_id=\(.agent_audit.tool_call.tool.call_id) input.length=\(.agent_audit.tool_call.input.length) output.length=\(.agent_audit.tool_call.output.length)"'
 
 [ "$(echo "$src" | jq -r '.event.action')" = tool-call ] || fail "event.action is not 'tool-call'"
@@ -198,8 +198,8 @@ echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, account/org
 
 assert_account_id "$src"
 
-echo "[cleanup] removing the synthetic verification document…"
-cleanup_doc "$TC_STREAM" "$cid"
+echo "[cleanup] removing the synthetic verification document by id…"
+cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
 echo
 echo "PASS: Codex UserPromptSubmit + PostToolUse hooks -> agent_audit stream delivery verified."

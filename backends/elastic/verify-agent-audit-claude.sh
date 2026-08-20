@@ -80,20 +80,18 @@ assert_landed() {
   fail "no audit document landed in $stream for conversation_id=$cid within timeout"
 }
 
-fetch_src() {
+fetch_hit() {
   stream=$1 cid=$2
   curl -s "$ES_URL/$stream/_search?ignore_unavailable=true&allow_no_indices=true" \
     -H 'Content-Type: application/json' \
     --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-    jq -c '.hits.hits[0]._source'
+    jq -c '.hits.hits[0]'
 }
 
 cleanup_doc() {
-  stream=$1 cid=$2
-  curl -s -X POST "$ES_URL/$stream/_delete_by_query?refresh=true&ignore_unavailable=true" \
-    -H 'Content-Type: application/json' \
-    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-    jq -r '"[cleanup] deleted \(.deleted // 0) document(s)"'
+  idx=$1 id=$2
+  curl -s -X DELETE "$ES_URL/$idx/_doc/$id?refresh=true" |
+    jq -r '"[cleanup] deleted \(._id) (result=\(.result))"'
 }
 
 # --- user_prompt stream ---
@@ -125,7 +123,8 @@ else
 fi
 
 assert_landed "$UP_STREAM" "$cid"
-src=$(fetch_src "$UP_STREAM" "$cid")
+hit=$(fetch_hit "$UP_STREAM" "$cid")
+src=$(echo "$hit" | jq -c '._source')
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) host.hostname=\(.host.hostname) provider=\(.agent_audit.agent.provider) name=\(.agent_audit.agent.name) turn_id=\(.agent_audit.turn_id) user_prompt.length=\(.agent_audit.user_prompt.length)"'
 
 [ "$(echo "$src" | jq -r '.agent_audit.agent.provider')" = anthropic ] ||
@@ -159,8 +158,8 @@ else
   echo "[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)"
 fi
 
-echo "[cleanup] removing the synthetic verification document…"
-cleanup_doc "$UP_STREAM" "$cid"
+echo "[cleanup] removing the synthetic verification document by id…"
+cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
 # --- tool_call stream ---
 
@@ -193,7 +192,8 @@ else
 fi
 
 assert_landed "$TC_STREAM" "$cid"
-src=$(fetch_src "$TC_STREAM" "$cid")
+hit=$(fetch_hit "$TC_STREAM" "$cid")
+src=$(echo "$hit" | jq -c '._source')
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) tool=\(.agent_audit.tool_call.tool.name) call_id=\(.agent_audit.tool_call.tool.call_id) turn_id=\(.agent_audit.turn_id) input.length=\(.agent_audit.tool_call.input.length) output.length=\(.agent_audit.tool_call.output.length)"'
 
 [ "$(echo "$src" | jq -r '.event.action')" = tool-call ] || fail "event.action is not 'tool-call'"
@@ -230,8 +230,8 @@ echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")
   fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
 echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, no user.email, account/organization envelope) ✓"
 
-echo "[cleanup] removing the synthetic verification document…"
-cleanup_doc "$TC_STREAM" "$cid"
+echo "[cleanup] removing the synthetic verification document by id…"
+cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
 echo
 echo "PASS: Claude Code UserPromptSubmit + PostToolUse hooks -> agent_audit stream delivery verified."

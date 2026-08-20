@@ -57,19 +57,18 @@ function Get-Landed($Stream, $Query, $Cid) {
     return $false
 }
 
-function Get-Hit($Stream, $Cid) {
+function Get-FullHit($Stream, $Cid) {
     $search = @{ size = 1; query = @{ term = @{ 'agent_audit.conversation_id' = $Cid } } } | ConvertTo-Json -Compress
     return (Invoke-RestMethod -Method Post -TimeoutSec 10 `
             -Uri "$EsApi/$Stream/_search?ignore_unavailable=true&allow_no_indices=true" `
-            -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
+            -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]
 }
 
-function Remove-Doc($Stream, $Query) {
-    Write-Host '[cleanup] removing the synthetic verification document…'
-    $del = Invoke-RestMethod -Method Post -TimeoutSec 30 `
-        -Uri "$EsApi/$Stream/_delete_by_query?refresh=true&ignore_unavailable=true" `
-        -Headers @{ 'Content-Type' = 'application/json' } -Body $Query
-    Write-Host "[cleanup] deleted $($del.deleted) document(s)"
+function Remove-Doc($Index, $Id) {
+    Write-Host '[cleanup] removing the synthetic verification document by id…'
+    $del = Invoke-RestMethod -Method Delete -TimeoutSec 30 `
+        -Uri "$EsApi/$Index/_doc/$Id?refresh=true"
+    Write-Host "[cleanup] deleted $($del._id) (result=$($del.result))"
 }
 
 Push-Location $ScriptDir
@@ -105,7 +104,8 @@ try {
     $query = @{ query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
     if (-not (Get-Landed -Stream $UpStream -Query $query -Cid $cid)) { Fail "no audit document landed in $UpStream for conversation_id=$cid within timeout" }
 
-    $hit = Get-Hit $UpStream $cid
+    $found = Get-FullHit $UpStream $cid
+    $hit = $found._source
     Write-Host "[assert] document: action=$($hit.event.action) host.hostname=$($hit.host.hostname) provider=$($hit.agent_audit.agent.provider) name=$($hit.agent_audit.agent.name) turn_id=$($hit.agent_audit.turn_id) user_prompt.length=$($hit.agent_audit.user_prompt.length)"
 
     if ($hit.agent_audit.agent.provider -ne 'anthropic') { Fail 'agent_audit.agent.provider != anthropic' }
@@ -138,7 +138,7 @@ try {
         Write-Host '[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)'
     }
 
-    Remove-Doc $UpStream $query
+    Remove-Doc $found._index $found._id
 
     # --- tool_call stream ---
 
@@ -163,7 +163,8 @@ try {
     $query = @{ query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
     if (-not (Get-Landed -Stream $TcStream -Query $query -Cid $cid)) { Fail "no audit document landed in $TcStream for conversation_id=$cid within timeout" }
 
-    $hit = Get-Hit $TcStream $cid
+    $found = Get-FullHit $TcStream $cid
+    $hit = $found._source
     $tc = $hit.agent_audit.tool_call
     Write-Host "[assert] document: action=$($hit.event.action) tool=$($tc.tool.name) call_id=$($tc.tool.call_id) turn_id=$($hit.agent_audit.turn_id) input.length=$($tc.input.length) output.length=$($tc.output.length)"
 
@@ -198,7 +199,7 @@ try {
     }
     Write-Host "[assert] identity present (user.id=$($hit.user.id), host.hostname=$($hit.host.hostname), no user.email, account/organization envelope) ✓"
 
-    Remove-Doc $TcStream $query
+    Remove-Doc $found._index $found._id
 
     Write-Host ''
     Write-Host 'PASS: Claude Code UserPromptSubmit + PostToolUse hooks -> agent_audit stream delivery verified.'
