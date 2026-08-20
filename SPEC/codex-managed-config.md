@@ -2,8 +2,8 @@
 
 How OpenAI Codex CLI lets an administrator push configuration onto a fleet and
 **enforce** a subset of it, while leaving the user's own `config.toml` in effect
-wherever it does not conflict. In the lab this surface is driven by the audit
-stacks' `agent-config place --scope managed`; the shared placement
+wherever it does not conflict. In the lab this surface is driven by
+`agent-config place --scope managed` from an audit-declaring config; the shared placement
 model is owned by [`config-deployment.md`](config-deployment.md). It is
 **Codex-specific**: Claude Code has no
 `config.toml` / `requirements.toml` — its org-enforcement surface is
@@ -130,12 +130,12 @@ completeness.
 
 ## Placement in this lab
 
-Managed placement follows the shared **deploy-only, human-gated, never-overwrite** model owned by [`config-deployment.md`](config-deployment.md) "Managed placement" — always interactive with no `--yes`, non-TTY aborts, fail-loud on permission errors, a sidecar provenance marker keyed on the executor, a hard refusal to touch any file without a lab marker (the path may hold the operator's **real organization's** MDM-pushed config), and a mandatory interactive teardown. One Codex-specific caveat: managed config cannot be isolated per-stack with `CODEX_HOME` the way the stacks isolate user config — `CODEX_HOME` never reaches the managed layer.
+Managed placement follows the shared **deploy-only, human-gated, never-overwrite** model owned by [`config-deployment.md`](config-deployment.md) "Managed placement" — always interactive with no `--yes`, non-TTY aborts, fail-loud on permission errors, a sidecar provenance marker keyed on the executor, a hard refusal to touch any file without a lab marker (the path may hold the operator's **real organization's** MDM-pushed config), and a mandatory interactive teardown. One Codex-specific caveat: managed config cannot be isolated per-workbench with `CODEX_HOME` the way workbenches isolate user config — `CODEX_HOME` never reaches the managed layer.
 
 ### What can actually be enforced (state it honestly)
 
 What a deployed managed layer enforces is **agent-specific and must be stated in the templates and the prompt**: Codex enforces via `requirements.toml` (managed hooks, `allow_managed_hooks_only`, `[features].hooks`; the lab keeps it **hook-scoped** — approval/sandbox-policy enforcement, though Codex supports it, is out of scope for an audit/telemetry tool), but **`[otel]`/telemetry is only a managed *default*** (`managed_config.toml`), never enforceable — and on Windows `managed_config.toml` is a weak boundary, so real enforcement lives in `requirements.toml` at `%ProgramData%`.
 
-This shapes what each managed combination materializes: the audit stacks' hooks-only deploy (`--with-hooks`, no OTLP endpoints) places **only `requirements.toml`** — pinning `[features].hooks = true`, `allow_managed_hooks_only = false`, the `managed_dir` / `windows_managed_dir`, and the hook tables — and **no `managed_config.toml`** (with no telemetry that file would be just a comment). A combined telemetry+hooks deploy adds `managed_config.toml` `[otel]`. The full matrix is in [`config-deployment.md`](config-deployment.md) "Managed materialize".
+This shapes what each managed combination materializes: an audit-only config's hooks-only deploy (no OTLP endpoints) places **only `requirements.toml`** — pinning `[features].hooks = true`, `allow_managed_hooks_only = false`, the `managed_dir` / `windows_managed_dir`, and the hook tables — and **no `managed_config.toml`** (with no telemetry that file would be just a comment). A combined telemetry+hooks deploy adds `managed_config.toml` `[otel]`. The full matrix is in [`config-deployment.md`](config-deployment.md) "Managed materialize".
 
 A **claude counterpart** uses a `managed-settings.d/` fragment — a different mechanism that, unlike Codex's `[otel]`, **can** enforce telemetry; it is documented separately (see the intro) and shares this same deploy-only, human-gated, never-overwrite placement model.

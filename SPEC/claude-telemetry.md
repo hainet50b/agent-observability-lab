@@ -1,10 +1,10 @@
-# Claude Code telemetry reference (claude-elastic)
+# Claude Code telemetry reference
 
-What Claude Code actually emits into the `claude-elastic` stack, captured
+What Claude Code actually emits into the elastic backend, captured
 from live sessions (`service.name = claude-code`, Claude Code 2.1.159, Stack
 9.4.2). Discover is the source of truth for the version you run — names and
-fields can change. This is the agent-knowledge companion to the stack's Quick
-Tour (`stacks/claude-elastic/README.md`); the Kibana views built on these
+fields can change. This is the agent-knowledge companion to the tour
+(`README.md`); the Kibana views built on these
 signals ship as importable NDJSON in
 `backends/elastic/kibana/claude/` — curated Discover **saved
 searches** rather than extra data views (a data view holds only an index-pattern
@@ -12,7 +12,7 @@ searches** rather than extra data views (a data view holds only an index-pattern
 
 **Optional OTLP auth.** The local demo APM Server runs with security disabled, so
 no credential is needed and the rendered telemetry config carries none by default.
-A stack can still ship one for a secured endpoint: set the backing service's api_key
+A deployment can still ship one for a secured endpoint: set the backing service's api_key
 in the gitignored `agent-config.local.toml` (copy from `agent-config.local.toml.example`) —
 `telemetry.apm_server.api_key` in `claude-elastic` — and
 `agent-config` renders `OTEL_EXPORTER_OTLP_HEADERS: "Authorization=ApiKey <key>"`
@@ -58,7 +58,7 @@ be attributed to a **person** (`labels.user_email` — the "who") and to a
 axis in the native telemetry, only a coarse OS class. For fleet auditing where
 device-level attribution matters (managed vs personal machine, which laptop), it
 would have to be **added downstream**, by infrastructure below the agent; the lab
-ships no such component, so in the telemetry stacks the gap simply stands. (The
+ships no such component, so in the lab the gap simply stands. (The
 **audit** path is different: its hooks run on the host and record `host.name` /
 `host.hostname` themselves — see [`agent-audit.md`](agent-audit.md).)
 
@@ -75,7 +75,7 @@ ships no such component, so in the telemetry stacks the gap simply stands. (The
 | `claude_code.commit.count` | (common labels only) | git commits |
 
 `claude_code.pull_request.count` is documented but hasn't landed here (no PR has
-been created against this stack). Dashboards should tolerate it arriving later.
+been created against this backend). Dashboards should tolerate it arriving later.
 
 ## Events (`logs-apm.app.claude_code-default`, discriminated by `message`)
 
@@ -135,8 +135,8 @@ A third, optional signal. Tracing is **off by default**; the Quick Tour config
 enables it with `CLAUDE_CODE_ENABLE_TELEMETRY=1` + `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
 + `OTEL_TRACES_EXPORTER=otlp` (the traces endpoint/protocol are rendered as
 per-signal `OTEL_EXPORTER_OTLP_TRACES_*` vars like the other two signals' —
-this stack's `http/protobuf` → `:8200`). APM Server receives spans natively on
-`/v1/traces` (no server change); this stack then **routes** Claude Code's spans
+the lab's `http/protobuf` → `:8200`). APM Server receives spans natively on
+`/v1/traces` (no server change); ingest then **routes** Claude Code's spans
 into the dedicated **`traces-apm-agents_claude_code`** data stream (see Trace data model
 below).
 
@@ -170,7 +170,7 @@ below).
   has no equivalent in the metrics/events streams.
 - **Not adopted: "detailed" beta.** A deeper tier (`ENABLE_BETA_TRACING_DETAILED=1`
   + `BETA_TRACING_ENDPOINT`, and an org allowlist for interactive sessions) adds the
-  `claude_code.hook` span and extra content attributes. This stack stays on the
+  `claude_code.hook` span and extra content attributes. The lab stays on the
   plain enhanced beta; detailed beta is out of scope.
 
 ## Trace data model
@@ -181,7 +181,7 @@ unlike the metrics/events streams, whose dataset embeds the service
 (`*-apm.app.claude_code-default`). So out of the box every producer's spans
 co-mingle, and a data view can't store a `service.name` filter to separate them.
 
-This stack therefore **physically isolates the agent's spans by routing**: a
+The backend therefore **physically isolates the agent's spans by routing**: a
 `reroute` processor in the per-agent **`traces-apm@custom-claude-code`** sub-pipeline
 — which the agent-agnostic **`traces-apm@custom`** router (the managed
 `traces-apm@default-pipeline`'s extension point) dispatches to on
@@ -218,7 +218,7 @@ Before the reroute, the sub-pipeline forwards to the shared per-agent
   `logs-apm.app.claude_code-default`) — they are not co-mingled, so there is nothing
   to separate. The co-mingling problem is unique to traces (no per-service trace
   dataset). Per-agent namespaces for traces (`agents_<agent>`) are the only routing
-  this stack does.
+  this lab does.
 
 Two doc kinds, discriminated by `processor.event`: `transaction` (the
 `claude_code.interaction` root, one per prompt turn) and `span` (every child).
@@ -316,7 +316,7 @@ one `tool_result` event but several spans (`tool` + `blocked_on_user` +
 The four `OTEL_LOG_*` gates ship as `0` in the telemetry config examples. What
 each gate changes — by data stream, document, and field:
 
-**At a glance — each gate's exposure and this stack's ingest control:**
+**At a glance — each gate's exposure and the backend's ingest control:**
 
 | Gate | What it exposes (stream · document · field) | Ingest control | Mechanism |
 | --- | --- | --- | --- |
@@ -343,7 +343,7 @@ detail follows.
 | `logs-apm.app.claude_code-default` | `message: claude_code.user_prompt` | `labels.prompt` | `<REDACTED>` | verbatim prompt text |
 | `traces-apm-agents_claude_code` | `labels.span_type: interaction` (the `claude_code.interaction` root, `processor.event: transaction`) | `labels.user_prompt` | `<REDACTED>` | verbatim prompt text |
 
-- **This stack force-redacts at ingest, overriding the gate.** The shared
+- **The backend force-redacts at ingest, overriding the gate.** The shared
   per-agent APM `@custom` pipelines — `logs-apm.app@custom-claude` (events) and
   `traces-apm@custom-claude` (traces) — unconditionally set `labels.prompt`
   and `labels.user_prompt` to `<REDACTED>`, so the **stored** value is always
@@ -372,7 +372,7 @@ detail follows.
 | `logs-apm.app.claude_code-default` | `message: claude_code.tool_decision` | `labels.tool_parameters` | absent | same shape — shows *what* the accept/reject decision was about |
 | `logs-apm.app.claude_code-default` | `message: claude_code.mcp_server_connection` | `labels.server_name` | absent | the configured MCP server name (e.g. `elasticsearch`) — this event otherwise has no server-name field at all |
 
-- **This stack field-drops the tool-argument fields at ingest.** The shared
+- **The backend field-drops the tool-argument fields at ingest.** The shared
   per-agent `logs-apm.app@custom-claude` pipeline `remove`s `labels.tool_input` and
   `labels.tool_parameters` (ignore-missing), so on stored `tool_result` /
   `tool_decision` documents those two fields are **absent** — identical to the
@@ -405,13 +405,13 @@ detail follows.
 | --- | --- | --- | --- | --- |
 | `logs-apm.app.claude_code-default` | `message: tool.output` — a new document type | `labels.output` (Bash: command stdout) / `labels.content` (Read: file contents) / `labels.diff` + `labels.file_path` (Edit: structured diff) | documents don't exist | verbatim tool output |
 
-- **This stack drops the `tool.output` documents at ingest.** The shared
+- **The backend drops the `tool.output` documents at ingest.** The shared
   per-agent `logs-apm.app@custom-claude` pipeline `drop`s every `message: tool.output`
   event, so tool output (`labels.output` / `content` / `diff` / `file_path`) **never
   lands** regardless of the gate — the same whole-doc drop used for
   `OTEL_LOG_RAW_API_BODIES`, matching the gate-off state (the documents don't exist
   when off). The `1` column above and the bullets below describe what the agent
-  *emits*, not what is stored in this stack.
+  *emits*, not what is stored in this backend.
 - The upstream docs describe this as a `tool.output` *span event* on
   `claude_code.tool.execution` (60 KB cap, requires tracing). **Physically it
   lands as a document in the events data stream**, not in the traces stream —
@@ -447,7 +447,7 @@ detail follows.
   only top-level (`service.name`, `session.id`, host fields). They match no
   `message: claude_code.*` filter, so none of the curated saved searches would
   surface them — seeing one takes an unfiltered Discover scan of the events
-  data view (moot in this stack, which drops them at ingest).
+  data view (moot here — the backend drops them at ingest).
 
 ### `OTEL_LOG_RAW_API_BODIES`
 
@@ -455,13 +455,13 @@ detail follows.
 | --- | --- | --- | --- | --- |
 | `logs-apm.app.claude_code-default` | `message: claude_code.api_request_body` (one per API attempt) / `claude_code.api_response_body` (one per response) | `labels.body` (+ `labels.body_length`, `labels.body_truncated`) | documents don't exist | Messages API request/response JSON — see the truncation chain |
 
-- **This stack drops both documents at ingest.** The shared per-agent
+- **The backend drops both documents at ingest.** The shared per-agent
   `logs-apm.app@custom-claude` pipeline `drop`s every
   `claude_code.api_request_body` / `claude_code.api_response_body` event, so raw
   API bodies **never land** regardless of the client gate or mode (inline
   `labels.body` or `file:<dir>` `labels.body_ref`) — a deliberate backend control,
   since the body bypasses the prompt-redaction of `labels.prompt`. The `1` column
-  above and the bullets below describe what the agent *emits*; in this stack the
+  above and the bullets below describe what the agent *emits*; here the
   documents are discarded before storage.
 - Unlike `tool.output`, these documents carry the **full envelope** —
   `labels.user_*`, `prompt_id`, `model`, `query_source` (plus `request_id` on
@@ -480,7 +480,7 @@ detail follows.
   `OTEL_LOG_USER_PROMPTS` / `OTEL_LOG_TOOL_DETAILS` / `OTEL_LOG_TOOL_CONTENT`
   would reveal" is real behaviour. The one exception: extended thinking arrives
   as `"thinking":"<REDACTED>"` (its `signature` blob is kept).
-- Net effect on this stack: **nothing lands** — the ingest drop (above) discards
+- Net effect on this backend: **nothing lands** — the ingest drop (above) discards
   both documents; were they kept, inline mode (`=1`) would store only ~1 KB of the
   oldest content per API call, of little audit value.
 - **`file:<dir>` mode lifts the truncation chain entirely.** The same events

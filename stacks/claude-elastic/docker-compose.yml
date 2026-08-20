@@ -1,6 +1,0 @@
-name: claude-elastic
-
-include:
-  - ../../backends/elastic/elasticsearch/docker-compose.yml
-  - ../../backends/elastic/kibana/docker-compose.yml
-  - ../../backends/elastic/apm-server/docker-compose.yml

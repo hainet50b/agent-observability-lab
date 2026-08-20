@@ -6,8 +6,7 @@ APM_OTLP_URL=${APM_OTLP_URL:-http://localhost:8200}
 SERVICE_NAME=aol-smoke-test
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-cd "$STACK_DIR"
+cd "$SCRIPT_DIR"
 
 skip() {
   echo "SKIP: $*"
@@ -24,7 +23,7 @@ command -v jq >/dev/null 2>&1 || skip "jq not found"
 command -v base64 >/dev/null 2>&1 || skip "base64 not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to smoke-test"
 
-echo "[arrange] bringing the stack up (docker compose up -d)…"
+echo "[arrange] bringing the backend up (docker compose up -d)…"
 docker compose up -d
 
 wait_healthy() {
@@ -109,5 +108,5 @@ discover "traces-apm*"
 
 echo
 echo "PASS: OTLP -> APM Server -> Elasticsearch pipeline verified."
-echo "Run a real Claude Code session (see ../README.md, Quick Tour step 2) to populate the"
-echo "claude service streams, then inspect them in Kibana (http://localhost:5601)."
+echo "Point a real agent session here (see README.md) to populate the per-agent streams,"
+echo "then inspect them in Kibana (http://localhost:5601)."

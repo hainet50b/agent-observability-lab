@@ -1,11 +1,11 @@
 # Codex CLI telemetry reference (codex-elastic)
 
-What OpenAI Codex CLI actually emits into the `codex-elastic` stack, captured
+What OpenAI Codex CLI actually emits into the elastic backend, captured
 from a live session (`service.name = codex_cli_rs`, Codex **0.137.0**,
 `agent.name = opentelemetry/rust` 0.31.0, Stack 9.4.2, ChatGPT auth). Discover is
 the source of truth for the version you run — names and fields change fast (Codex
-is high-churn). This is the agent-knowledge companion to the stack's Quick Tour
-(`stacks/codex-elastic/README.md`); the Kibana views built on these signals
+is high-churn). This is the agent-knowledge companion to the tour
+(`README.md`); the Kibana views built on these signals
 ship as importable NDJSON in `backends/elastic/kibana/codex/`
 (Kibana-consumed assets live in the kibana service component — see `SPEC.md`
 "Placement rule").
@@ -19,7 +19,7 @@ ship as importable NDJSON in `backends/elastic/kibana/codex/`
 
 **Optional OTLP auth.** The local demo APM Server runs with security disabled, so
 no credential is needed and the rendered `[otel]` config carries none by default. A
-stack can still ship one for a secured endpoint: set `telemetry.apm_server.api_key` in the
+deployment can still ship one for a secured endpoint: set `telemetry.apm_server.api_key` in the
 gitignored `agent-config.local.toml` (copy from `agent-config.local.toml.example`) and
 `agent-config` renders `headers = { Authorization = "ApiKey <key>" }` into each
 `[otel.*.otlp-http]` exporter block. Absent or empty → `headers = {}`, byte-identical
@@ -105,7 +105,7 @@ with the log_only body. Many structured fields (`tool_name`, `success`,
 needs only one family: a tool-I/O audit (who + command + output + success +
 duration) is fully served by the **`log_only` tool twin alone** (filter
 `service.framework.name: codex_otel.log_only` + `labels.tool_name` exists, no
-join) — though in this stack the command/output columns read `[REDACTED]`,
+join) — though in this backend the command/output columns read `[REDACTED]`,
 since the ingest pipeline redacts `labels.arguments` / `labels.output` (see
 below); the who / success / duration / size axes are unaffected.
 
@@ -119,7 +119,7 @@ the full set local. But Codex's **OTLP logs exporter emits both targets**, so th
 tool-payload exposure tracked in openai/codex
 [#17909](https://github.com/openai/codex/issues/17909). The boundary holds on the
 **traces** path (only trace_safe-shaped data becomes spans) but is defeated on the
-**logs** path. **This stack closes it at ingest, field-grained:** the shared
+**logs** path. **This backend closes it at ingest, field-grained:** the shared
 `logs-apm.app@custom-codex` pipeline sets `labels.prompt`, `labels.arguments`,
 and `labels.output` to `[REDACTED]`, so the stored `log_only` docs keep their
 identity / structure / size fields but no content — a client cannot expose
@@ -145,10 +145,10 @@ metric name *is* the field. Grouped:
 
 ⚠️ **Metrics default to Statsig, not OTLP.** Codex ships `metrics_exporter`
 defaulting to `statsig`; the lab template sets it to `otlp-http` explicitly,
-else **no metrics reach the stack**. Also `codex exec` (headless) emits **no
+else **no metrics reach the backend**. Also `codex exec` (headless) emits **no
 metrics**, and `codex mcp-server` was observed emitting no telemetry at all
 (openai/codex [#12913](https://github.com/openai/codex/issues/12913)) — the
-stack nonetheless ships routing sub-pipelines for the `codex-mcp-server`
+backend nonetheless ships routing sub-pipelines for the `codex-mcp-server`
 surface, so if a Codex version starts emitting there it is routed like the
 others rather than polluting `traces-apm-default`. The Hooks saved search is
 the one metrics-based view (`codex.hooks.run`); other metric docs aren't useful
@@ -188,7 +188,7 @@ through `codex.api_request`.
 ## Traces (`traces-apm-agents_codex_cli_rs`)
 
 Codex emits spans natively (APM receives them on `/v1/traces`, no server change).
-This stack **routes** them off the service-agnostic `traces-apm-default` into a
+This backend **routes** them off the service-agnostic `traces-apm-default` into a
 dedicated per-surface data stream (the CLI's is
 `traces-apm-agents_codex_cli_rs`): the agent-agnostic `traces-apm@custom`
 router dispatches by `service.name` to the per-surface sub-pipeline
@@ -237,8 +237,7 @@ content (Codex's export carries none — see below). Two rules govern the design
   that dispatch by `service.name` to per-surface sub-pipelines; those are thin
   forwarders into the shared `…@custom-codex` pipelines, where both drops live
   once for every surface — with **no** in-pipeline `service.name` gate, since the
-  router already confines them to Codex, and a stack without Codex never installs
-  them.
+  router already confines them to Codex.
 
 **Traces — the shared `traces-apm@custom-codex`, called by each surface's
 forwarder *before* its reroute** (so dropped spans never reach routing):
@@ -301,7 +300,7 @@ instruments (startup phases, MCP cache, sqlite, transport; see Metrics above).
   full `arguments` (command) and `output` (stdout) with no extra gate (unlike
   Claude Code's `OTEL_LOG_TOOL_DETAILS` / `OTEL_LOG_TOOL_CONTENT`). Treat the
   `log_only` stream as content-bearing whenever tools run.
-- **This stack force-redacts all three at ingest, overriding the gates.** The
+- **This backend force-redacts all three at ingest, overriding the gates.** The
   shared `logs-apm.app@custom-codex` pipeline unconditionally sets
   `labels.prompt`, `labels.arguments`, and `labels.output` to `[REDACTED]`, so
   the **stored** values never carry content even when a client turns

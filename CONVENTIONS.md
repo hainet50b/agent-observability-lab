@@ -6,9 +6,9 @@ How code is written in this project. Read before implementing.
 
 This is an infrastructure / demo repository, not an application codebase. The "code" is container orchestration and glue scripting.
 
-- **Docker + Docker Compose** — every stack is defined as a `docker-compose.yml` and runs with `docker compose up` (the unit of delivery is a running stack, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
+- **Docker + Docker Compose** — the backend is defined as a `docker-compose.yml` per family and runs with `docker compose up` (the unit of delivery is a running backend, not a binary). Pin image versions explicitly (`image: …:<version>`); never rely on `latest`.
 - **Rust (`agent-config/`)** — the config renderer/deployer CLI. Built and run via `cargo run` (a Rust toolchain is assumed; no prebuilt binaries). Keep it `cargo fmt`-formatted, `cargo clippy`-clean, and covered by `cargo test` (golden fixtures pin the rendered bytes).
-- **POSIX shell (`sh`/`bash`)** — smoke tests and verification queries under each stack's `scripts/`, plus the runtime audit hooks under `agents/*/hooks/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean. (Backend provisioning is espalier's: thin `provision.{sh,ps1}` wrappers plus generated `provision-standalone.{sh,ps1}` — regenerate the latter with `espalier render-script` when assets change, never edit them.)
+- **POSIX shell (`sh`/`bash`)** — the operational checks under `backends/elastic/` (`smoke-test.sh`, `verify-*`), plus the runtime audit hooks under `agents/*/hooks/`. Keep scripts portable and dependency-light (`curl`, `jq`); `shfmt`-formatted and `shellcheck`-clean. (Backend provisioning is espalier's: thin `provision.{sh,ps1}` wrappers plus generated `provision-standalone.{sh,ps1}` — regenerate the latter with `espalier render-script` when assets change, never edit them.)
 - **PowerShell (`pwsh`)** — each `.sh` script ships a `.ps1` mirror with identical behaviour for Windows hosts; keep the pair in sync and `PSScriptAnalyzer`-clean. `.ps1` files carry **no shebang**: PowerShell does not honour one, these scripts are always invoked via `powershell`/`pwsh -File` or `&` (never executed directly), and a `#!/usr/bin/env pwsh` line both is dead and misleadingly implies a PS7 requirement where Windows fleets run `powershell.exe` (5.1).
 
 ## Comments and leanness
@@ -23,7 +23,7 @@ Keep every artifact **as lean as possible so its load-bearing parts stand out** 
 
 The Rust crate carries real unit / golden tests (`cargo test`); everything else is smoke / integration checks written as shell scripts that follow the **3A pattern**:
 
-- **Arrange** — bring the stack up and wait for health.
+- **Arrange** — bring the backend up and wait for health.
 - **Act** — explicitly perform the action under test (e.g. send telemetry, query an index). The Act step must be visible in the script body, not hidden in a helper.
 - **Assert** — verify the outcome (service healthy, expected index exists, documents present) and exit non-zero on failure.
 
@@ -34,11 +34,11 @@ The commands below must pass before a change is committed. Run from the reposito
 **1. Validate compose files** — required gate, always available with Docker.
 
 ```sh
-for d in stacks/*/; do (cd "$d" && docker compose config -q); done
+for f in backends/*/docker-compose.yml; do docker compose -f "$f" config -q; done
 ```
 
 ```powershell
-Get-ChildItem stacks -Directory | ForEach-Object { Push-Location $_; docker compose config -q; Pop-Location }
+Get-ChildItem backends/*/docker-compose.yml | ForEach-Object { docker compose -f $_.FullName config -q }
 ```
 
 **2. Format → lint → test the Rust crate** — required whenever `agent-config/` changed.
@@ -52,29 +52,31 @@ cargo test   --manifest-path agent-config/Cargo.toml
 **3. Format → lint scripts** — run if the tools are installed; fix every finding.
 
 ```sh
-command -v shfmt      >/dev/null 2>&1 && find stacks backends agents -name '*.sh' -print0 | xargs -0 -r shfmt -w
-command -v shellcheck >/dev/null 2>&1 && find stacks backends agents -name '*.sh' -print0 | xargs -0 -r shellcheck
+command -v shfmt      >/dev/null 2>&1 && find backends agents -name '*.sh' -print0 | xargs -0 -r shfmt -w
+command -v shellcheck >/dev/null 2>&1 && find backends agents -name '*.sh' -print0 | xargs -0 -r shellcheck
 ```
 
 ```powershell
 if (Get-Module -ListAvailable PSScriptAnalyzer) {
   $settings = 'PSScriptAnalyzerSettings.psd1'
-  Get-ChildItem -Recurse stacks, backends, agents -Filter *.ps1 | ForEach-Object {
+  Get-ChildItem -Recurse backends, agents -Filter *.ps1 | ForEach-Object {
     Set-Content -Path $_.FullName -Value (Invoke-Formatter -Settings $settings -ScriptDefinition (Get-Content -Raw $_.FullName))
     Invoke-ScriptAnalyzer -Settings $settings -Path $_.FullName
   }
 }
 ```
 
-**4. Run smoke tests** — each must exit 0. Smoke tests are POSIX `sh`; on Windows run them under bash.
+**4. Run the backend smoke test** — required whenever `backends/elastic/` changed; it needs a running Docker daemon, and on such a change a SKIP (daemon unreachable) counts as failure, not a pass. POSIX `sh`; on Windows run it under bash.
 
 ```sh
-for f in stacks/*/scripts/smoke-test.sh; do [ -x "$f" ] && "$f"; done
+backends/elastic/smoke-test.sh
 ```
 
 ```powershell
-Get-ChildItem stacks/*/scripts/smoke-test.sh | ForEach-Object { bash $_.FullName }
+bash backends/elastic/smoke-test.sh
 ```
+
+The `backends/elastic/verify-*` scripts are manual tools, not a gate: each exercises a **placed** workbench (pass its directory, or set `AOL_WORKBENCH`) end to end against the live backend.
 
 ## Commit Messages
 
@@ -82,7 +84,6 @@ Subject line: present-imperative, ≤ 72 characters. Body optional and free-form
 
 ## File and Identifier Naming
 
-- Stack directories under `stacks/` are **kebab-case** and name the agent + backend they exercise (e.g. `claude-elastic`).
-- Within a stack: `docker-compose.yml` at the stack root, service config under `config/`, scripts under `scripts/`, and any importable backend assets in their own dir (e.g. `kibana/` for Kibana saved objects).
-- Compose service names are lowercase, matching the component (e.g. `kibana`, `apm-server`).
+- Backend families under `backends/` are **kebab-case** (e.g. `elastic`); within one, each service fragment dir holds its `docker-compose.yml`, service config, and the assets that service consumes.
+- Compose service names are lowercase, matching the service (e.g. `kibana`, `apm-server`).
 - Shell scripts are kebab-case with a `.sh` extension (e.g. `smoke-test.sh`).

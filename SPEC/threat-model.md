@@ -38,7 +38,7 @@ outside.
 
 ## The direct hook → Elasticsearch audit path
 
-The agent-audit stacks (`*-elastic-audit`) capture prompts and tool calls with
+The direct audit path captures prompts and tool calls with
 **agent hooks** that POST straight to Elasticsearch (`logs-agent_audit.*`) — a
 different mechanism from the OTel telemetry path above. The same (A)/(B)
 boundary applies (it is an (A) tool), but the hook path sits on a **lower
@@ -116,7 +116,7 @@ outside the lab's scope.
 
 ## Where this leaves the lab
 
-- The telemetry stacks (`claude-elastic`, `codex-elastic`) are **direct**
+- The telemetry path is **direct**
   (agent → APM Server) — the (A)-with-loss posture. Audit coverage is
   "connected sessions only", and this must be documented openly to whoever
   consumes the data.

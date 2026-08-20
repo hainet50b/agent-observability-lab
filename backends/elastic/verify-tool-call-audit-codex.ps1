@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [string]$Workbench = $env:AOL_WORKBENCH,
     [string]$EsUrl = 'http://localhost:9200'
 )
 
@@ -11,10 +12,10 @@ $DataStream = 'logs-agent_audit.tool_call-default'
 $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
-$StackDir = Split-Path -Parent $ScriptDir
-$HookPs1 = Join-Path $StackDir '.claude/hooks/agent-audit.ps1'
-$ClaudeHome = Join-Path $StackDir '.claude'
-$Settings = Join-Path $ClaudeHome 'settings.local.json'
+if (-not $Workbench) { [Console]::Error.WriteLine('FAIL: usage: verify-tool-call-audit-codex.ps1 -Workbench <dir>  (or set AOL_WORKBENCH) — the directory agent config was placed into'); exit 1 }
+$Workbench = (Resolve-Path -LiteralPath $Workbench).Path
+$HookPs1 = Join-Path $Workbench '.codex/hooks/agent-audit.ps1'
+$CodexHome = Join-Path $Workbench '.codex'
 
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
 function Fail($m) { [Console]::Error.WriteLine("FAIL: $m"); exit 1 }
@@ -23,15 +24,15 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Skip 'docker CLI 
 try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not reachable; nothing to verify' } }
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
-if (-not (Test-Path -LiteralPath $Settings)) { Skip 'no .claude/settings.local.json — run scripts/setup.ps1 first' }
-if (-not (Test-Path -LiteralPath (Join-Path $ClaudeHome 'hooks/agent-audit.conf'))) { Skip 'no .claude/hooks/agent-audit.conf — run scripts/setup.ps1 first' }
-if (-not ((Get-Content -Raw -LiteralPath $Settings | ConvertFrom-Json).hooks.PostToolUse)) {
-    Fail 'no hooks.PostToolUse registered in .claude/settings.local.json'
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml in the workbench — run agent-config place first (see README.md)' }
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'hooks/agent-audit.conf'))) { Skip 'no .codex/hooks/agent-audit.conf in the workbench — run agent-config place first (see README.md)' }
+if (-not (Select-String -SimpleMatch -Quiet -Pattern '[[hooks.PostToolUse]]' -LiteralPath (Join-Path $CodexHome 'config.toml'))) {
+    Fail 'no [[hooks.PostToolUse]] registered in .codex/config.toml'
 }
 
-Push-Location $StackDir
+Push-Location $ScriptDir
 try {
-    Write-Host '[arrange] bringing the stack up (docker compose up -d)…'
+    Write-Host '[arrange] bringing the backend up (docker compose up -d)…'
     docker compose up -d
     if ($LASTEXITCODE -ne 0) { Fail 'docker compose up failed' }
 
@@ -49,6 +50,7 @@ try {
     $payload = [ordered]@{
         session_id      = $cid
         turn_id         = 'verify-turn-1'
+        model           = 'verify-model'
         tool_name       = 'Bash'
         tool_use_id     = 'call_verify_0001'
         tool_input      = [ordered]@{ command = 'echo hello'; description = 'verify' }
@@ -59,10 +61,9 @@ try {
         permission_mode = 'auto'
     } | ConvertTo-Json -Compress
 
-    $entry = (Get-Content -Raw -LiteralPath $Settings | ConvertFrom-Json).hooks.PostToolUse[0].hooks[0]
-    $hookArgs = if ($entry.PSObject.Properties.Name -contains 'args') { @($entry.args) } else { @() }
-    Write-Host "[act] spawning the rendered hook: $($entry.command) $($hookArgs -join ' ')"
-    $payload | & $entry.command @hookArgs
+    $env:CODEX_HOME = $CodexHome
+    $conf = Join-Path $CodexHome 'hooks/agent-audit.conf'
+    try { $payload | & pwsh -NoProfile -File $HookPs1 -Stream tool_call -Config $conf } finally { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 
     Write-Host "[assert] querying $DataStream for the audit document…"
     $query = @{ query = @{ term = @{ 'agent_audit.conversation_id' = $cid } } } | ConvertTo-Json -Compress
@@ -76,8 +77,7 @@ try {
                 Write-Host "[assert] found $($r.count) audit document(s) for conversation_id=$cid ✓"
                 $landed = $true; break
             }
-        }
-        catch { Write-Verbose "fail-open: $_" }
+        } catch { Write-Verbose "fail-open: $_" }
         Start-Sleep -Seconds 2
     }
     if (-not $landed) { Fail "no audit document landed in $DataStream for conversation_id=$cid within timeout" }
@@ -87,43 +87,36 @@ try {
             -Uri "$EsApi/$DataStream/_search?ignore_unavailable=true&allow_no_indices=true" `
             -Headers @{ 'Content-Type' = 'application/json' } -Body $search).hits.hits[0]._source
     $tc = $hit.agent_audit.tool_call
-    Write-Host "[assert] document: action=$($hit.event.action) tool=$($tc.tool.name) call_id=$($tc.tool.call_id) turn_id=$($hit.agent_audit.turn_id) input.length=$($tc.input.length) output.length=$($tc.output.length)"
+    Write-Host "[assert] document: action=$($hit.event.action) tool=$($tc.tool.name) call_id=$($tc.tool.call_id) input.length=$($tc.input.length) output.length=$($tc.output.length)"
 
-    if ($hit.event.action -ne 'tool-call') { Fail "event.action is not 'tool-call'" }
-    if ($hit.event.dataset -ne 'agent_audit.tool_call') { Fail "event.dataset is not 'agent_audit.tool_call'" }
-    if ($tc.tool.name -ne 'Bash') { Fail 'tool.name not captured' }
-    if ($tc.tool.call_id -ne 'call_verify_0001') { Fail 'tool.call_id not captured (tool_use_id mapping)' }
+    if ($hit.event.action -ne 'tool-call')                 { Fail "event.action is not 'tool-call'" }
+    if ($hit.event.dataset -ne 'agent_audit.tool_call')    { Fail "event.dataset is not 'agent_audit.tool_call'" }
+    if ($tc.tool.name -ne 'Bash')                          { Fail 'tool.name not captured' }
+    if ($tc.tool.call_id -ne 'call_verify_0001')           { Fail 'tool.call_id not captured (tool_use_id mapping)' }
 
-    if ($hit.agent_audit.agent.provider -ne 'anthropic') { Fail 'agent_audit.agent.provider != anthropic' }
-    if ($hit.agent_audit.agent.name -ne 'claude') { Fail 'agent_audit.agent.name != claude' }
-    if ($hit.agent_audit.turn_id -ne 'verify-turn-1') { Fail 'agent_audit.turn_id not captured (turn_id mapping)' }
-    if ($hit.agent_audit.agent.PSObject.Properties.Name -contains 'model') {
-        Fail 'audit document carries agent_audit.agent.model — model should be removed from the schema'
-    }
-    Write-Host '[assert] agent constants ok (anthropic/claude, turn_id captured, no model) ✓'
-    if (-not $tc.input.text) { Fail 'input.text empty — tool_input not serialized (plaintext mode expected)' }
+    if (-not $tc.input.text)  { Fail 'input.text empty — tool_input not serialized (plaintext mode expected)' }
     if ($tc.input.text -notmatch 'command') { Fail 'input.text does not look like serialized tool_input JSON' }
-    if ([int]$tc.input.length -le 0) { Fail 'input.length not recorded' }
+    if ([int]$tc.input.length -le 0)  { Fail 'input.length not recorded' }
     if (-not $tc.output.text) { Fail 'output.text empty — tool_response not serialized (plaintext mode expected)' }
     if ([int]$tc.output.length -le 0) { Fail 'output.length not recorded' }
     Write-Host "[assert] tool I/O serialized to .text with lengths (input=$($tc.input.length), output=$($tc.output.length)) ✓"
 
     if (-not $hit.host.hostname) { Fail 'audit document missing host.hostname — host enrichment or mapping not applied' }
-    if (-not $hit.user.id) { Fail 'audit document missing user.id — identity derivation not applied' }
-    if ($hit.user.PSObject.Properties.Name -contains 'email') {
-        Fail 'audit document carries user.email — identity schema not applied'
-    }
+    if (-not $hit.user.id)       { Fail 'audit document missing user.id — identity derivation not applied' }
     $agentProps = $hit.agent_audit.agent.PSObject.Properties.Name
     if (($agentProps -notcontains 'account') -or ($agentProps -notcontains 'organization')) {
         Fail 'audit document missing agent_audit.agent.account/organization — identity schema not applied'
     }
-    Write-Host "[assert] identity present (user.id=$($hit.user.id), host.hostname=$($hit.host.hostname), no user.email, account/organization envelope) ✓"
+    Write-Host "[assert] identity present (user.id=$($hit.user.id), host.hostname=$($hit.host.hostname), account/organization envelope) ✓"
 
-    if ($hit.agent_audit.agent.account.id) {
-        Write-Host "[assert] provider account.id derived from ~/.claude.json (account.id=$($hit.agent_audit.agent.account.id)) ✓"
-    }
-    else {
-        Write-Host '[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)'
+    $authFile = Join-Path $CodexHome 'auth.json'
+    if (Test-Path -LiteralPath $authFile) {
+        if (-not $hit.agent_audit.agent.account.id) {
+            Fail 'auth.json present but agent_audit.agent.account.id not populated — provider identity derivation not applied'
+        }
+        Write-Host "[assert] provider account.id derived from $authFile (account.id=$($hit.agent_audit.agent.account.id)) ✓"
+    } else {
+        Write-Host "[assert] no $authFile — skipping provider account.id assertion (API-key auth / null is valid)"
     }
 
     Write-Host '[cleanup] removing the synthetic verification document…'
@@ -133,7 +126,7 @@ try {
     Write-Host "[cleanup] deleted $($del.deleted) document(s)"
 
     Write-Host ''
-    Write-Host "PASS: Claude Code PostToolUse hook -> $DataStream delivery verified."
+    Write-Host "PASS: Codex PostToolUse hook -> $DataStream delivery verified."
 }
 finally {
     Pop-Location

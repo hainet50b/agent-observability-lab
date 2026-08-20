@@ -22,9 +22,13 @@ have not verified against the current code.
 - `backends/` — backend side: one self-contained directory per backend
   family. `elastic/` holds the service fragments (compose + config + the
   ES/Kibana assets they consume), the espalier project (`espalier.toml`),
-  and the `provision.{sh,ps1}` wrappers; its `docker-compose.yml`
-  (project name `aol-elastic`) is the runnable composition
-- `stacks/` — one composition each (Backends × Agents), with a Quick Tour README
+  the `provision.{sh,ps1}` wrappers, the connection file
+  (`agent-config.toml`) agents wire up from, and the operational checks
+  (`smoke-test.sh`, `verify-*`); its `docker-compose.yml` (project name
+  `aol-elastic`) is the runnable composition
+- `workbench/` — gitignored; per-experiment directories users create by
+  copying the connection file and running `agent-config place` (see
+  `README.md`)
 - `README.md` — user-facing entry point
 - `SPEC/` — reference notes that are hard to re-derive from code (telemetry
   field mappings, threat model, config-deployment invariants). Consult when

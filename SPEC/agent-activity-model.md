@@ -50,13 +50,10 @@ Conversations / Turns rollups. Both rollups are also embedded side-by-side in
 the cross-agent **Agents — Adoption Overview** dashboard
 (`kibana/shared/dashboard.ndjson`), which references both agents' data views
 and saved searches.
-Each telemetry stack's espalier group includes it, and the dependency closure
-pulls in exactly what it references — both agents' data views and the two
-user-activity searches (the sibling's other saved searches no longer ride
-along), so
-the dashboard's references resolve even though only one agent feeds data; the
-sibling's half simply shows no results. The audit stacks don't import it (they
-carry no telemetry data views at all).
+The single espalier group includes it, and the dependency closure pulls in
+exactly what it references — both agents' data views and the two user-activity
+searches — so the dashboard's references always resolve; an agent that has not
+emitted yet simply shows no results on its half.
 
 **The three facets** — each in-turn activity is looked at through up to three
 lenses:

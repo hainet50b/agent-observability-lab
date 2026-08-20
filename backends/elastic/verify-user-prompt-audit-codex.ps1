@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [string]$Workbench = $env:AOL_WORKBENCH,
     [string]$EsUrl = 'http://localhost:9200'
 )
 
@@ -11,9 +12,10 @@ $DataStream = 'logs-agent_audit.user_prompt-default'
 $EsApi = $EsUrl.TrimEnd('/') -replace '://localhost([:/]|$)', '://127.0.0.1$1'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
-$StackDir  = Split-Path -Parent $ScriptDir
-$HookPs1 = Join-Path $StackDir '.codex/hooks/agent-audit.ps1'
-$CodexHome = Join-Path $StackDir '.codex'
+if (-not $Workbench) { [Console]::Error.WriteLine('FAIL: usage: verify-user-prompt-audit-codex.ps1 -Workbench <dir>  (or set AOL_WORKBENCH) — the directory agent config was placed into'); exit 1 }
+$Workbench = (Resolve-Path -LiteralPath $Workbench).Path
+$HookPs1 = Join-Path $Workbench '.codex/hooks/agent-audit.ps1'
+$CodexHome = Join-Path $Workbench '.codex'
 
 function Skip($m) { Write-Host "SKIP: $m"; exit 0 }
 function Fail($m) { [Console]::Error.WriteLine("FAIL: $m"); exit 1 }
@@ -22,15 +24,15 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Skip 'docker CLI 
 try { docker info *> $null; if ($LASTEXITCODE -ne 0) { Skip 'docker daemon not reachable; nothing to verify' } }
 catch { Skip 'docker daemon not reachable; nothing to verify' }
 if (-not (Test-Path -LiteralPath $HookPs1)) { Fail "hook not found: $HookPs1" }
-if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml — run scripts/setup.ps1 first' }
-if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'hooks/agent-audit.conf'))) { Skip 'no .codex/hooks/agent-audit.conf — run scripts/setup.ps1 first' }
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'config.toml')))       { Skip 'no .codex/config.toml in the workbench — run agent-config place first (see README.md)' }
+if (-not (Test-Path -LiteralPath (Join-Path $CodexHome 'hooks/agent-audit.conf'))) { Skip 'no .codex/hooks/agent-audit.conf in the workbench — run agent-config place first (see README.md)' }
 if (-not (Select-String -SimpleMatch -Quiet -Pattern '[[hooks.UserPromptSubmit]]' -LiteralPath (Join-Path $CodexHome 'config.toml'))) {
     Fail 'no [[hooks.UserPromptSubmit]] registered in .codex/config.toml'
 }
 
-Push-Location $StackDir
+Push-Location $ScriptDir
 try {
-    Write-Host '[arrange] bringing the stack up (docker compose up -d)…'
+    Write-Host '[arrange] bringing the backend up (docker compose up -d)…'
     docker compose up -d
     if ($LASTEXITCODE -ne 0) { Fail 'docker compose up failed' }
 

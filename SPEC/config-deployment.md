@@ -16,7 +16,7 @@ A deployed bundle is **self-contained** — everything the agent needs at runtim
 | audit delivery config | `agent-audit.conf` (see [`agent-audit.md`](agent-audit.md)) |
 | hook **scripts + library** | `agent-audit.{sh,ps1}` + the shared core + the per-agent adapter |
 
-**Materialize, don't reference.** Each deployment is a frozen **copy**. Editing a component source or template then changes only **future** deployments, never a live one — fixing a real coupling in the older in-place model, where editing a script under `agents/` silently altered every stack's runtime behaviour at once. (The shared hook core stays a single source in the repo; deployment copies it into each bundle.)
+**Materialize, don't reference.** Each deployment is a frozen **copy**. Editing a component source or template then changes only **future** deployments, never a live one — fixing a real coupling in the older in-place model, where editing a script under `agents/` silently altered every live deployment's runtime behaviour at once. (The shared hook core stays a single source in the repo; deployment copies it into each bundle.)
 
 ## Scopes
 
@@ -24,11 +24,11 @@ Selected by `--scope` (default **`local`**). Behaviour per scope:
 
 | Scope | `--target` | MCP materialized | Codex auth-link | Interactive | Teardown |
 |---|---|---|---|---|---|
-| **`local`** | **rejected** (target = stack dir) | **yes** | **yes** (`link-auth`) | no — safe, scriptable, no prompt | non-interactive, marker-matched |
+| **`local`** | **rejected** (target = the config's directory) | **yes** | **yes** (`link-auth`) | no — safe, scriptable, no prompt | non-interactive, marker-matched |
 | **`project`** | **required** `<dir>` | no | no | no — safe, scriptable, no prompt | non-interactive, marker-matched (`--target` again) |
 | **`managed`** | n/a | no | no | **yes** — confirm each file (or `a` = yes-to-all), non-TTY aborts, no `--yes` | interactive |
 
-- **`local`** — user-scope deployment to the **stack's own directory**. Full bundle **including** the Elasticsearch MCP. For a Codex stack it also links the user's `~/.codex/auth.json` into the relocated `CODEX_HOME` (a `local`-only convenience: symlink, or copy with a staleness warning; no-op if the source is absent or the target exists), so the provider-identity source is present without a fresh `codex login`. (Claude has no auth-link. The link is a placement-time act, so it is never part of a rendered or bundled tree.)
+- **`local`** — user-scope deployment **beside the `--config` file** (the workbench). Full bundle **including** the Elasticsearch MCP. For Codex it also links the user's `~/.codex/auth.json` into the relocated `CODEX_HOME` (a `local`-only convenience: symlink, or copy with a staleness warning; no-op if the source is absent or the target exists), so the provider-identity source is present without a fresh `codex login`. (Claude has no auth-link. The link is a placement-time act, so it is never part of a rendered or bundled tree.)
 - **`project`** — user-scope deployment into an arbitrary directory (a user's real project, to see what telemetry/audit their everyday work would emit). Full bundle **except** the MCP — a local-only lab-exploration convenience, not injected into foreign projects, keeping their footprint minimal.
 - **`managed`** — org-enforced placement at machine-global system paths, highest precedence. Follows the **deploy-only, human-gated, never-overwrite** model in [Managed placement](#managed-placement-deploy-only-human-gated) below. Dangerous and manual by design. A managed deploy can carry **telemetry, hooks, or both** — see [Managed materialize](#managed-materialize).
 
@@ -52,7 +52,7 @@ The materialized agent home also gets a **self-ignore `.gitignore` = `*`**, plac
 
 ## Managed placement (deploy-only, human-gated)
 
-Managed config is **machine-global, admin-owned, highest-precedence** — it cannot be isolated per-stack the way `local` / `project` deploys isolate user config. It does not need a stack of its own: it is an **agent-scoped capability** — templates under `agents/<agent>/` plus the OS-path-aware bundle definition and interactive placement in `agent-config/` — that **any** stack can opt into at setup, regardless of backend (managed config is agent-side; the backend is irrelevant). This placement model is agent-agnostic; only the file format, paths, and what is enforceable differ per agent ([`claude-managed-config.md`](claude-managed-config.md), [`codex-managed-config.md`](codex-managed-config.md)).
+Managed config is **machine-global, admin-owned, highest-precedence** — it cannot be isolated per-workbench the way `local` / `project` deploys isolate user config. It is an **agent-scoped capability** — templates under `agents/<agent>/` plus the OS-path-aware bundle definition and interactive placement in `agent-config/` — that **any** config can opt into, regardless of backend (managed config is agent-side; the backend is irrelevant). This placement model is agent-agnostic; only the file format, paths, and what is enforceable differ per agent ([`claude-managed-config.md`](claude-managed-config.md), [`codex-managed-config.md`](codex-managed-config.md)).
 
 It is deliberately a **guarded manual deploy, not part of the automated suite.** Exercising managed config means writing host-global, admin-owned, highest-precedence files that affect **every** agent on the machine and cannot be overridden by a user — too dangerous to drive mechanically. So the lab **does not mechanically verify it**: no verify script, no containerized harness, and **no auto-confirm.** Placement is the deliverable; that enforcement takes effect is confirmed by observation and documented, never by an automated assertion.
 
@@ -78,35 +78,35 @@ A **teardown script is mandatory** — the counterpart to placement, since a hos
 
 ## Teardown — all scopes
 
-`agent-config teardown` is valid for every scope (`local` resolves the target to the stack dir; `project` requires `--target`, like `project` deploy; `managed` takes neither).
+`agent-config teardown` is valid for every scope (`local` resolves the target to the config's directory; `project` requires `--target`, like `project` deploy; `managed` takes neither).
 
-- **`managed`** → **interactive** teardown: it enumerates every candidate target the stack's `agent-config.toml` could have placed (hook bundle, settings fragment / `requirements.toml`, and always Codex's `managed_config.toml`), confirms each marker-bearing file, and treats one never placed as a harmless no-op.
+- **`managed`** → **interactive** teardown: it enumerates every candidate target the `agent-config.toml` could have placed (hook bundle, settings fragment / `requirements.toml`, and always Codex's `managed_config.toml`), confirms each marker-bearing file, and treats one never placed as a harmless no-op.
 - **`local` / `project`** → **non-interactive**: remove each bundle file carrying a marker with this config's `executor`, plus its marker (and the copied `hooks/` tree when the hook-bearing file was ours, the linked Codex `auth.json` when we placed it, and the agent home's self-ignore `.gitignore`). A target **lacking a marker is a benign skip** — left untouched, no error — because it is the user's own file, not ours (e.g. a `codex login` `auth.json`, or a project's own `.mcp.json`; these are never placed in `project` scope). A target marked by a **different executor** is **refused and the run ends non-zero** (it belongs to another distribution). Teardown needs no concern or endpoint knowledge — it enumerates every candidate target and removes what the executor test confirms is ours.
 
 ## Backend vs config
 
 Two concerns, kept separate:
 
-- **`provision`** — the canonical wrapper is `backends/elastic/provision.{sh,ps1}`: it runs `ghcr.io/hainet50b/espalier` `apply --group elastic --yes` against the espalier project in its own directory (targets, the group, and dependency edges live in its `espalier.toml`), joining the compose network named by `ESPALIER_NETWORK` (default `aol-elastic_default`). Each stack's `scripts/provision.{sh,ps1}` only sets `ESPALIER_NETWORK` to its own network and delegates. Health waiting, ordering, and selection are the tool's. Docker lifecycle (up/down) is the **user's**, via plain `docker compose up -d` / `docker compose down`; setup does not run it. `scripts/provision-standalone.{sh,ps1}` — rendered by `espalier render-script`, payloads embedded, `curl`-only — are the equally supported no-Docker path; they read `ESPALIER_ELASTICSEARCH_URL` / `ESPALIER_KIBANA_URL` (and optional `ESPALIER_ELASTICSEARCH_API_KEY`) at run time and are regenerated whenever assets change.
+- **`provision`** — the canonical wrapper is `backends/elastic/provision.{sh,ps1}`: it runs `ghcr.io/hainet50b/espalier` `apply --group elastic --yes` against the espalier project in its own directory (targets, the group, and dependency edges live in its `espalier.toml`), joining the compose network named by `ESPALIER_NETWORK` (default `aol-elastic_default`, the family compose's own network). Health waiting, ordering, and selection are the tool's. Docker lifecycle (up/down) is the **user's**, via plain `docker compose up -d` / `docker compose down`. A generated `provision-standalone.{sh,ps1}` pair — rendered by `espalier render-script`, payloads embedded, `curl`-only — is the equally supported no-Docker path (reads `ESPALIER_ELASTICSEARCH_URL` / `ESPALIER_KIBANA_URL` and optional `ESPALIER_ELASTICSEARCH_API_KEY` at run time); it is regenerated whenever assets change and is currently pending regeneration against the consolidated group.
 - **`agent-config place`** — deploy a bundle to a `(target, scope)`. **Backend-independent**: can run with no backend (e.g. managed placement onto a host whose backend is elsewhere or already running).
 
 `setup.sh` is their **composition** (`provision` then `agent-config place`) and forwards `--scope` / `--target` unchanged (a `project`-scope run is just `--scope project --target <dir>` flowing through). `--scope` defaults to `local`; the backend must already be up (`docker compose up -d`) before running it. Managed-only **without** a backend is the standalone **`agent-config place --scope managed`**.
 
 ## Two config files — one per plane
 
-Each stack splits its configuration by consumer: the **espalier project** (`backends/elastic/espalier.toml`, shared by all stacks) carries the backend control plane — targets, the single all-assets group, dependency edges — and **`agent-config.toml`** (TOML) carries the agent data plane read by the `agent-config` CLI — plus the tool-directed `[agent_config]` table (`executor`, the ownership name written into provenance markers; defaults to `agent-config` when undeclared, and this repo's configs declare `agent-observability-lab`). The CLI deserializes the TOML into typed structures with unknown keys rejected (serde `deny_unknown_fields`) — a typo or a misplaced key is an error, not a silent no-op — and logs the resolved concerns (`telemetry=on audit=off`) at the start of every run:
+Configuration splits by consumer: the **espalier project** (`backends/elastic/espalier.toml`) carries the backend control plane — targets, the single all-assets group, dependency edges — and **`agent-config.toml`** (TOML) carries the agent data plane read by the `agent-config` CLI — plus the tool-directed `[agent_config]` table (`executor`, the ownership name written into provenance markers; defaults to `agent-config` when undeclared, and this repo's configs declare `agent-observability-lab`). The CLI deserializes the TOML into typed structures with unknown keys rejected (serde `deny_unknown_fields`) — a typo or a misplaced key is an error, not a silent no-op — and logs the resolved concerns (`telemetry=on audit=off`) at the start of every run:
 
-| Plane | Key(s) | Stacks |
+| Plane | Key(s) | Concern |
 |---|---|---|
-| **Control plane** | `espalier.toml` `[targets.local]` — in-network endpoints (`http://elasticsearch:9200`, `http://kibana:5601`) the espalier container provisions into; `[groups.elastic]` is the single all-assets selection shared by every stack. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) placed verbatim | all |
-| **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | `claude-elastic`, `codex-elastic` |
-| **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | `claude-elastic-audit`, `codex-elastic-audit` |
+| **Control plane** | `espalier.toml` `[targets.local]` — in-network endpoints (`http://elasticsearch:9200`, `http://kibana:5601`) the espalier container provisions into; `[groups.elastic]` is the single all-assets selection. The Elasticsearch MCP has **no key of its own**: its template carries a fixed container-reachable endpoint (`host.docker.internal:9200` — the same ES, addressed from inside the MCP container) placed verbatim | all |
+| **Agent data plane** — telemetry | `telemetry.apm_server.endpoint` (`:8200`) | telemetry |
+| **Agent data plane** — audit | **required** `agent_audit.elasticsearch.{url,timeout_ms}` + `agent_audit.capture.{user_prompt,tool_call}.{enabled,content}`, read fail-fast (no fallback to `elasticsearch.url`) | audit |
 
 `agent-config` builds the three `/v1/{logs,traces,metrics}` URLs from the telemetry OTLP base. The data-plane key names the actual backing service rather than a generic `otlp` (the architecture is already exposed via the control-plane `elasticsearch.url` / `kibana.url`). Audit details: see [`agent-audit.md`](agent-audit.md).
 
-**Secret values are never in a committed conf.** Each lives only in a gitignored **`agent-config.local.toml`** (covered by `**/agent-config.local.toml`); each stack with one ships a committed **`agent-config.local.toml.example`** with an empty value. The overlay is looked up **beside `agent-config.toml`** by default; `--local-conf <file>` points the CLI at another secrets file (runtime wiring, so it lives on the command line, not in the committed conf — an explicitly named file that is missing is an error, while the absent default is not). Absent default file → empty key, no error. The overlay is the same typed vocabulary: only the two `api_key` fields are accepted, and an `api_key` in the committed conf is rejected as an unknown key. Two symmetric secrets:
+**Secret values are never in a committed conf.** Each lives only in a gitignored **`agent-config.local.toml`** (covered by `**/agent-config.local.toml`); the committed **`agent-config.local.toml.example`** beside the connection file carries the empty-valued template. The overlay is looked up **beside `agent-config.toml`** by default; `--local-conf <file>` points the CLI at another secrets file (runtime wiring, so it lives on the command line, not in the committed conf — an explicitly named file that is missing is an error, while the absent default is not). Absent default file → empty key, no error. The overlay is the same typed vocabulary: only the two `api_key` fields are accepted, and an `api_key` in the committed conf is rejected as an unknown key. Two symmetric secrets:
 
-| Stacks | Secret key | Threaded to | Rendered header |
+| Concern | Secret key | Threaded to | Rendered header |
 |---|---|---|---|
 | Audit | `agent_audit.elasticsearch.api_key` | the audit hook config | (see [`agent-audit.md`](agent-audit.md)) |
 | Telemetry | `telemetry.apm_server.api_key` | the rendered telemetry config | `Authorization: ApiKey <key>` on OTLP exports |
@@ -115,12 +115,12 @@ For telemetry, Claude sends the header via `OTEL_EXPORTER_OTLP_HEADERS` in the s
 
 ## Managed materialize
 
-A managed deploy carries telemetry, hooks, or both, driven by which concerns the stack's `agent-config.toml` declares (a `[telemetry]` and/or an `[agent_audit]` table; a conf with neither fails at load). Three combinations:
+A managed deploy carries telemetry, hooks, or both, driven by which concerns the `agent-config.toml` declares (a `[telemetry]` and/or an `[agent_audit]` table; a conf with neither fails at load). Three combinations:
 
 | Combination | Driven by | Claude `managed-settings.d/10-agent-observability-lab.json` | Codex |
 |---|---|---|---|
-| **Telemetry-only** (config-only) | telemetry stacks (telemetry keys only) | `env` (telemetry) only | `managed_config.toml` `[otel]` only |
-| **Hooks-only** (audit) | audit stacks (`agent_audit.*` keys only) | `_comment` + `hooks` block, **no `env`** | **only `requirements.toml`** (pins `[features].hooks`, hook tables); **no `managed_config.toml`** |
+| **Telemetry-only** (config-only) | telemetry keys only | `env` (telemetry) only | `managed_config.toml` `[otel]` only |
+| **Hooks-only** (audit) | `agent_audit.*` keys only | `_comment` + `hooks` block, **no `env`** | **only `requirements.toml`** (pins `[features].hooks`, hook tables); **no `managed_config.toml`** |
 | **Combined** (telemetry + hooks) | both key groups in one conf | `env` + `hooks` | `managed_config.toml` `[otel]` + `requirements.toml` |
 
 - **Config-only files have no scripts to materialize** — Claude's `env` and Codex's `[otel]` are self-contained. Telemetry rendering happens **only** when the OTLP endpoints are present, byte-identical to before.
@@ -131,10 +131,10 @@ A managed deploy carries telemetry, hooks, or both, driven by which concerns the
 
 ## Bundles
 
-`agent-config bundle` writes the same rendered bundles as **zip archives**, one cell per **scope × OS** (managed and local by default; every cell with an explicit `--scope`/`--os` filter), named `<owner>-<agent>-<scope>-<os>-<version>.zip` under the stack's `dist/`. Versioning: a content-only sha256 **cell hash** (file bytes + relative paths, ordering-stable, version file excluded) is compared against the committed **`bundle-versions.conf`** ledger beside `agent-config.toml`; only changed cells mint a new `YYYYMMDD-NNNN` version (UTC date), unchanged cells are skipped (`--all` re-emits them), and stale archives of a re-emitted cell are replaced. Each archive carries a `<owner>.version` file — at the managed root for managed cells, inside the agent home for user-scope cells.
+`agent-config bundle` writes the same rendered bundles as **zip archives**, one cell per **scope × OS** (managed and local by default; every cell with an explicit `--scope`/`--os` filter), named `<owner>-<agent>-<scope>-<os>-<version>.zip` under `dist/` beside the config. Versioning: a content-only sha256 **cell hash** (file bytes + relative paths, ordering-stable, version file excluded) is compared against the committed **`bundle-versions.conf`** ledger beside `agent-config.toml`; only changed cells mint a new `YYYYMMDD-NNNN` version (UTC date), unchanged cells are skipped (`--all` re-emits them), and stale archives of a re-emitted cell are replaced. Each archive carries a `<owner>.version` file — at the managed root for managed cells, inside the agent home for user-scope cells.
 
-`local`/`project` placement bakes **absolute target paths** into the rendered content (hook commands, the seal cert path), so those bundles are **target-specific by construction**: a `local` cell bakes the stack directory of the machine that cut it, and a `project` cell requires `--target` at bundle time (without one it is skipped, loudly). Only `managed` bundles are host-portable — their roots are fixed per OS. All rendered output is LF regardless of the rendering host.
+`local`/`project` placement bakes **absolute target paths** into the rendered content (hook commands, the seal cert path), so those bundles are **target-specific by construction**: a `local` cell bakes the config directory of the machine that cut it, and a `project` cell requires `--target` at bundle time (without one it is skipped, loudly). Only `managed` bundles are host-portable — their roots are fixed per OS. All rendered output is LF regardless of the rendering host.
 
 ## Sensitive content
 
-Pointing any deployment — a real project via `--scope project`, or a managed host — at the lab backend flows that machine's prompts and tool I/O into the lab's Elasticsearch. That is the point of the lab, but it is also sensitive: don't run secret-bearing sessions against it. This caveat lives here and in the stack READMEs; the scripts do **not** emit it at runtime.
+Pointing any deployment — a real project via `--scope project`, or a managed host — at the lab backend flows that machine's prompts and tool I/O into the lab's Elasticsearch. That is the point of the lab, but it is also sensitive: don't run secret-bearing sessions against it. This caveat lives here and in `README.md`; the scripts do **not** emit it at runtime.

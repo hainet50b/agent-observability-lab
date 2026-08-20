@@ -6,11 +6,15 @@ ES_URL=${ES_URL:-http://localhost:9200}
 DATA_STREAM=logs-agent_audit.user_prompt-default
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-STACK_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
-HOOK="$STACK_DIR/.claude/hooks/agent-audit.sh"
-CLAUDE_HOME_DIR="$STACK_DIR/.claude"
+WORKBENCH=${1:-${AOL_WORKBENCH:-}}
+if [ -z "$WORKBENCH" ]; then
+  echo "FAIL: usage: verify-user-prompt-audit-claude.sh <workbench-dir>  (or set AOL_WORKBENCH) — the directory agent config was placed into" >&2
+  exit 1
+fi
+WORKBENCH=$(CDPATH='' cd -- "$WORKBENCH" && pwd)
+HOOK="$WORKBENCH/.claude/hooks/agent-audit.sh"
+CLAUDE_HOME_DIR="$WORKBENCH/.claude"
 SETTINGS="$CLAUDE_HOME_DIR/settings.local.json"
-cd "$STACK_DIR"
 
 skip() {
   echo "SKIP: $*"
@@ -26,13 +30,13 @@ command -v curl >/dev/null 2>&1 || skip "curl not found"
 command -v jq >/dev/null 2>&1 || skip "jq not found"
 docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to verify"
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
-[ -f "$SETTINGS" ] || skip "no .claude/settings.local.json — run scripts/setup.sh first"
-[ -f "$CLAUDE_HOME_DIR/hooks/agent-audit.conf" ] || skip "no .claude/hooks/agent-audit.conf — run scripts/setup.sh first"
+[ -f "$SETTINGS" ] || skip "no .claude/settings.local.json in the workbench — run agent-config place first (see README.md)"
+[ -f "$CLAUDE_HOME_DIR/hooks/agent-audit.conf" ] || skip "no .claude/hooks/agent-audit.conf in the workbench — run agent-config place first (see README.md)"
 jq -e '.hooks.UserPromptSubmit' "$SETTINGS" >/dev/null 2>&1 ||
   fail "no hooks.UserPromptSubmit registered in .claude/settings.local.json"
 
-echo "[arrange] bringing the stack up (docker compose up -d)…"
-docker compose up -d
+echo "[arrange] bringing the backend up (docker compose up -d)…"
+docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
 
 wait_healthy() {
   cname=$1 tries=${2:-60}
@@ -47,7 +51,7 @@ wait_healthy() {
   return 1
 }
 wait_healthy aol-elasticsearch 60 || {
-  docker compose ps
+  docker compose -f "$SCRIPT_DIR/docker-compose.yml" ps
   fail "aol-elasticsearch did not become healthy"
 }
 

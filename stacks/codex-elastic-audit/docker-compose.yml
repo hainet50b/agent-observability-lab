@@ -1,5 +1,0 @@
-name: codex-elastic-audit
-
-include:
-  - ../../backends/elastic/elasticsearch/docker-compose.yml
-  - ../../backends/elastic/kibana/docker-compose.yml

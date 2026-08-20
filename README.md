@@ -37,7 +37,9 @@ Two concerns flow through it:
 
 - Docker with a running daemon (`docker compose`).
 - A Rust toolchain (`cargo` — the `agent-config` CLI builds on first use).
-- Claude Code and/or Codex CLI, to generate real signals.
+- Claude Code and/or Codex CLI, to generate real signals. (Codex:
+  `metrics_exporter` is a recent addition — check `codex --version` if metrics
+  don't appear.)
 - `curl` for the optional command-line checks.
 
 ## 1. Bring the backend up
@@ -144,6 +146,12 @@ CODEX_HOME="$PWD/.codex" codex            # PowerShell: $env:CODEX_HOME = "$PWD\
 (Codex: `place` links your `~/.codex/auth.json` into the workbench so you stay
 logged in; if absent, `codex login` once under this `CODEX_HOME`.)
 
+> **Entrypoint matters for Codex.** Interactive `codex` emits telemetry; at the
+> time of writing `codex exec` emits no metrics and `codex mcp-server` emits
+> nothing — use the interactive REPL to see signals flow. The rendered config
+> sets `log_user_prompt = false`, so telemetry carries no prompt text; prompt
+> capture is the audit concern's job, per your connection-file posture.
+
 Do a little work — ask a question, let it read or edit a file. Telemetry
 flushes on its export interval and hooks write per event, so data lands within
 ~10–30 s.
@@ -178,16 +186,57 @@ docker compose -f backends/elastic/docker-compose.yml down     # keep the data
 docker compose -f backends/elastic/docker-compose.yml down -v  # wipe it
 ```
 
-## Beyond the workbench
+## Beyond the workbench — the three scopes
 
-To see what your **real project's** everyday sessions would emit, deploy the
-same bundle into it instead of a workbench:
+The workbench flow above is `place`'s default scope (`local`). The same bundle
+deploys to two more scopes:
+
+| Scope | Where it lands | What differs |
+| --- | --- | --- |
+| `local` (default) | beside the `--config` copy — the workbench | full bundle, including the Elasticsearch MCP |
+| `project` | `--target <dir>` — your real project | no MCP; the placed agent home ignores itself so your repo stays clean |
+| `managed` | fixed machine-global system paths (below) | org enforcement — highest precedence, interactive placement |
+
+**`project` — wire your real project.** To see what your everyday sessions
+would emit:
 
 ```sh
 cargo run -q --manifest-path agent-config/Cargo.toml -- \
   place --agent claude --config workbench/mine/agent-config.toml --scope project --target /path/to/project
 ```
 
-Same teardown (with the same `--target`); the MCP registration is excluded to
-keep the project's footprint minimal. Remember that project's prompts and tool
-I/O then flow into this Elasticsearch.
+Same teardown (with the same `--target`). Remember that project's prompts and
+tool I/O then flow into this Elasticsearch.
+
+**`managed` — org-enforced placement. Handle with care: this changes your
+machine, not a directory.** The managed tier is how an organization forces
+agent config onto a fleet — for Claude Code it can *enforce* telemetry
+(highest precedence; the user cannot turn it off or change the endpoint),
+while Codex's managed `[otel]` is a default, not enforced. Placement is
+opt-in and always interactive (each file confirmed, no `--yes`; a
+non-interactive shell aborts having changed nothing), never overwrites a file
+it did not place, and has a matching teardown:
+
+```sh
+cargo run -q --manifest-path agent-config/Cargo.toml -- \
+  place    --agent claude --config workbench/mine/agent-config.toml --scope managed
+cargo run -q --manifest-path agent-config/Cargo.toml -- \
+  teardown --agent claude --config workbench/mine/agent-config.toml --scope managed
+```
+
+The admin-owned roots it writes into (the lab's own files sit beside any
+policy your real organization may already deploy there — check the directory
+before placing):
+
+| Agent | OS | Managed root |
+| --- | --- | --- |
+| Claude Code | Linux / WSL | `/etc/claude-code/` |
+| Claude Code | macOS | `/Library/Application Support/ClaudeCode/` |
+| Claude Code | Windows | `C:\Program Files\ClaudeCode\` |
+| Codex | Linux / macOS | `/etc/codex/` |
+| Codex | Windows | `C:\ProgramData\OpenAI\Codex\` (defaults additionally at `%USERPROFILE%\.codex\managed_config.toml`) |
+
+Everything the lab places there is named after its executor
+(`10-agent-observability-lab.json`, `hooks/agent-observability-lab/`, ...) and
+carries a provenance marker, so teardown removes exactly the lab's files and
+nothing else.
