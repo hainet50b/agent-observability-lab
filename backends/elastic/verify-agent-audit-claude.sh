@@ -3,12 +3,13 @@
 set -euo pipefail
 
 ES_URL=${ES_URL:-http://localhost:9200}
-DATA_STREAM=logs-agent_audit.tool_call-default
+UP_STREAM=logs-agent_audit.user_prompt-default
+TC_STREAM=logs-agent_audit.tool_call-default
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 WORKBENCH=${1:-${AOL_WORKBENCH:-}}
 if [ -z "$WORKBENCH" ]; then
-  echo "FAIL: usage: verify-tool-call-audit-claude.sh <workbench-dir>  (or set AOL_WORKBENCH) — the directory agent config was placed into" >&2
+  echo "FAIL: usage: verify-agent-audit-claude.sh <workbench-dir>  (or set AOL_WORKBENCH) — the directory agent config was placed into" >&2
   exit 1
 fi
 WORKBENCH=$(CDPATH='' cd -- "$WORKBENCH" && pwd)
@@ -32,6 +33,8 @@ docker info >/dev/null 2>&1 || skip "docker daemon not reachable; nothing to ver
 [ -f "$HOOK" ] || fail "hook not found: $HOOK"
 [ -f "$SETTINGS" ] || skip "no .claude/settings.local.json in the workbench — run agent-config place first (see README.md)"
 [ -f "$CLAUDE_HOME_DIR/hooks/agent-audit.conf" ] || skip "no .claude/hooks/agent-audit.conf in the workbench — run agent-config place first (see README.md)"
+jq -e '.hooks.UserPromptSubmit' "$SETTINGS" >/dev/null 2>&1 ||
+  fail "no hooks.UserPromptSubmit registered in .claude/settings.local.json"
 jq -e '.hooks.PostToolUse' "$SETTINGS" >/dev/null 2>&1 ||
   fail "no hooks.PostToolUse registered in .claude/settings.local.json"
 
@@ -55,6 +58,112 @@ wait_healthy aol-elasticsearch 60 || {
   fail "aol-elasticsearch did not become healthy"
 }
 
+es_count() {
+  stream=$1 cid=$2
+  curl -s "$ES_URL/$stream/_count?ignore_unavailable=true&allow_no_indices=true" \
+    -H 'Content-Type: application/json' \
+    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
+    jq -r '.count // 0'
+}
+
+assert_landed() {
+  stream=$1 cid=$2
+  echo "[assert] querying $stream for the audit document…"
+  for _ in $(seq 1 30); do
+    n=$(es_count "$stream" "$cid")
+    if [ "${n:-0}" -ge 1 ]; then
+      echo "[assert] found $n audit document(s) for conversation_id=$cid ✓"
+      return 0
+    fi
+    sleep 2
+  done
+  fail "no audit document landed in $stream for conversation_id=$cid within timeout"
+}
+
+fetch_src() {
+  stream=$1 cid=$2
+  curl -s "$ES_URL/$stream/_search?ignore_unavailable=true&allow_no_indices=true" \
+    -H 'Content-Type: application/json' \
+    --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
+    jq -c '.hits.hits[0]._source'
+}
+
+cleanup_doc() {
+  stream=$1 cid=$2
+  curl -s -X POST "$ES_URL/$stream/_delete_by_query?refresh=true&ignore_unavailable=true" \
+    -H 'Content-Type: application/json' \
+    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
+    jq -r '"[cleanup] deleted \(.deleted // 0) document(s)"'
+}
+
+# --- user_prompt stream ---
+
+cid="aol-verify-$(date +%s)-$$"
+echo "[act] feeding a synthetic UserPromptSubmit payload (conversation_id=$cid) through the configured hook…"
+
+payload=$(jq -nc --arg cid "$cid" '{
+  session_id: $cid,
+  prompt: "agent audit verification prompt",
+  cwd: "/should/not/be/sent",
+  transcript_path: "/should/not/be/sent.jsonl",
+  hook_event_name: "UserPromptSubmit",
+  permission_mode: "default"
+}')
+
+# tr -d '\r': jq.exe on Windows writes CRLF, so a trailing CR would corrupt each
+# exec arg (e.g. "Bypass\r" silently voids -ExecutionPolicy); a no-op on POSIX jq.
+hook_command=$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' "$SETTINGS" | tr -d '\r')
+if jq -e '.hooks.UserPromptSubmit[0].hooks[0] | has("args")' "$SETTINGS" >/dev/null 2>&1; then
+  hook_args=()
+  while IFS= read -r a; do hook_args+=("$a"); done \
+    < <(jq -r '.hooks.UserPromptSubmit[0].hooks[0].args[]' "$SETTINGS" | tr -d '\r')
+  echo "[act] spawning the rendered hook (exec form): $hook_command ${hook_args[*]}"
+  printf '%s' "$payload" | "$hook_command" "${hook_args[@]}" || true
+else
+  echo "[act] spawning the rendered hook (command string via shell): $hook_command"
+  printf '%s' "$payload" | sh -c "$hook_command" || true
+fi
+
+assert_landed "$UP_STREAM" "$cid"
+src=$(fetch_src "$UP_STREAM" "$cid")
+echo "$src" | jq -r '"[assert] document: action=\(.event.action) host.hostname=\(.host.hostname) provider=\(.agent_audit.agent.provider) name=\(.agent_audit.agent.name) turn_id=\(.agent_audit.turn_id) user_prompt.length=\(.agent_audit.user_prompt.length)"'
+
+[ "$(echo "$src" | jq -r '.agent_audit.agent.provider')" = anthropic ] ||
+  fail "agent_audit.agent.provider != anthropic"
+[ "$(echo "$src" | jq -r '.agent_audit.agent.name')" = claude ] ||
+  fail "agent_audit.agent.name != claude"
+echo "$src" | jq -e '.agent_audit.turn_id == null' >/dev/null ||
+  fail "agent_audit.turn_id is not null (Claude payload has no turn id)"
+echo "$src" | jq -e '(.agent_audit.agent | has("model")) | not' >/dev/null ||
+  fail "audit document carries agent_audit.agent.model — model should be removed from the schema"
+echo "[assert] agent constants ok (anthropic/claude, turn_id null, no model) ✓"
+
+hhost=$(echo "$src" | jq -r '.host.hostname // empty')
+[ -n "$hhost" ] || fail "audit document missing host.hostname — host enrichment or mapping not applied"
+echo "[assert] host enrichment present (host.hostname=$hhost) ✓"
+
+echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")' >/dev/null ||
+  fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
+echo "$src" | jq -e '(.user | has("email")) | not' >/dev/null ||
+  fail "audit document carries user.email — identity schema not applied"
+echo "[assert] identity schema applied (account/organization present, no user.email) ✓"
+
+uid=$(echo "$src" | jq -r '.user.id // empty')
+[ -n "$uid" ] || fail "audit document missing user.id — identity derivation not applied"
+echo "[assert] user.id derived (user.id=$uid) ✓"
+
+acct=$(echo "$src" | jq -r '.agent_audit.agent.account.id // empty')
+if [ -n "$acct" ]; then
+  echo "[assert] provider account.id derived from ~/.claude.json (account.id=$acct) ✓"
+else
+  echo "[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)"
+fi
+
+echo "[cleanup] removing the synthetic verification document…"
+cleanup_doc "$UP_STREAM" "$cid"
+
+# --- tool_call stream ---
+
 cid="aol-verify-tc-$(date +%s)-$$"
 echo "[act] feeding a synthetic PostToolUse payload (conversation_id=$cid) through the configured hook…"
 
@@ -71,8 +180,6 @@ payload=$(jq -nc --arg cid "$cid" '{
   permission_mode: "auto"
 }')
 
-# tr -d '\r': jq.exe on Windows writes CRLF, so a trailing CR would corrupt each exec
-# arg (e.g. "Bypass\r" silently voids -ExecutionPolicy); a no-op on POSIX jq.
 hook_command=$(jq -r '.hooks.PostToolUse[0].hooks[0].command' "$SETTINGS" | tr -d '\r')
 if jq -e '.hooks.PostToolUse[0].hooks[0] | has("args")' "$SETTINGS" >/dev/null 2>&1; then
   hook_args=()
@@ -85,30 +192,8 @@ else
   printf '%s' "$payload" | sh -c "$hook_command" || true
 fi
 
-es_count_cid() {
-  curl -s "$ES_URL/$DATA_STREAM/_count?ignore_unavailable=true&allow_no_indices=true" \
-    -H 'Content-Type: application/json' \
-    --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-    jq -r '.count // 0'
-}
-
-echo "[assert] querying $DATA_STREAM for the audit document…"
-landed=0
-for _ in $(seq 1 30); do
-  n=$(es_count_cid)
-  if [ "${n:-0}" -ge 1 ]; then
-    echo "[assert] found $n audit document(s) for conversation_id=$cid ✓"
-    landed=1
-    break
-  fi
-  sleep 2
-done
-[ "$landed" = 1 ] || fail "no audit document landed in $DATA_STREAM for conversation_id=$cid within timeout"
-
-src=$(curl -s "$ES_URL/$DATA_STREAM/_search?ignore_unavailable=true&allow_no_indices=true" \
-  -H 'Content-Type: application/json' \
-  --data "{\"size\":1,\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-  jq -c '.hits.hits[0]._source')
+assert_landed "$TC_STREAM" "$cid"
+src=$(fetch_src "$TC_STREAM" "$cid")
 echo "$src" | jq -r '"[assert] document: action=\(.event.action) tool=\(.agent_audit.tool_call.tool.name) call_id=\(.agent_audit.tool_call.tool.call_id) turn_id=\(.agent_audit.turn_id) input.length=\(.agent_audit.tool_call.input.length) output.length=\(.agent_audit.tool_call.output.length)"'
 
 [ "$(echo "$src" | jq -r '.event.action')" = tool-call ] || fail "event.action is not 'tool-call'"
@@ -145,18 +230,8 @@ echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")
   fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
 echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, no user.email, account/organization envelope) ✓"
 
-acct=$(echo "$src" | jq -r '.agent_audit.agent.account.id // empty')
-if [ -n "$acct" ]; then
-  echo "[assert] provider account.id derived from ~/.claude.json (account.id=$acct) ✓"
-else
-  echo "[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)"
-fi
-
 echo "[cleanup] removing the synthetic verification document…"
-curl -s -X POST "$ES_URL/$DATA_STREAM/_delete_by_query?refresh=true&ignore_unavailable=true" \
-  -H 'Content-Type: application/json' \
-  --data "{\"query\":{\"term\":{\"agent_audit.conversation_id\":\"$cid\"}}}" |
-  jq -r '"[cleanup] deleted \(.deleted // 0) document(s)"'
+cleanup_doc "$TC_STREAM" "$cid"
 
 echo
-echo "PASS: Claude Code PostToolUse hook -> $DATA_STREAM delivery verified."
+echo "PASS: Claude Code UserPromptSubmit + PostToolUse hooks -> agent_audit stream delivery verified."
