@@ -138,6 +138,9 @@ try {
         Write-Host '[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)'
     }
 
+    if ($hit.agent_audit.conversation_id -ne $cid) {
+        Fail "fetched document carries conversation_id $($hit.agent_audit.conversation_id), not $cid — refusing to delete"
+    }
     Remove-Doc $found._index $found._id
 
     # --- tool_call stream ---
@@ -199,6 +202,9 @@ try {
     }
     Write-Host "[assert] identity present (user.id=$($hit.user.id), host.hostname=$($hit.host.hostname), no user.email, account/organization envelope) ✓"
 
+    if ($hit.agent_audit.conversation_id -ne $cid) {
+        Fail "fetched document carries conversation_id $($hit.agent_audit.conversation_id), not $cid — refusing to delete"
+    }
     Remove-Doc $found._index $found._id
 
     Write-Host ''

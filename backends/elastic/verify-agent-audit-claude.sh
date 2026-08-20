@@ -158,6 +158,8 @@ else
   echo "[assert] account.id null — no OAuth session in ~/.claude.json (valid; user.id still derived)"
 fi
 
+[ "$(echo "$src" | jq -r '.agent_audit.conversation_id')" = "$cid" ] ||
+  fail "fetched document carries conversation_id $(echo "$src" | jq -r '.agent_audit.conversation_id'), not $cid — refusing to delete"
 echo "[cleanup] removing the synthetic verification document by id…"
 cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
@@ -230,6 +232,8 @@ echo "$src" | jq -e '.agent_audit.agent | has("account") and has("organization")
   fail "audit document missing agent_audit.agent.account/organization — identity schema not applied"
 echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, no user.email, account/organization envelope) ✓"
 
+[ "$(echo "$src" | jq -r '.agent_audit.conversation_id')" = "$cid" ] ||
+  fail "fetched document carries conversation_id $(echo "$src" | jq -r '.agent_audit.conversation_id'), not $cid — refusing to delete"
 echo "[cleanup] removing the synthetic verification document by id…"
 cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 

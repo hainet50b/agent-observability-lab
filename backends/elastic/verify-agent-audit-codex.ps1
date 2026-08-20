@@ -142,6 +142,9 @@ try {
 
     Test-AccountId $hit
 
+    if ($hit.agent_audit.conversation_id -ne $cid) {
+        Fail "fetched document carries conversation_id $($hit.agent_audit.conversation_id), not $cid — refusing to delete"
+    }
     Remove-Doc $found._index $found._id
 
     # --- tool_call stream ---
@@ -195,6 +198,9 @@ try {
 
     Test-AccountId $hit
 
+    if ($hit.agent_audit.conversation_id -ne $cid) {
+        Fail "fetched document carries conversation_id $($hit.agent_audit.conversation_id), not $cid — refusing to delete"
+    }
     Remove-Doc $found._index $found._id
 
     Write-Host ''

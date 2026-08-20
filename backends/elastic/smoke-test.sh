@@ -106,6 +106,25 @@ discover "logs-apm*"
 echo "  traces-apm*:"
 discover "traces-apm*"
 
+cleanup_probe_docs() {
+  idx=$1
+  curl -s "$ES_URL/$idx/_search?ignore_unavailable=true&allow_no_indices=true" \
+    -H 'Content-Type: application/json' \
+    --data "{\"size\":1000,\"query\":{\"term\":{\"service.name\":\"$SERVICE_NAME\"}},\"_source\":[\"service.name\"]}" |
+    jq -r --arg svc "$SERVICE_NAME" \
+      '.hits.hits[] | select(._source.service.name == $svc) | "\(._index) \(._id)"' |
+    while read -r doc_index doc_id; do
+      curl -s -X DELETE "$ES_URL/$doc_index/_doc/$doc_id?refresh=true" |
+        jq -r --arg idx "$doc_index" \
+          'if .result == "deleted" then "[cleanup] deleted \(._id) from \($idx)" else "[cleanup] WARN: could not delete \(._id // "?") from \($idx): \(.result // .error.type // "unknown")" end'
+    done
+}
+
+echo "[cleanup] removing the synthetic probe documents by id (this run and any earlier ones)…"
+cleanup_probe_docs "metrics-apm*"
+cleanup_probe_docs "logs-apm*"
+cleanup_probe_docs "traces-apm*"
+
 echo
 echo "PASS: OTLP -> APM Server -> Elasticsearch pipeline verified."
 echo "Point a real agent session here (see README.md) to populate the per-agent streams,"

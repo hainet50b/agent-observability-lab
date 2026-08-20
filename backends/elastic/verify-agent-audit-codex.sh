@@ -142,6 +142,8 @@ echo "[assert] user.id derived (user.id=$uid) ✓"
 
 assert_account_id "$src"
 
+[ "$(echo "$src" | jq -r '.agent_audit.conversation_id')" = "$cid" ] ||
+  fail "fetched document carries conversation_id $(echo "$src" | jq -r '.agent_audit.conversation_id'), not $cid — refusing to delete"
 echo "[cleanup] removing the synthetic verification document by id…"
 cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
@@ -198,6 +200,8 @@ echo "[assert] identity present (user.id=$uid, host.hostname=$hhost, account/org
 
 assert_account_id "$src"
 
+[ "$(echo "$src" | jq -r '.agent_audit.conversation_id')" = "$cid" ] ||
+  fail "fetched document carries conversation_id $(echo "$src" | jq -r '.agent_audit.conversation_id'), not $cid — refusing to delete"
 echo "[cleanup] removing the synthetic verification document by id…"
 cleanup_doc "$(echo "$hit" | jq -r '._index')" "$(echo "$hit" | jq -r '._id')"
 
