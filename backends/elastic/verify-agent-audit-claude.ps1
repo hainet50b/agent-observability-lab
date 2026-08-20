@@ -67,7 +67,7 @@ function Get-FullHit($Stream, $Cid) {
 function Remove-Doc($Index, $Id) {
     Write-Host '[cleanup] removing the synthetic verification document by id…'
     $del = Invoke-RestMethod -Method Delete -TimeoutSec 30 `
-        -Uri "$EsApi/$Index/_doc/$Id?refresh=true"
+        -Uri "$EsApi/$Index/_doc/${Id}?refresh=true"
     Write-Host "[cleanup] deleted $($del._id) (result=$($del.result))"
 }
 

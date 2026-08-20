@@ -113,6 +113,7 @@ cleanup_probe_docs() {
     --data "{\"size\":1000,\"query\":{\"term\":{\"service.name\":\"$SERVICE_NAME\"}},\"_source\":[\"service.name\"]}" |
     jq -r --arg svc "$SERVICE_NAME" \
       '.hits.hits[] | select(._source.service.name == $svc) | "\(._index) \(._id)"' |
+    tr -d '\r' |
     while read -r doc_index doc_id; do
       curl -s -X DELETE "$ES_URL/$doc_index/_doc/$doc_id?refresh=true" |
         jq -r --arg idx "$doc_index" \
