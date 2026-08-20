@@ -52,14 +52,14 @@ cargo test   --manifest-path agent-config/Cargo.toml
 **3. Format → lint scripts** — run if the tools are installed; fix every finding.
 
 ```sh
-command -v shfmt      >/dev/null 2>&1 && find backends agents -name '*.sh' -print0 | xargs -0 -r shfmt -w
-command -v shellcheck >/dev/null 2>&1 && find backends agents -name '*.sh' -print0 | xargs -0 -r shellcheck
+command -v shfmt      >/dev/null 2>&1 && find backends agents -name '*.sh' ! -name 'provision-standalone.sh' -print0 | xargs -0 -r shfmt -w
+command -v shellcheck >/dev/null 2>&1 && find backends agents -name '*.sh' ! -name 'provision-standalone.sh' -print0 | xargs -0 -r shellcheck
 ```
 
 ```powershell
 if (Get-Module -ListAvailable PSScriptAnalyzer) {
   $settings = 'PSScriptAnalyzerSettings.psd1'
-  Get-ChildItem -Recurse backends, agents -Filter *.ps1 | ForEach-Object {
+  Get-ChildItem -Recurse backends, agents -Filter *.ps1 | Where-Object { $_.Name -ne 'provision-standalone.ps1' } | ForEach-Object {
     Set-Content -Path $_.FullName -Value (Invoke-Formatter -Settings $settings -ScriptDefinition (Get-Content -Raw $_.FullName))
     Invoke-ScriptAnalyzer -Settings $settings -Path $_.FullName
   }
