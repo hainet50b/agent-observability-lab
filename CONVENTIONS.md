@@ -27,56 +27,18 @@ The Rust crate carries real unit / golden tests (`cargo test`); everything else 
 - **Act** — explicitly perform the action under test (e.g. send telemetry, query an index). The Act step must be visible in the script body, not hidden in a helper.
 - **Assert** — verify the outcome (service healthy, expected index exists, documents present) and exit non-zero on failure.
 
-## Lint / Format / Test Commands
+## Pass Gate
 
-The commands below must pass before a change is committed. Run from the repository root. **Where a formatter/linter is installed, run format → lint and fix every finding before completing the task** — the format step applies fixes in place; remaining lint findings are fixed by hand. Each tool is skipped silently if absent.
+`.ralph/gate.sh` / `.ralph/gate.ps1` are the executable, authoritative pass gate — a change must pass it before commit, and Ralph re-runs it at integration. They are the single source for the actual commands; don't duplicate command blocks here, read/edit the scripts directly when the checks change.
 
-**1. Validate compose files** — required gate, always available with Docker.
+- **Compose validate** — always runs (`docker compose ... config -q` per backend).
+- **Rust suite** (`agent-config/`) — `cargo fmt --check` / `clippy` / `test`; runs only when `agent-config/` changed.
+- **Shell / PowerShell lint** — `shfmt -d` / `shellcheck` / `PSScriptAnalyzer`; always runs when the tools are installed.
+- **Backend smoke test** — `backends/elastic/smoke-test.sh`; runs only when `backends/elastic/` changed (a SKIP from an unreachable daemon counts as failure on such a change, not a pass).
 
-```sh
-for f in backends/*/docker-compose.yml; do docker compose -f "$f" config -q; done
-```
+While implementing, fix findings with the mutating forms — `cargo fmt` (no `--check`), `shfmt -w`, PowerShell's `Invoke-Formatter` — then re-run the gate, which stays check-only.
 
-```powershell
-Get-ChildItem backends/*/docker-compose.yml | ForEach-Object { docker compose -f $_.FullName config -q }
-```
-
-**2. Format → lint → test the Rust crate** — required whenever `agent-config/` changed.
-
-```sh
-cargo fmt    --manifest-path agent-config/Cargo.toml
-cargo clippy --manifest-path agent-config/Cargo.toml --all-targets
-cargo test   --manifest-path agent-config/Cargo.toml
-```
-
-**3. Format → lint scripts** — run if the tools are installed; fix every finding.
-
-```sh
-command -v shfmt      >/dev/null 2>&1 && find backends agents -name '*.sh' ! -name 'provision-standalone.sh' -print0 | xargs -0 -r shfmt -w
-command -v shellcheck >/dev/null 2>&1 && find backends agents -name '*.sh' ! -name 'provision-standalone.sh' -print0 | xargs -0 -r shellcheck
-```
-
-```powershell
-if (Get-Module -ListAvailable PSScriptAnalyzer) {
-  $settings = 'PSScriptAnalyzerSettings.psd1'
-  Get-ChildItem -Recurse backends, agents -Filter *.ps1 | Where-Object { $_.Name -ne 'provision-standalone.ps1' } | ForEach-Object {
-    Set-Content -Path $_.FullName -Value (Invoke-Formatter -Settings $settings -ScriptDefinition (Get-Content -Raw $_.FullName))
-    Invoke-ScriptAnalyzer -Settings $settings -Path $_.FullName
-  }
-}
-```
-
-**4. Run the backend smoke test** — required whenever `backends/elastic/` changed; it needs a running Docker daemon, and on such a change a SKIP (daemon unreachable) counts as failure, not a pass. POSIX `sh`; on Windows run it under bash.
-
-```sh
-backends/elastic/smoke-test.sh
-```
-
-```powershell
-bash backends/elastic/smoke-test.sh
-```
-
-The `backends/elastic/verify-*` scripts are manual tools, not a gate: each exercises a **placed** workbench (pass its directory, or set `AOL_WORKBENCH`) end to end against the live backend.
+The `backends/elastic/verify-*` scripts are manual tools, not part of the gate: each exercises a **placed** workbench (pass its directory, or set `AOL_WORKBENCH`) end to end against the live backend.
 
 ## Commit Messages
 

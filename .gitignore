@@ -8,3 +8,7 @@
 **/agent-config.local.toml
 /workbench/
 /backends/elastic/dist/
+
+.ralph/worktrees/
+.ralph/integrate.lock/
+.ralph/claims/
