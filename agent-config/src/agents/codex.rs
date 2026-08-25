@@ -21,18 +21,18 @@ pub fn manifest(
     }
 }
 
-pub fn teardown_targets() -> (
-    Vec<(&'static str, &'static str)>,
-    &'static str,
-    &'static str,
-) {
+pub fn teardown_targets(
+    executor: &str,
+) -> (Vec<(&'static str, String)>, &'static str, &'static str) {
     (
         vec![
-            ("config", ".codex/config.toml"),
-            ("agent-audit", ".codex/hooks/agent-audit.conf"),
-            ("agent-audit", ".codex/hooks/recipient.pem"),
-            ("auth", ".codex/auth.json"),
-            ("gitignore", ".codex/.gitignore"),
+            ("config", ".codex/config.toml".to_string()),
+            ("agent-audit", ".codex/hooks/agent-audit.conf".to_string()),
+            ("agent-audit", ".codex/hooks/recipient.pem".to_string()),
+            ("auth", ".codex/auth.json".to_string()),
+            ("gitignore", ".codex/.gitignore".to_string()),
+            ("version", format!(".codex/{executor}.version")),
+            ("sha256", format!(".codex/{executor}.sha256")),
         ],
         ".codex/hooks",
         ".codex/config.toml",
@@ -58,6 +58,14 @@ pub fn managed_candidates(cfg: &Config, os: Os) -> Vec<(String, String)> {
         format!("{root}/managed_config.toml")
     };
     candidates.push(("managed_config".to_string(), managed_config));
+    candidates.push((
+        "version".to_string(),
+        format!("{root}/{}.version", cfg.executor),
+    ));
+    candidates.push((
+        "sha256".to_string(),
+        format!("{root}/{}.sha256", cfg.executor),
+    ));
     candidates
 }
 

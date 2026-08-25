@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use agent_config::config::Config;
-use agent_config::model::{Agent, Cell, Os, Scope};
+use agent_config::model::{Agent, Cell, Location, Os, Scope};
 use agent_config::{agents, place};
 
 const AUDIT_CONF: &str = r#"
@@ -39,13 +39,16 @@ fn load(dir: &Path, conf: &str) -> Config {
 fn place_into(dir: &Path, cfg: &Config, agent: Agent, scope: Scope) -> Result<(), String> {
     let target = dir.join("target");
     fs::create_dir_all(&target).unwrap();
+    let os = Os::detect().unwrap();
     let cell = Cell {
         agent,
         scope,
-        os: Os::detect().unwrap(),
+        os,
         target: Some(target.display().to_string().replace('\\', "/")),
     };
-    let entries = agents::manifest(cfg, &cell, None)?;
+    let mut entries = agents::manifest(cfg, &cell, None)?;
+    let sidecars = place::sidecar_entries(&entries, &cfg.executor, agent, scope, os)?;
+    entries.extend(sidecars);
     place::place(&entries, &target, &cfg.executor)
 }
 
@@ -70,6 +73,8 @@ fn place_local_audit_writes_files_and_markers() {
         ".claude/hooks/agent-audit.conf",
         ".claude/.gitignore",
         ".mcp.json",
+        ".claude/agent-config.version",
+        ".claude/agent-config.sha256",
     ] {
         assert!(target.join(marked).is_file(), "missing {marked}");
         let marker = target.join(format!("{marked}.managed"));
@@ -98,6 +103,80 @@ fn place_local_audit_writes_files_and_markers() {
             .exists(),
         "hook assets carry no markers"
     );
+}
+
+#[test]
+fn place_writes_a_fixed_version_and_a_self_excluding_sha256() {
+    let dir = workspace("place-sidecars");
+    let cfg = load(&dir, AUDIT_CONF);
+    place_into(&dir, &cfg, Agent::Claude, Scope::Local).unwrap();
+    let target = dir.join("target");
+
+    let version = fs::read_to_string(target.join(".claude/agent-config.version")).unwrap();
+    assert_eq!(
+        version,
+        format!("{}-0001\n", agent_config::clock::utc_today_compact())
+    );
+
+    let checksums = fs::read_to_string(target.join(".claude/agent-config.sha256")).unwrap();
+    assert!(
+        !checksums.contains("agent-config.version") && !checksums.contains("agent-config.sha256"),
+        "{checksums}"
+    );
+    assert!(
+        checksums.contains("  .claude/settings.local.json"),
+        "{checksums}"
+    );
+}
+
+#[test]
+fn teardown_targets_list_the_version_and_sha256_sidecars() {
+    let (targets, _, _) = agents::claude::teardown_targets("agent-config");
+    assert!(targets.contains(&("version", ".claude/agent-config.version".to_string())));
+    assert!(targets.contains(&("sha256", ".claude/agent-config.sha256".to_string())));
+
+    let (targets, _, _) = agents::codex::teardown_targets("agent-config");
+    assert!(targets.contains(&("version", ".codex/agent-config.version".to_string())));
+    assert!(targets.contains(&("sha256", ".codex/agent-config.sha256".to_string())));
+}
+
+#[test]
+fn managed_candidates_list_the_version_and_sha256_sidecars() {
+    let dir = workspace("managed-candidates-sidecars");
+    let cfg = load(&dir, AUDIT_CONF);
+    let os = Os::detect().unwrap();
+
+    let root = agents::claude::managed_root(os);
+    let candidates = agents::claude::managed_candidates(&cfg, os);
+    assert!(candidates.contains(&(
+        "version".to_string(),
+        format!("{root}/agent-config.version")
+    )));
+    assert!(candidates.contains(&("sha256".to_string(), format!("{root}/agent-config.sha256"))));
+
+    let root = agents::codex::managed_root(os);
+    let candidates = agents::codex::managed_candidates(&cfg, os);
+    assert!(candidates.contains(&(
+        "version".to_string(),
+        format!("{root}/agent-config.version")
+    )));
+    assert!(candidates.contains(&("sha256".to_string(), format!("{root}/agent-config.sha256"))));
+}
+
+#[test]
+fn managed_sidecar_entries_target_the_managed_root() {
+    let os = Os::detect().unwrap();
+    let sidecars =
+        place::sidecar_entries(&[], "agent-config", Agent::Claude, Scope::Managed, os).unwrap();
+    let root = agents::claude::managed_root(os);
+    match &sidecars[0].location {
+        Location::Host(path) => assert_eq!(path, &format!("{root}/agent-config.version")),
+        _ => panic!("expected a host location"),
+    }
+    match &sidecars[1].location {
+        Location::Host(path) => assert_eq!(path, &format!("{root}/agent-config.sha256")),
+        _ => panic!("expected a host location"),
+    }
 }
 
 #[test]
@@ -226,6 +305,8 @@ fn teardown_removes_only_lab_files() {
     assert!(!target.join(".claude/settings.local.json.managed").exists());
     assert!(!target.join(".claude/hooks").exists());
     assert!(!target.join(".mcp.json").exists());
+    assert!(!target.join(".claude/agent-config.version").exists());
+    assert!(!target.join(".claude/agent-config.sha256").exists());
     assert!(
         target.join(".claude/own.txt").is_file(),
         "user file must survive"

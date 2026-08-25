@@ -52,6 +52,8 @@ Nothing is written on the fail path, so there is nothing to roll back; the forei
 
 The materialized agent home also gets a **self-ignore `.gitignore` = `*`**, placed as a normal bundle file (executor-marked, foreign-refused), so a `project` deploy never dirties the host project's git tree.
 
+`place` also writes the same `<owner>.version` / `<owner>.sha256` sidecars as `render --zip` (see [Bundles](#bundles)), at the same placement rule (managed root for managed cells, agent home for user-scope cells) — as ordinary marker-owned bundle files, so they are ownership-checked and converged/refused like any other, and `teardown` removes them like any other. Unlike `render --zip`, `place` never touches a ledger: `.version` is always the fixed `{today}-0001` (never looked up or minted), and `.sha256` is the fresh per-file manifest of that placement.
+
 ## Managed placement (deploy-only, human-gated)
 
 Managed config is **machine-global, admin-owned, highest-precedence** — it cannot be isolated per-workbench the way `local` / `project` deploys isolate user config. It is an **agent-scoped capability** — templates under `agents/<agent>/` plus the OS-path-aware bundle definition and interactive placement in `agent-config/` — that **any** config can opt into, regardless of backend (managed config is agent-side; the backend is irrelevant). This placement model is agent-agnostic; only the file format, paths, and what is enforceable differ per agent ([`claude-managed-config.md`](claude-managed-config.md), [`codex-managed-config.md`](codex-managed-config.md)).

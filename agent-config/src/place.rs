@@ -1,9 +1,43 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::model::{Agent, Content, Entry, Location};
+use crate::model::{Agent, Content, Entry, Location, Os, Scope};
 
 const MARKER_SUFFIX: &str = ".managed";
+
+/// `.version` (always the fixed `{today}-0001`, never looked up or minted —
+/// `place` never touches a ledger) and `.sha256` (the fresh manifest of
+/// `entries`) sidecars for a placed cell, mirroring the `--zip` sidecars at
+/// the same placement rule: managed root for managed cells, agent home for
+/// user-scope cells.
+pub fn sidecar_entries(
+    entries: &[Entry],
+    executor: &str,
+    agent: Agent,
+    scope: Scope,
+    os: Os,
+) -> Result<Vec<Entry>, String> {
+    let manifest = crate::render::manifest_of(entries)?;
+    let version = format!("{}-0001\n", crate::clock::utc_today_compact());
+    let location = |ext: &str| -> Location {
+        match scope {
+            Scope::Managed => {
+                let root = match agent {
+                    Agent::Claude => crate::agents::claude::managed_root(os),
+                    Agent::Codex => crate::agents::codex::managed_root(os),
+                };
+                Location::Host(format!("{root}/{executor}.{ext}"))
+            }
+            Scope::Local | Scope::Project => {
+                Location::InTarget(format!("{}/{executor}.{ext}", agent.home()))
+            }
+        }
+    };
+    Ok(vec![
+        Entry::marked_file("version", location("version"), version),
+        Entry::marked_file("sha256", location("sha256"), manifest),
+    ])
+}
 
 pub fn place(entries: &[Entry], target_dir: &Path, executor: &str) -> Result<(), String> {
     for entry in entries {
@@ -93,8 +127,8 @@ pub fn place(entries: &[Entry], target_dir: &Path, executor: &str) -> Result<(),
 
 pub fn teardown(agent: Agent, target_dir: &Path, executor: &str) -> Result<(), String> {
     let (targets, hooks_dir, anchor) = match agent {
-        Agent::Claude => crate::agents::claude::teardown_targets(),
-        Agent::Codex => crate::agents::codex::teardown_targets(),
+        Agent::Claude => crate::agents::claude::teardown_targets(executor),
+        Agent::Codex => crate::agents::codex::teardown_targets(executor),
     };
 
     let anchor_path = target_dir.join(anchor);

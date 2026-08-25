@@ -194,6 +194,26 @@ fn rendered_files(
     Ok(files)
 }
 
+/// The same content-only manifest `--zip` cell hashes are derived from
+/// (sha256 + relative path per rendered file, ordering-stable), computed
+/// directly from already-built entries — used by `place` for its `.sha256`
+/// sidecar, which has no ledger to hash against.
+pub fn manifest_of(entries: &[Entry]) -> Result<String, String> {
+    let mut files = Vec::new();
+    for entry in entries {
+        let Some((bytes, executable)) = entry.content.rendered() else {
+            continue;
+        };
+        files.push(RenderedFile {
+            rel: entry.location.render_rel()?,
+            bytes,
+            executable,
+        });
+    }
+    files.sort_by(|a, b| a.rel.cmp(&b.rel));
+    Ok(cell_manifest(&files))
+}
+
 fn sidecar_file_rel(
     ext: &str,
     executor: &str,

@@ -269,7 +269,9 @@ fn place_cmd(
                 os,
                 target: None,
             };
-            let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+            let mut entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+            let sidecars = place::sidecar_entries(&entries, &cfg.executor, agent, scope, os)?;
+            entries.extend(sidecars);
             place::managed_place(&entries, &cfg.executor, &mut confirm)?;
         }
         return Ok(());
@@ -293,7 +295,9 @@ fn place_cmd(
             os,
             target: Some(canonical(&target_dir)?),
         };
-        let entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+        let mut entries = agents::manifest(&cfg, &cell, seal.as_ref())?;
+        let sidecars = place::sidecar_entries(&entries, &cfg.executor, agent, scope, os)?;
+        entries.extend(sidecars);
         place::place(&entries, &target_dir, &cfg.executor)?;
     }
     Ok(())

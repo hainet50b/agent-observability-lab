@@ -24,18 +24,18 @@ pub fn manifest(
     }
 }
 
-pub fn teardown_targets() -> (
-    Vec<(&'static str, &'static str)>,
-    &'static str,
-    &'static str,
-) {
+pub fn teardown_targets(
+    executor: &str,
+) -> (Vec<(&'static str, String)>, &'static str, &'static str) {
     (
         vec![
-            ("settings", ".claude/settings.local.json"),
-            ("agent-audit", ".claude/hooks/agent-audit.conf"),
-            ("agent-audit", ".claude/hooks/recipient.pem"),
-            ("mcp", ".mcp.json"),
-            ("gitignore", ".claude/.gitignore"),
+            ("settings", ".claude/settings.local.json".to_string()),
+            ("agent-audit", ".claude/hooks/agent-audit.conf".to_string()),
+            ("agent-audit", ".claude/hooks/recipient.pem".to_string()),
+            ("mcp", ".mcp.json".to_string()),
+            ("gitignore", ".claude/.gitignore".to_string()),
+            ("version", format!(".claude/{executor}.version")),
+            ("sha256", format!(".claude/{executor}.sha256")),
         ],
         ".claude/hooks",
         ".claude/settings.local.json",
@@ -44,10 +44,20 @@ pub fn teardown_targets() -> (
 
 pub fn managed_candidates(cfg: &Config, os: Os) -> Vec<(String, String)> {
     let root = managed_root(os);
-    let mut candidates = vec![(
-        "managed-settings".to_string(),
-        format!("{root}/managed-settings.d/10-{}.json", cfg.executor),
-    )];
+    let mut candidates = vec![
+        (
+            "managed-settings".to_string(),
+            format!("{root}/managed-settings.d/10-{}.json", cfg.executor),
+        ),
+        (
+            "version".to_string(),
+            format!("{root}/{}.version", cfg.executor),
+        ),
+        (
+            "sha256".to_string(),
+            format!("{root}/{}.sha256", cfg.executor),
+        ),
+    ];
     if cfg.audit.is_some() {
         candidates.extend(hook_candidates(
             &format!("{root}/hooks/{}", cfg.executor),
