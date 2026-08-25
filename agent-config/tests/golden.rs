@@ -681,3 +681,91 @@ fn concern_filter_rejects_an_undeclared_concern() {
     let err = cfg.retain_concerns(&[Concern::Audit]).unwrap_err();
     assert!(err.contains("[agent_audit]"), "{err}");
 }
+
+#[test]
+fn project_targets_are_named_and_keyed_flat_by_os() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("project-targets");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(
+        &conf_path,
+        format!(
+            "{TELEMETRY_CONF}
+[project.server-a]
+linux = \"/srv/server-a\"
+windows = \"C:/server-a\"
+"
+        ),
+    )
+    .unwrap();
+
+    let cfg = Config::load(&conf_path, None).unwrap();
+    let target = cfg.projects.get("server-a").expect("project declared");
+    assert_eq!(target.for_os(Os::Linux), Some("/srv/server-a"));
+    assert_eq!(target.for_os(Os::Windows), Some("C:/server-a"));
+    assert_eq!(target.for_os(Os::Macos), None);
+}
+
+#[test]
+fn project_targets_merge_additively_from_the_overlay() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("project-targets-overlay");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(
+        &conf_path,
+        format!("{TELEMETRY_CONF}\n[project.server-a]\nlinux = \"/srv/server-a\"\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("agent-config.local.toml"),
+        "[project.throwaway]\nlinux = \"/tmp/throwaway\"\n",
+    )
+    .unwrap();
+
+    let cfg = Config::load(&conf_path, None).unwrap();
+    assert!(cfg.projects.contains_key("server-a"));
+    assert_eq!(
+        cfg.projects.get("throwaway").unwrap().for_os(Os::Linux),
+        Some("/tmp/throwaway")
+    );
+}
+
+#[test]
+fn a_project_name_declared_in_both_files_is_a_hard_error() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("project-targets-ambiguous");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(
+        &conf_path,
+        format!("{TELEMETRY_CONF}\n[project.server-a]\nlinux = \"/srv/server-a\"\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("agent-config.local.toml"),
+        "[project.server-a]\nlinux = \"/tmp/server-a\"\n",
+    )
+    .unwrap();
+
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(err.contains("server-a"), "{err}");
+    assert!(err.contains("both"), "{err}");
+}
+
+#[test]
+fn a_project_name_must_be_a_safe_slug() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("project-targets-bad-name");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let conf_path = dir.join("agent-config.toml");
+    fs::write(
+        &conf_path,
+        format!("{TELEMETRY_CONF}\n[project.\"server a\"]\nlinux = \"/srv/server-a\"\n"),
+    )
+    .unwrap();
+
+    let err = Config::load(&conf_path, None).unwrap_err();
+    assert!(err.contains("server a"), "{err}");
+}

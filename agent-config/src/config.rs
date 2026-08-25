@@ -1,9 +1,10 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::model::Concern;
+use crate::model::{Concern, Os};
 
 pub const DEFAULT_OVERLAY: &str = "agent-config.local.toml";
 pub const DEFAULT_EXECUTOR: &str = "agent-config";
@@ -14,6 +15,7 @@ struct ConfFile {
     agent_config: Option<AgentConfigFile>,
     telemetry: Option<TelemetryFile>,
     agent_audit: Option<AuditFile>,
+    project: Option<BTreeMap<String, ProjectTargetFile>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +69,15 @@ struct SealFile {
 struct OverlayFile {
     telemetry: Option<TelemetryOverlay>,
     agent_audit: Option<AuditOverlay>,
+    project: Option<BTreeMap<String, ProjectTargetFile>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectTargetFile {
+    linux: Option<String>,
+    macos: Option<String>,
+    windows: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,11 +139,37 @@ pub struct Audit {
     pub seal_epoch: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProjectTarget {
+    pub linux: Option<String>,
+    pub macos: Option<String>,
+    pub windows: Option<String>,
+}
+
+impl ProjectTarget {
+    pub fn for_os(&self, os: Os) -> Option<&str> {
+        match os {
+            Os::Linux => self.linux.as_deref(),
+            Os::Macos => self.macos.as_deref(),
+            Os::Windows => self.windows.as_deref(),
+        }
+    }
+
+    fn from_file(file: ProjectTargetFile) -> ProjectTarget {
+        ProjectTarget {
+            linux: file.linux,
+            macos: file.macos,
+            windows: file.windows,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Config {
     pub executor: String,
     pub telemetry: Option<Telemetry>,
     pub audit: Option<Audit>,
+    pub projects: BTreeMap<String, ProjectTarget>,
 }
 
 impl Config {
@@ -187,6 +224,12 @@ impl Config {
             ));
         }
 
+        let mut projects = BTreeMap::new();
+        for (name, target) in file.project.into_iter().flatten() {
+            validate_project_name(path, &name)?;
+            projects.insert(name, ProjectTarget::from_file(target));
+        }
+
         let overlay = match local_conf {
             Some(overlay) => overlay.to_path_buf(),
             None => conf_dir(path).join(DEFAULT_OVERLAY),
@@ -205,6 +248,17 @@ impl Config {
                 {
                     a.api_key = o.elasticsearch.api_key;
                 }
+                for (name, target) in file.project.into_iter().flatten() {
+                    validate_project_name(&overlay, &name)?;
+                    if projects.contains_key(&name) {
+                        return Err(format!(
+                            "project '{name}' declared in both {} and {}",
+                            path.display(),
+                            overlay.display()
+                        ));
+                    }
+                    projects.insert(name, ProjectTarget::from_file(target));
+                }
             }
             Err(_) if local_conf.is_some() => {
                 return Err(format!("--local-conf not found: {}", overlay.display()));
@@ -216,6 +270,7 @@ impl Config {
             executor,
             telemetry,
             audit,
+            projects,
         })
     }
 
@@ -260,6 +315,17 @@ pub fn conf_dir(config: &Path) -> PathBuf {
 fn require(path: &Path, key: &str, value: &str) -> Result<(), String> {
     if value.is_empty() {
         return Err(format!("{}: '{key}' is empty", path.display()));
+    }
+    Ok(())
+}
+
+fn validate_project_name(path: &Path, name: &str) -> Result<(), String> {
+    let valid = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+    if !valid {
+        return Err(format!(
+            "{}: project name '{name}' must be alphanumeric or '-'",
+            path.display()
+        ));
     }
     Ok(())
 }
