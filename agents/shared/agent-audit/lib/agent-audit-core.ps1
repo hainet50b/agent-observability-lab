@@ -84,7 +84,7 @@ function Assert-StreamEnabled($Stream) {
 
 function Read-HookPayload($Stream) {
     try {
-        try { [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false) } catch {}
+        try { [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { $null = $_ }
         $raw = [Console]::In.ReadToEnd()
         if (-not $raw) { Log 'empty stdin — nothing to capture'; exit 0 }
         try { $script:rawObj = $raw | ConvertFrom-Json }
