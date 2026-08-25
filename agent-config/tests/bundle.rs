@@ -79,16 +79,13 @@ fn bundles_managed_cells_with_a_version_ledger() {
         "{archives:?}"
     );
 
-    let ledger = fs::read_to_string(dir.join("bundle-versions.conf")).unwrap();
+    let ledger = fs::read_to_string(dir.join("agent-config-managed-versions.conf")).unwrap();
     for os in ["linux", "macos", "windows"] {
         assert!(
-            ledger.contains(&format!("claude.managed.{os}.version=")),
+            ledger.contains(&format!("claude.{os}.version=")),
             "{ledger}"
         );
-        assert!(
-            ledger.contains(&format!("claude.managed.{os}.hash=")),
-            "{ledger}"
-        );
+        assert!(ledger.contains(&format!("claude.{os}.hash=")), "{ledger}");
     }
 }
 
@@ -98,13 +95,13 @@ fn unchanged_cells_are_skipped_and_the_ledger_is_stable() {
     let cfg = load(&dir, AUDIT_CONF);
     let run = managed_run(&dir, vec![Os::Linux], false);
     bundle::bundle(&cfg, None, Agent::Claude, &dir, &run).unwrap();
-    let ledger_before = fs::read_to_string(dir.join("bundle-versions.conf")).unwrap();
+    let ledger_before = fs::read_to_string(dir.join("agent-config-managed-versions.conf")).unwrap();
     let archives_before = zips(&dir);
 
     bundle::bundle(&cfg, None, Agent::Claude, &dir, &run).unwrap();
     assert_eq!(
         ledger_before,
-        fs::read_to_string(dir.join("bundle-versions.conf")).unwrap()
+        fs::read_to_string(dir.join("agent-config-managed-versions.conf")).unwrap()
     );
     assert_eq!(archives_before, zips(&dir), "skipped cell must not re-emit");
 }
@@ -119,10 +116,10 @@ fn changed_content_bumps_the_version_sequence() {
     let cfg = load(&dir, &AUDIT_CONF.replace("2000", "5000"));
     bundle::bundle(&cfg, None, Agent::Claude, &dir, &run).unwrap();
 
-    let ledger = fs::read_to_string(dir.join("bundle-versions.conf")).unwrap();
+    let ledger = fs::read_to_string(dir.join("agent-config-managed-versions.conf")).unwrap();
     let version_line = ledger
         .lines()
-        .find(|l| l.starts_with("claude.managed.linux.version="))
+        .find(|l| l.starts_with("claude.linux.version="))
         .unwrap();
     assert!(version_line.ends_with("-0002"), "{version_line}");
     let archives = zips(&dir);
@@ -231,5 +228,39 @@ fn local_bundle_bakes_the_stack_dir_and_project_needs_a_target() {
     assert!(
         settings.contains(&format!("{baked}/.claude/hooks/agent-audit.sh")),
         "{settings}"
+    );
+}
+
+#[test]
+fn local_and_project_versions_land_in_scope_specific_ledgers() {
+    let dir = workspace("bundle-scoped-ledgers");
+    let target = workspace("bundle-scoped-ledgers-target");
+    let cfg = load(&dir, AUDIT_CONF);
+    let run = BundleRun {
+        scopes: vec![Scope::Local, Scope::Project],
+        oses: vec![Os::Linux],
+        target: Some(target.display().to_string().replace('\\', "/")),
+        out_dir: dir.join("dist"),
+        emit_all: false,
+    };
+    bundle::bundle(&cfg, None, Agent::Claude, &dir, &run).unwrap();
+
+    assert!(
+        !dir.join("agent-config-managed-versions.conf").exists(),
+        "no managed cells were bundled"
+    );
+
+    let local_ledger = fs::read_to_string(dir.join("agent-config-local-versions.conf")).unwrap();
+    assert!(
+        local_ledger.contains("claude.linux.version="),
+        "{local_ledger}"
+    );
+
+    let project_ledger =
+        fs::read_to_string(dir.join("agent-config-project-versions.conf")).unwrap();
+    let name = target.file_name().unwrap().to_string_lossy().to_string();
+    assert!(
+        project_ledger.contains(&format!("claude.{name}.linux.version=")),
+        "{project_ledger}"
     );
 }

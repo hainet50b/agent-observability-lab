@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -10,8 +10,6 @@ use zip::write::SimpleFileOptions;
 use crate::config::Config;
 use crate::model::{Agent, Cell, Os, Scope};
 use crate::seal::SealSource;
-
-const LEDGER_NAME: &str = "bundle-versions.conf";
 
 pub struct BundleRun {
     pub scopes: Vec<Scope>,
@@ -34,21 +32,12 @@ pub fn bundle(
     config_dir: &Path,
     run: &BundleRun,
 ) -> Result<(), String> {
-    let ledger_path = config_dir.join(LEDGER_NAME);
-    let mut ledger = read_ledger(&ledger_path)?;
-
     let today = crate::clock::utc_today_compact();
-    let max_seq = ledger
-        .values()
-        .filter_map(|value| value.strip_prefix(&format!("{today}-")))
-        .filter_map(|seq| seq.parse::<u32>().ok())
-        .max()
-        .unwrap_or(0);
-    let new_version = format!("{today}-{:04}", max_seq + 1);
 
     fs::create_dir_all(&run.out_dir)
         .map_err(|e| format!("cannot create {}: {e}", run.out_dir.display()))?;
 
+    let mut ledgers: HashMap<Scope, Ledger> = HashMap::new();
     let mut changed = 0;
     for &scope in &run.scopes {
         for &os in &run.oses {
@@ -80,17 +69,27 @@ pub fn bundle(
             let manifest = cell_manifest(&files);
             let hash = cell_hash(&manifest);
 
-            let key = format!("{}.{}.{}", agent.name(), scope.name(), os.name());
-            let old_hash = ledger.get(&format!("{key}.hash")).cloned();
-            let old_version = ledger.get(&format!("{key}.version")).cloned();
+            let ledger = match ledgers.entry(scope) {
+                std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(load_ledger(config_dir, &cfg.executor, scope, &today)?)
+                }
+            };
+
+            let key = ledger_key(agent, scope, os, cell.target.as_deref());
+            let old_hash = ledger.entries.get(&format!("{key}.hash")).cloned();
+            let old_version = ledger.entries.get(&format!("{key}.version")).cloned();
             let (version, cell_changed) = match (old_hash, old_version) {
                 (Some(h), Some(v)) if h == hash => (v, false),
-                _ => (new_version.clone(), true),
+                _ => (ledger.new_version.clone(), true),
             };
-            ledger.insert(format!("{key}.version"), version.clone());
-            ledger.insert(format!("{key}.hash"), hash);
+            ledger
+                .entries
+                .insert(format!("{key}.version"), version.clone());
+            ledger.entries.insert(format!("{key}.hash"), hash);
             if cell_changed {
                 changed += 1;
+                ledger.changed = true;
             }
 
             if !cell_changed && !run.emit_all {
@@ -133,14 +132,17 @@ pub fn bundle(
         }
     }
 
-    if changed > 0 {
-        write_ledger(&ledger_path, &ledger)?;
-        log(&format!(
-            "{changed} cell(s) changed -> {new_version}; ledger updated: {} (commit it)",
-            ledger_path.display()
-        ));
-    } else {
-        log("no cells changed — ledger untouched");
+    for ledger in ledgers.values() {
+        if ledger.changed {
+            write_ledger(&ledger.path, &ledger.entries)?;
+            log(&format!(
+                "ledger updated: {} (commit it)",
+                ledger.path.display()
+            ));
+        }
+    }
+    if changed == 0 {
+        log("no cells changed — ledgers untouched");
     }
     Ok(())
 }
@@ -236,6 +238,62 @@ fn remove_stale_archives(out_dir: &Path, prefix: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+struct Ledger {
+    path: PathBuf,
+    entries: BTreeMap<String, String>,
+    new_version: String,
+    changed: bool,
+}
+
+fn ledger_file_name(executor: &str, scope: Scope) -> String {
+    format!("{executor}-{}-versions.conf", scope.name())
+}
+
+fn load_ledger(
+    config_dir: &Path,
+    executor: &str,
+    scope: Scope,
+    today: &str,
+) -> Result<Ledger, String> {
+    let path = config_dir.join(ledger_file_name(executor, scope));
+    let entries = read_ledger(&path)?;
+    let max_seq = entries
+        .values()
+        .filter_map(|value| value.strip_prefix(&format!("{today}-")))
+        .filter_map(|seq| seq.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
+    Ok(Ledger {
+        path,
+        entries,
+        new_version: format!("{today}-{:04}", max_seq + 1),
+        changed: false,
+    })
+}
+
+fn ledger_key(agent: Agent, scope: Scope, os: Os, target: Option<&str>) -> String {
+    match scope {
+        Scope::Managed | Scope::Local => format!("{}.{}", agent.name(), os.name()),
+        Scope::Project => format!(
+            "{}.{}.{}",
+            agent.name(),
+            target.map(project_slug).unwrap_or_default(),
+            os.name()
+        ),
+    }
+}
+
+// Interim stand-in for the declared project name T3 introduces; derived from
+// the raw --target path since that is the only per-project identifier today.
+fn project_slug(target: &str) -> String {
+    target
+        .trim_end_matches('/')
+        .rsplit('/')
+        .find(|s| !s.is_empty())
+        .unwrap_or(target)
+        .to_string()
 }
 
 fn read_ledger(path: &Path) -> Result<BTreeMap<String, String>, String> {
