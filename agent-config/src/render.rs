@@ -140,11 +140,10 @@ pub fn bundle(
         });
 
         let prefix = format!(
-            "{}-{}-{}-{}-",
+            "{}-{}-{}-",
             cfg.executor,
-            agent.name(),
-            run.scope.name(),
-            os.name()
+            key.replace('.', "-"),
+            run.scope.name()
         );
         remove_stale_archives(&run.out_dir, &prefix)?;
         let archive = run.out_dir.join(format!("{prefix}{version}.zip"));

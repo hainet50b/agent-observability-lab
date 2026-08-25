@@ -72,12 +72,14 @@ fn bundles_managed_cells_with_a_version_ledger() {
 
     let archives = zips(&dir);
     assert_eq!(archives.len(), 3, "one archive per OS: {archives:?}");
-    assert!(
-        archives
-            .iter()
-            .all(|n| n.starts_with("agent-config-claude-managed-")),
-        "{archives:?}"
-    );
+    for os in ["linux", "macos", "windows"] {
+        assert!(
+            archives
+                .iter()
+                .any(|n| n.starts_with(&format!("agent-config-claude-{os}-managed-"))),
+            "{archives:?}"
+        );
+    }
 
     let ledger = fs::read_to_string(dir.join("agent-config-managed-versions.conf")).unwrap();
     for os in ["linux", "macos", "windows"] {
@@ -203,7 +205,7 @@ fn local_bundle_bakes_the_stack_dir() {
     let archives = zips(&dir);
     assert_eq!(archives.len(), 1, "{archives:?}");
     assert!(
-        archives[0].starts_with("agent-config-claude-local-linux-"),
+        archives[0].starts_with("agent-config-claude-linux-local-"),
         "{archives:?}"
     );
 
@@ -278,6 +280,68 @@ fn local_and_project_versions_land_in_scope_specific_ledgers() {
     assert!(
         project_ledger.contains("claude.server-a.linux.version="),
         "{project_ledger}"
+    );
+
+    let archives = zips(&dir);
+    assert!(
+        archives
+            .iter()
+            .any(|n| n.starts_with("agent-config-claude-linux-local-")),
+        "{archives:?}"
+    );
+    assert!(
+        archives
+            .iter()
+            .any(|n| n.starts_with("agent-config-claude-server-a-linux-project-")),
+        "{archives:?}"
+    );
+}
+
+#[test]
+fn project_archives_for_different_names_sharing_an_os_do_not_collide() {
+    let dir = workspace("bundle-project-name-collision");
+    let target_a = workspace("bundle-project-name-collision-a");
+    let target_b = workspace("bundle-project-name-collision-b");
+    let cfg = load(
+        &dir,
+        &format!(
+            "{AUDIT_CONF}\n[project.server-a]\nlinux = \"{}\"\n[project.server-b]\nlinux = \"{}\"\n",
+            target_a.display().to_string().replace('\\', "/"),
+            target_b.display().to_string().replace('\\', "/"),
+        ),
+    );
+
+    let run_for = |name: &str| {
+        let (oses, project_target) = cfg
+            .os_candidates(Scope::Project, Some(name), &[Os::Linux], false)
+            .unwrap();
+        BundleRun {
+            scope: Scope::Project,
+            oses,
+            project: Some(ProjectSelection {
+                name: name.into(),
+                target: project_target.unwrap().clone(),
+            }),
+            out_dir: dir.join("dist"),
+            emit_all: false,
+        }
+    };
+
+    render::bundle(&cfg, None, Agent::Claude, &dir, &run_for("server-a")).unwrap();
+    render::bundle(&cfg, None, Agent::Claude, &dir, &run_for("server-b")).unwrap();
+
+    let archives = zips(&dir);
+    assert!(
+        archives
+            .iter()
+            .any(|n| n.starts_with("agent-config-claude-server-a-linux-project-")),
+        "server-a's archive was wrongly removed as stale: {archives:?}"
+    );
+    assert!(
+        archives
+            .iter()
+            .any(|n| n.starts_with("agent-config-claude-server-b-linux-project-")),
+        "{archives:?}"
     );
 }
 
