@@ -160,6 +160,24 @@ fn archive_carries_the_rendered_tree_and_version_file() {
         names.contains(&"etc/claude-code/agent-config.version".to_string()),
         "{names:?}"
     );
+    assert!(
+        names.contains(&"etc/claude-code/agent-config.sha256".to_string()),
+        "{names:?}"
+    );
+
+    let mut checksums = String::new();
+    zip.by_name("etc/claude-code/agent-config.sha256")
+        .unwrap()
+        .read_to_string(&mut checksums)
+        .unwrap();
+    assert!(
+        !checksums.contains("agent-config.version") && !checksums.contains("agent-config.sha256"),
+        "{checksums}"
+    );
+    assert!(
+        checksums.contains("  etc/claude-code/managed-settings.d/10-agent-config.json"),
+        "{checksums}"
+    );
 
     let mut fragment = String::new();
     zip.by_name("etc/claude-code/managed-settings.d/10-agent-config.json")

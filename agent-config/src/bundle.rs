@@ -77,7 +77,8 @@ pub fn bundle(
                 return Err(format!("{cell_name}: rendered nothing"));
             }
             files.sort_by(|a, b| a.rel.cmp(&b.rel));
-            let hash = cell_hash(&files);
+            let manifest = cell_manifest(&files);
+            let hash = cell_hash(&manifest);
 
             let key = format!("{}.{}.{}", agent.name(), scope.name(), os.name());
             let old_hash = ledger.get(&format!("{key}.hash")).cloned();
@@ -98,8 +99,13 @@ pub fn bundle(
             }
 
             files.push(RenderedFile {
-                rel: version_file_rel(&cfg.executor, agent, &cell)?,
+                rel: sidecar_file_rel("version", &cfg.executor, agent, &cell)?,
                 bytes: format!("{version}\n").into_bytes(),
+                executable: false,
+            });
+            files.push(RenderedFile {
+                rel: sidecar_file_rel("sha256", &cfg.executor, agent, &cell)?,
+                bytes: manifest.into_bytes(),
                 executable: false,
             });
 
@@ -159,23 +165,27 @@ fn rendered_files(
     Ok(files)
 }
 
-fn version_file_rel(executor: &str, agent: Agent, cell: &Cell) -> Result<String, String> {
-    let version_file = format!("{executor}.version");
+fn sidecar_file_rel(
+    ext: &str,
+    executor: &str,
+    agent: Agent,
+    cell: &Cell,
+) -> Result<String, String> {
+    let file_name = format!("{executor}.{ext}");
     match cell.scope {
         Scope::Managed => {
             let root = match agent {
                 Agent::Claude => crate::agents::claude::managed_root(cell.os),
                 Agent::Codex => crate::agents::codex::managed_root(cell.os),
             };
-            let rel =
-                crate::model::Location::Host(format!("{root}/{version_file}")).render_rel()?;
+            let rel = crate::model::Location::Host(format!("{root}/{file_name}")).render_rel()?;
             Ok(rel)
         }
-        Scope::Local | Scope::Project => Ok(format!("{}/{version_file}", agent.home())),
+        Scope::Local | Scope::Project => Ok(format!("{}/{file_name}", agent.home())),
     }
 }
 
-fn cell_hash(files: &[RenderedFile]) -> String {
+fn cell_manifest(files: &[RenderedFile]) -> String {
     let mut manifest = String::new();
     for file in files {
         manifest.push_str(&hex(&Sha256::digest(&file.bytes)));
@@ -183,6 +193,10 @@ fn cell_hash(files: &[RenderedFile]) -> String {
         manifest.push_str(&file.rel);
         manifest.push('\n');
     }
+    manifest
+}
+
+fn cell_hash(manifest: &str) -> String {
     hex(&Sha256::digest(manifest.as_bytes()))
 }
 
