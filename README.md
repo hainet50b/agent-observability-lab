@@ -194,19 +194,27 @@ deploys to two more scopes:
 | Scope | Where it lands | What differs |
 | --- | --- | --- |
 | `local` (default) | beside the `--config` copy — the workbench | full bundle, including the Elasticsearch MCP |
-| `project` | `--target <dir>` — your real project | no MCP; the placed agent home ignores itself so your repo stays clean |
+| `project` | `--project <name>` — a name declared in `[project.<name>]` | no MCP; the placed agent home ignores itself so your repo stays clean |
 | `managed` | fixed machine-global system paths (below) | org enforcement — highest precedence, interactive placement |
 
-**`project` — wire your real project.** To see what your everyday sessions
-would emit:
+**`project` — wire your real project.** Declare the target path in
+`workbench/mine/agent-config.toml` first:
+
+```toml
+[project.mine]
+linux = "/path/to/project"
+```
+
+Then, to see what your everyday sessions would emit:
 
 ```sh
 cargo run -q --manifest-path agent-config/Cargo.toml -- \
-  place --agent claude --config workbench/mine/agent-config.toml --scope project --target /path/to/project
+  place --agent claude --config workbench/mine/agent-config.toml --scope project --project mine
 ```
 
-Same teardown (with the same `--target`). Remember that project's prompts and
-tool I/O then flow into this Elasticsearch.
+Teardown still takes the raw directory (`--target /path/to/project`, not
+`--project`). Remember that project's prompts and tool I/O then flow into
+this Elasticsearch.
 
 **`managed` — org-enforced placement. Handle with care: this changes your
 machine, not a directory.** The managed tier is how an organization forces

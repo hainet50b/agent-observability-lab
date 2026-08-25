@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::model::{Concern, Os};
+use crate::model::{Concern, Os, Scope};
 
 pub const DEFAULT_OVERLAY: &str = "agent-config.local.toml";
 pub const DEFAULT_EXECUTOR: &str = "agent-config";
@@ -272,6 +272,54 @@ impl Config {
             audit,
             projects,
         })
+    }
+
+    /// The OS candidates a `(scope, --project)` selection makes available, filtered by an
+    /// optional explicit `--os` list, and — for `place`, which only ever deploys to the live
+    /// host — further restricted to the detected host OS. An empty result is not an error: it
+    /// means the caller should loudly skip rather than fail. Returns the resolved project
+    /// target too, so a caller doesn't have to look it up a second time.
+    pub fn os_candidates(
+        &self,
+        scope: Scope,
+        project: Option<&str>,
+        os_filter: &[Os],
+        restrict_to_host: bool,
+    ) -> Result<(Vec<Os>, Option<&ProjectTarget>), String> {
+        let project_target = match scope {
+            Scope::Project => {
+                let name = project
+                    .ok_or_else(|| "--scope project requires --project <name>".to_string())?;
+                Some(self.projects.get(name).ok_or_else(|| {
+                    format!(
+                        "no project '{name}' declared (see [project.{name}] in --config or the overlay)"
+                    )
+                })?)
+            }
+            Scope::Local | Scope::Managed => None,
+        };
+
+        let mut candidates: Vec<Os> = match scope {
+            Scope::Managed => Os::ALL.to_vec(),
+            Scope::Local => vec![Os::detect()?],
+            Scope::Project => {
+                let target = project_target.expect("resolved above for Scope::Project");
+                Os::ALL
+                    .into_iter()
+                    .filter(|&os| target.for_os(os).is_some())
+                    .collect()
+            }
+        };
+
+        if !os_filter.is_empty() {
+            candidates.retain(|os| os_filter.contains(os));
+        }
+        if restrict_to_host {
+            let host = Os::detect()?;
+            candidates.retain(|&os| os == host);
+        }
+
+        Ok((candidates, project_target))
     }
 
     pub fn retain_concerns(&mut self, concerns: &[Concern]) -> Result<(), String> {
