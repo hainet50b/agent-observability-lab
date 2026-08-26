@@ -80,6 +80,12 @@ User prompt audit documents in `logs-agent_audit.user_prompt-default` use this c
     "conversation_id": "...",
     "turn_id": "...",
     "seal": { "key_id": null },
+    "config": {
+      "version": "...",
+      "hash": "...",
+      "runtime_hash": "...",
+      "integrity": "match"
+    },
     "user_prompt": {
       "text": "...",
       "encrypted_text": null,
@@ -99,6 +105,7 @@ Field ownership:
 - `agent_audit.agent.*` describes the AI agent application, not the ECS collecting agent.
 - `agent_audit.agent.account.*` describes the AI agent provider account when available; it is read from the agent's local credential store (for Codex CLI, `$CODEX_HOME/auth.json` — see [Identity derivation](#identity-derivation)).
 - `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it, and is read from the same local credential store (see [Identity derivation](#identity-derivation)).
+- `agent_audit.config.*` describes the deployed **config bundle's provenance** — what was placed on the host, not the AI agent's identity, so it sits beside `seal`, not under `agent_audit.agent.*`. `version` and `hash` are read at hook time from the deployed `<executor>.version` / `<executor>.sha256` sidecars (see [`config-deployment.md`](config-deployment.md) "Bundles"); `runtime_hash` is recomputed at hook time over the deployed files, using the same two-stage manifest-then-hash shape as the sidecar's own `hash` so the two are comparable; `integrity` is `match` or `mismatch` from comparing `hash` to `runtime_hash`, or `unknown` whenever a sidecar is missing or recomputation fails — the hook stays fail-open, so a degraded `config` block never blocks the audit write. `runtime_hash` only detects accidental drift (a partial push, corruption, a hand edit) — see [`threat-model.md`](threat-model.md) for why it is not a tamper-evidence control.
 - Standardized audit event names belong in `event.action`; user prompt submissions use `event.action: user-prompt`.
 - Hook senders should construct near-final JSON documents before indexing. Ingest pipelines for audit streams should stay minimal: defaulting, validation, and routing are acceptable, but prompt redaction/encryption belongs in the sender.
 - `logs-agent_audit.*` is access-controlled separately from OTel/APM telemetry indices. The intended production posture is that only audit-authorized users can read the audit data stream.
@@ -122,6 +129,12 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
     "conversation_id": "...",
     "turn_id": "...",
     "seal": { "key_id": null },
+    "config": {
+      "version": "...",
+      "hash": "...",
+      "runtime_hash": "...",
+      "integrity": "match"
+    },
     "tool_call": {
       "tool":   { "name": "...", "call_id": "..." },
       "input":  { "text": "...", "encrypted_text": null, "length": 123 },
@@ -131,7 +144,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 }
 ```
 
-`event.*`, `user.*`, `host.*`, `agent_audit.agent.*`, `conversation_id`, and `turn_id` carry the same meaning and identity derivation as user prompt documents. Tool-call-specific ownership:
+`event.*`, `user.*`, `host.*`, `agent_audit.agent.*`, `agent_audit.config.*`, `conversation_id`, and `turn_id` carry the same meaning and derivation as user prompt documents. Tool-call-specific ownership:
 
 - `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
 - `agent_audit.tool_call.tool.name` ← the hook's `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP tool-result span's `call_id` — `codex.tool_result` for Codex CLI).
@@ -160,6 +173,7 @@ Mappings are **strict** by default — an unexpected field fails indexing rather
 | Field(s) | Type | Note |
 |---|---|---|
 | `user.id` / `.name`, `host.name` / `.hostname`, `event.*`, `agent_audit.agent.*`, `agent_audit.conversation_id` / `.turn_id`, `agent_audit.seal.key_id` | `keyword` | where applicable; `seal.key_id` is the recipient epoch or `null` |
+| `agent_audit.config.version` / `.hash` / `.runtime_hash` / `.integrity` | `keyword` | config-provenance; `integrity` is one of `match` / `mismatch` / `unknown`, not a boolean, so "could not be computed" stays distinct from "did not match" |
 | `agent_audit.user_prompt.text` | **`wildcard`** | holds the prompt, `[REDACTED]`, or `[ENCRYPTED]`; substring/regexp |
 | `agent_audit.user_prompt.encrypted_text` | **`binary`** | base64 CMS; stored, not searchable |
 | `agent_audit.user_prompt.length` | `long` | |
@@ -169,6 +183,15 @@ Mappings are **strict** by default — an unexpected field fails indexing rather
 | `agent_audit.tool_call.input.length` / `.output.length` | `long` | |
 
 Both `.text` body fields are `wildcard` — substring/regexp over machine-generated tool JSON, and a prompt body that may be large or carry an `[ENCRYPTED]` / `[REDACTED]` marker, each indexed without risking Lucene's ~32 KB term limit; the sealed bodies are `binary` (opaque base64 CMS, not searchable). Tool-call volume far exceeds user prompts (many per turn) and bodies are larger; the lab retains full bodies for now (no truncation), with `length` always recorded so size is known even if a body is sealed or capped.
+
+A `@mappings` component template change (such as adding `agent_audit.config.*`) only reaches the **write index** of an already-provisioned data stream on rollover — re-provisioning updates the component/index templates but not documents already routed to the current backing index, per [`SPEC.md`](SPEC.md) "Lifecycle (ILM)". A deployment updating from a pre-`config`-field template must force one rollover per stream after provisioning to pick up the new mapping immediately, rather than waiting for ILM's own `max_age: 1d` rollover:
+
+```
+POST logs-agent_audit.user_prompt-default/_rollover
+POST logs-agent_audit.tool_call-default/_rollover
+```
+
+Until that rollover runs, writes against the old backing index still succeed under the old (pre-`config`) strict mapping — the new fields are simply absent from any document indexed before the rollover, not rejected.
 
 Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
 

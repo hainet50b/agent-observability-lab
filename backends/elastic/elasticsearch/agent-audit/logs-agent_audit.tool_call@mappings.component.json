@@ -52,6 +52,14 @@
                 "key_id": { "type": "keyword" }
               }
             },
+            "config": {
+              "properties": {
+                "version":      { "type": "keyword" },
+                "hash":         { "type": "keyword" },
+                "runtime_hash": { "type": "keyword" },
+                "integrity":    { "type": "keyword" }
+              }
+            },
             "tool_call": {
               "properties": {
                 "tool": {
