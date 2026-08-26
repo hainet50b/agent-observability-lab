@@ -181,6 +181,138 @@ json::unescape() { ESC=$1 LC_ALL=C LANG=C awk "$awk_unesc" </dev/null; }
 jv_esc() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf 'null'; fi; }
 jv_raw() { if [ -n "$1" ]; then printf '"%s"' "$(json::escape "$1")"; else printf 'null'; fi; }
 
+sha256_cmd=()
+sha256_tool() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256_cmd=(sha256sum)
+  elif command -v shasum >/dev/null 2>&1; then
+    sha256_cmd=(shasum -a 256)
+  else
+    sha256_cmd=()
+  fi
+  [ "${#sha256_cmd[@]}" -gt 0 ]
+}
+
+sha256_file() {
+  sha256_tool || return 1
+  "${sha256_cmd[@]}" -- "$1" 2>/dev/null | awk '{print $1}'
+}
+
+provenance_single_version_match() {
+  dir=$1
+  match=""
+  count=0
+  for f in "$dir"/*.version; do
+    [ -e "$f" ] || continue
+    match=$f
+    count=$((count + 1))
+  done
+  [ "$count" -eq 1 ] && printf '%s' "$match"
+}
+
+# Locates the `.version`/`.sha256` sidecars `place`/`render` wrote beside this
+# deployed cell (see sidecar_entries in agent-config/src/place.rs): one level
+# up from the hook's own dir for local/project, two levels up (keyed by the
+# hook dir's own name, which is the executor for managed) for managed.
+resolve_config_provenance() {
+  config_version=""
+  config_hash=""
+  config_runtime_hash=""
+  config_integrity=unknown
+  provenance_abs=()
+  provenance_rel=()
+
+  own_dir=$(CDPATH='' cd -- "$_audit_lib_dir/.." 2>/dev/null && pwd) || return 0
+  own_name=$(basename -- "$own_dir")
+  parent_dir=$(dirname -- "$own_dir")
+
+  layout=""
+  version_file=""
+  hash_file=""
+  home_dir=""
+  target_root=""
+  managed_root=""
+
+  local_match=$(provenance_single_version_match "$parent_dir")
+  if [ -n "$local_match" ]; then
+    layout=local
+    version_file=$local_match
+    hash_file="${local_match%.version}.sha256"
+    home_dir=$parent_dir
+    target_root=$(dirname -- "$parent_dir")
+  else
+    grandparent_dir=$(dirname -- "$parent_dir")
+    candidate="$grandparent_dir/$own_name.version"
+    if [ -f "$candidate" ]; then
+      layout=managed
+      version_file=$candidate
+      hash_file="$grandparent_dir/$own_name.sha256"
+      managed_root=$grandparent_dir
+    fi
+  fi
+
+  [ -n "$layout" ] || return 0
+  [ -f "$hash_file" ] || return 0
+
+  config_version=$(head -n1 -- "$version_file" 2>/dev/null | tr -d '\r\n')
+  config_hash=$(sha256_file "$hash_file")
+
+  if [ "$layout" = local ]; then
+    audit_provenance_local_pairs "$home_dir" "$target_root"
+  else
+    audit_provenance_managed_pairs "$own_name" "$managed_root"
+  fi
+
+  existing_abs=()
+  existing_rel=()
+  i=0
+  while [ "$i" -lt "${#provenance_abs[@]}" ]; do
+    abs=${provenance_abs[$i]}
+    if [ -f "$abs" ]; then
+      existing_abs+=("$abs")
+      existing_rel+=("${provenance_rel[$i]}")
+    fi
+    i=$((i + 1))
+  done
+  [ "${#existing_abs[@]}" -gt 0 ] || return 0
+
+  sha256_tool || return 0
+  raw=$(printf '%s\0' "${existing_abs[@]}" | xargs -0 "${sha256_cmd[@]}" -- 2>/dev/null)
+  [ -n "$raw" ] || return 0
+
+  manifest_lines=""
+  i=0
+  while IFS= read -r line; do
+    [ "$i" -lt "${#existing_rel[@]}" ] || break
+    hash=${line%% *}
+    case $hash in
+    *[!0-9a-fA-F]* | "") break ;;
+    esac
+    manifest_lines="${manifest_lines}${hash}  ${existing_rel[$i]}
+"
+    i=$((i + 1))
+  done <<PROVENANCE_EOF
+$raw
+PROVENANCE_EOF
+  [ "$i" -eq "${#existing_abs[@]}" ] || return 0
+
+  sorted=$(printf '%s' "$manifest_lines" | LC_ALL=C sort -k2,2)
+  [ -n "$sorted" ] || return 0
+  config_runtime_hash=$(printf '%s\n' "$sorted" | "${sha256_cmd[@]}" 2>/dev/null | awk '{print $1}')
+  [ -n "$config_runtime_hash" ] || {
+    config_runtime_hash=""
+    return 0
+  }
+
+  if [ -n "$config_hash" ]; then
+    if [ "$config_hash" = "$config_runtime_hash" ]; then
+      config_integrity=match
+    else
+      config_integrity=mismatch
+    fi
+  fi
+}
+
 load_delivery_config() {
   local stream=$1
   enabled=$(cfg_get "capture.$stream.enabled")
@@ -268,7 +400,7 @@ build_user_prompt_record() {
   *) prompt_text=null ;;
   esac
 
-  record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"seal":{"key_id":%s},"user_prompt":{"text":%s,"encrypted_text":%s,"length":%s}}}' \
+  record=$(printf '{"@timestamp":"%s","event":{"action":"user-prompt","created":"%s","dataset":"agent_audit.user_prompt","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"seal":{"key_id":%s},"config":{"version":%s,"hash":%s,"runtime_hash":%s,"integrity":%s},"user_prompt":{"text":%s,"encrypted_text":%s,"length":%s}}}' \
     "$ts" "$ts" \
     "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
@@ -277,6 +409,7 @@ build_user_prompt_record() {
     "$(jv_esc "$organization_id")" "$(jv_esc "$organization_name")" \
     "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
     "$seal_kid" \
+    "$(jv_esc "$config_version")" "$(jv_esc "$config_hash")" "$(jv_esc "$config_runtime_hash")" "$(jv_esc "$config_integrity")" \
     "$prompt_text" "$enc_text" "$prompt_length")
 }
 
@@ -321,7 +454,7 @@ build_tool_call_record() {
     ;;
   esac
 
-  record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"seal":{"key_id":%s},"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":%s,"length":%s},"output":{"text":%s,"encrypted_text":%s,"length":%s}}}}' \
+  record=$(printf '{"@timestamp":"%s","event":{"action":"tool-call","created":"%s","dataset":"agent_audit.tool_call","kind":"event"},"user":{"id":%s,"name":%s},"host":{"name":%s,"hostname":%s},"agent_audit":{"agent":{"provider":"%s","name":"%s","account":{"id":%s,"name":%s,"email":%s},"organization":{"id":%s,"name":%s}},"conversation_id":%s,"turn_id":%s,"seal":{"key_id":%s},"config":{"version":%s,"hash":%s,"runtime_hash":%s,"integrity":%s},"tool_call":{"tool":{"name":%s,"call_id":%s},"input":{"text":%s,"encrypted_text":%s,"length":%s},"output":{"text":%s,"encrypted_text":%s,"length":%s}}}}' \
     "$ts" "$ts" \
     "$(jv_raw "$user_id")" "$(jv_raw "$user_name")" \
     "$(jv_raw "$host_name")" "$(jv_raw "$host_hostname")" \
@@ -330,6 +463,7 @@ build_tool_call_record() {
     "$(jv_esc "$organization_id")" "$(jv_esc "$organization_name")" \
     "$(jv_esc "$session_id")" "$(jv_esc "$turn_id")" \
     "$seal_kid" \
+    "$(jv_esc "$config_version")" "$(jv_esc "$config_hash")" "$(jv_esc "$config_runtime_hash")" "$(jv_esc "$config_integrity")" \
     "$(jv_esc "$tool_name")" "$(jv_esc "$call_id")" \
     "$input_text" "$input_enc" "$input_length" \
     "$output_text" "$output_enc" "$output_length")
@@ -338,6 +472,7 @@ build_tool_call_record() {
 build_audit_document() {
   local stream=$1
   derive_runtime_identity
+  resolve_config_provenance
   case $stream in
   user_prompt) build_user_prompt_record ;;
   tool_call) build_tool_call_record ;;

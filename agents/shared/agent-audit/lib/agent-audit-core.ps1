@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
 # dot-source the edge sealing helper from this lib dir (defines Protect-Body)
-$sealLib = Join-Path $PSScriptRoot 'seal.ps1'
+$script:CoreLibDir = $PSScriptRoot
+$sealLib = Join-Path $script:CoreLibDir 'seal.ps1'
 if (Test-Path -LiteralPath $sealLib) { . $sealLib }
 
 $DefaultTimeoutMs = 2000
@@ -28,6 +29,126 @@ function Measure-CodePoint($Value) {
         if (-not [System.Char]::IsLowSurrogate($c)) { $count++ }
     }
     return $count
+}
+
+function Get-Sha256Hex($Path) {
+    try {
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $stream = [System.IO.File]::OpenRead($Path)
+            try { $bytes = $hasher.ComputeHash($stream) } finally { $stream.Dispose() }
+        }
+        finally { $hasher.Dispose() }
+        return ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+    }
+    catch { return $null }
+}
+
+function Get-Sha256HexOfByteArray([byte[]]$Bytes) {
+    try {
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        try { $hash = $hasher.ComputeHash($Bytes) } finally { $hasher.Dispose() }
+        return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
+    }
+    catch { return $null }
+}
+
+function Get-SingleVersionMatch($Dir) {
+    try {
+        $found = [System.IO.Directory]::GetFiles($Dir, '*.version')
+        if ($found.Length -eq 1) { return $found[0] }
+    }
+    catch { return $null }
+    return $null
+}
+
+# Locates the `.version`/`.sha256` sidecars `place`/`render` wrote beside this
+# deployed cell (see sidecar_entries in agent-config/src/place.rs): one level
+# up from the hook's own dir for local/project, two levels up (keyed by the
+# hook dir's own name, which is the executor for managed) for managed.
+function Resolve-ConfigProvenance {
+    $script:ConfigVersion = $null
+    $script:ConfigHash = $null
+    $script:ConfigRuntimeHash = $null
+    $script:ConfigIntegrity = 'unknown'
+
+    try {
+        $ownDir = Split-Path -Parent $script:CoreLibDir
+        $ownName = Split-Path -Leaf $ownDir
+        $parentDir = Split-Path -Parent $ownDir
+
+        $layout = $null
+        $versionFile = $null
+        $hashFile = $null
+        $homeDir = $null
+        $targetRoot = $null
+        $managedRoot = $null
+
+        $localMatch = Get-SingleVersionMatch $parentDir
+        if ($localMatch) {
+            $layout = 'local'
+            $versionFile = $localMatch
+            $hashFile = [System.IO.Path]::ChangeExtension($localMatch, 'sha256')
+            $homeDir = $parentDir
+            $targetRoot = Split-Path -Parent $parentDir
+        }
+        else {
+            $grandparentDir = Split-Path -Parent $parentDir
+            $candidate = Join-Path $grandparentDir "$ownName.version"
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                $layout = 'managed'
+                $versionFile = $candidate
+                $hashFile = Join-Path $grandparentDir "$ownName.sha256"
+                $managedRoot = $grandparentDir
+            }
+        }
+
+        if (-not $layout) { return }
+        if (-not (Test-Path -LiteralPath $hashFile -PathType Leaf)) { return }
+
+        $script:ConfigVersion = ([System.IO.File]::ReadAllText($versionFile)).Trim()
+        $script:ConfigHash = Get-Sha256Hex $hashFile
+
+        $script:ProvenanceAbs = New-Object System.Collections.Generic.List[string]
+        $script:ProvenanceRel = New-Object System.Collections.Generic.List[string]
+        if ($layout -eq 'local') {
+            Add-AuditProvenanceLocalManifest $homeDir $targetRoot
+        }
+        else {
+            Add-AuditProvenanceManagedManifest $ownName $managedRoot
+        }
+
+        $existingAbs = New-Object System.Collections.Generic.List[string]
+        $existingRel = New-Object System.Collections.Generic.List[string]
+        for ($i = 0; $i -lt $script:ProvenanceAbs.Count; $i++) {
+            if (Test-Path -LiteralPath $script:ProvenanceAbs[$i] -PathType Leaf) {
+                $existingAbs.Add($script:ProvenanceAbs[$i])
+                $existingRel.Add($script:ProvenanceRel[$i])
+            }
+        }
+        if ($existingAbs.Count -eq 0) { return }
+
+        # Ordinal (byte-wise) sort by rel path, matching Rust's `String::cmp`
+        # — PowerShell's default Sort-Object is culture-aware and can reorder
+        # punctuation differently.
+        $relArr = $existingRel.ToArray()
+        $absArr = $existingAbs.ToArray()
+        [Array]::Sort($relArr, $absArr, [System.StringComparer]::Ordinal)
+
+        $lines = for ($i = 0; $i -lt $relArr.Length; $i++) {
+            $h = Get-Sha256Hex $absArr[$i]
+            if (-not $h) { return }
+            "$h  $($relArr[$i])"
+        }
+        $manifest = ($lines -join "`n") + "`n"
+        $manifestBytes = [System.Text.Encoding]::UTF8.GetBytes($manifest)
+        $script:ConfigRuntimeHash = Get-Sha256HexOfByteArray $manifestBytes
+
+        if ($script:ConfigHash -and $script:ConfigRuntimeHash) {
+            $script:ConfigIntegrity = if ($script:ConfigHash -eq $script:ConfigRuntimeHash) { 'match' } else { 'mismatch' }
+        }
+    }
+    catch { Write-Verbose "fail-open: $_" }
 }
 
 function Assert-Stream($Stream) {
@@ -116,6 +237,13 @@ function Read-HookPayload($Stream) {
 function Build-AuditDocument($Stream) {
     try {
         $identity = Get-RuntimeIdentity
+        Resolve-ConfigProvenance
+        $config = [ordered]@{
+            version      = $script:ConfigVersion
+            hash         = $script:ConfigHash
+            runtime_hash = $script:ConfigRuntimeHash
+            integrity    = $script:ConfigIntegrity
+        }
         $agent = [ordered]@{
             provider     = $script:Provider
             name         = $script:AgentName
@@ -148,6 +276,7 @@ function Build-AuditDocument($Stream) {
                         conversation_id = $script:sessionId
                         turn_id         = $script:turnId
                         seal            = [ordered]@{ key_id = $sealKid }
+                        config          = $config
                         user_prompt     = [ordered]@{ text = $promptField; encrypted_text = $encField; length = $script:promptLength }
                     }
                 }
@@ -185,6 +314,7 @@ function Build-AuditDocument($Stream) {
                         conversation_id = $script:sessionId
                         turn_id         = $script:turnId
                         seal            = [ordered]@{ key_id = $sealKid }
+                        config          = $config
                         tool_call       = [ordered]@{
                             tool   = [ordered]@{ name = $script:toolName; call_id = $script:callId }
                             input  = [ordered]@{ text = $inputField; encrypted_text = $inputEnc; length = $script:inputLength }

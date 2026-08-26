@@ -5,6 +5,57 @@ provider='openai'
 agent_name='codex'
 CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
 
+# Relative-path candidates for config-provenance runtime_hash (T8), mirroring
+# the render-time entries in agent-config/src/agents/codex.rs. `home_dir` is
+# the local/project agent home (".codex"); `target_root` is unused for Codex
+# (no sibling root file — `[mcp_servers.*]` is folded into config.toml, and
+# auth.json is a place-time symlink/copy, not a rendered manifest entry).
+audit_provenance_local_pairs() {
+  home_dir=$1
+  provenance_abs+=("$home_dir/.gitignore")
+  provenance_rel+=(".codex/.gitignore")
+  provenance_abs+=("$home_dir/config.toml")
+  provenance_rel+=(".codex/config.toml")
+  provenance_abs+=("$home_dir/hooks/agent-audit.conf")
+  provenance_rel+=(".codex/hooks/agent-audit.conf")
+  provenance_abs+=("$home_dir/hooks/agent-audit.sh")
+  provenance_rel+=(".codex/hooks/agent-audit.sh")
+  provenance_abs+=("$home_dir/hooks/lib/adapter.sh")
+  provenance_rel+=(".codex/hooks/lib/adapter.sh")
+  provenance_abs+=("$home_dir/hooks/lib/agent-audit-core.sh")
+  provenance_rel+=(".codex/hooks/lib/agent-audit-core.sh")
+  provenance_abs+=("$home_dir/hooks/lib/seal.sh")
+  provenance_rel+=(".codex/hooks/lib/seal.sh")
+  provenance_abs+=("$home_dir/hooks/recipient.pem")
+  provenance_rel+=(".codex/hooks/recipient.pem")
+}
+
+# Same, for a managed cell (agent-config/src/agents/codex.rs managed_root /
+# managed_entries). `managed_config.toml` here is the non-Windows path only —
+# adapter.ps1 carries the %USERPROFILE% variant this hook flavor never runs
+# under (Os::Windows always resolves to the .ps1 flavor).
+audit_provenance_managed_pairs() {
+  executor=$1
+  managed_root=$2
+  root_rel=${managed_root#/}
+  provenance_abs+=("$managed_root/hooks/$executor/agent-audit.conf")
+  provenance_rel+=("$root_rel/hooks/$executor/agent-audit.conf")
+  provenance_abs+=("$managed_root/hooks/$executor/agent-audit.sh")
+  provenance_rel+=("$root_rel/hooks/$executor/agent-audit.sh")
+  provenance_abs+=("$managed_root/hooks/$executor/lib/adapter.sh")
+  provenance_rel+=("$root_rel/hooks/$executor/lib/adapter.sh")
+  provenance_abs+=("$managed_root/hooks/$executor/lib/agent-audit-core.sh")
+  provenance_rel+=("$root_rel/hooks/$executor/lib/agent-audit-core.sh")
+  provenance_abs+=("$managed_root/hooks/$executor/lib/seal.sh")
+  provenance_rel+=("$root_rel/hooks/$executor/lib/seal.sh")
+  provenance_abs+=("$managed_root/hooks/$executor/recipient.pem")
+  provenance_rel+=("$root_rel/hooks/$executor/recipient.pem")
+  provenance_abs+=("$managed_root/requirements.toml")
+  provenance_rel+=("$root_rel/requirements.toml")
+  provenance_abs+=("$managed_root/managed_config.toml")
+  provenance_rel+=("$root_rel/managed_config.toml")
+}
+
 awk_org='function liftstr(str,key,   kk,p,ii,nn,c,out){
     kk="\"" key "\":\""; p=index(str,kk); if(p==0) return "";
     ii=p+length(kk); nn=length(str); out="";

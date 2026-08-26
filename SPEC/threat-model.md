@@ -76,6 +76,19 @@ The hook-audit's specific bypass / failure surface:
   the agent emits with a registered hook are captured, and a hand-edited
   lab-placed config still feeds the agent at runtime — placement is marker-aware
   and fail-if-foreign on *writes*, but it does not police later local edits.
+- **`agent_audit.config.runtime_hash` detects drift, not tampering.** Each
+  audit document carries a config-provenance block (`agent_audit.config.*`,
+  see [`agent-audit.md`](agent-audit.md) "Config provenance") comparing the
+  `place`/`render`-time cell hash against a hash the hook recomputes from
+  the files it finds on disk at capture time. This catches **accidental**
+  drift — a partial MDM push, disk corruption, a hand edit — because it is
+  a second, independent read of the same files. It is **not** an integrity
+  control against (B): the hook computing `runtime_hash` lives inside the
+  very directory it hashes, so a user with local privileges who can rewrite
+  the config can equally rewrite the hasher (or the sidecars it reads) to
+  keep reporting `match`. Same category mistake as hardening telemetry for
+  (B) — the fix, if ever needed, is anchoring outside the audited machine,
+  not a richer client-side hash.
 
 The correct control for (B) / compliance evidence is **capture above the user's
 machine**, at a trust boundary they do not own: provider-side enterprise audit

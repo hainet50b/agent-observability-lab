@@ -105,7 +105,7 @@ Field ownership:
 - `agent_audit.agent.*` describes the AI agent application, not the ECS collecting agent.
 - `agent_audit.agent.account.*` describes the AI agent provider account when available; it is read from the agent's local credential store (for Codex CLI, `$CODEX_HOME/auth.json` — see [Identity derivation](#identity-derivation)).
 - `agent_audit.agent.organization.*` describes the AI agent provider organization / workspace / tenant context when available. It is parallel to `account`, not nested under it, and is read from the same local credential store (see [Identity derivation](#identity-derivation)).
-- `agent_audit.config.*` describes the deployed **config bundle's provenance** — what was placed on the host, not the AI agent's identity, so it sits beside `seal`, not under `agent_audit.agent.*`. `version` and `hash` are read at hook time from the deployed `<executor>.version` / `<executor>.sha256` sidecars (see [`config-deployment.md`](config-deployment.md) "Bundles"); `runtime_hash` is recomputed at hook time over the deployed files, using the same two-stage manifest-then-hash shape as the sidecar's own `hash` so the two are comparable; `integrity` is `match` or `mismatch` from comparing `hash` to `runtime_hash`, or `unknown` whenever a sidecar is missing or recomputation fails — the hook stays fail-open, so a degraded `config` block never blocks the audit write. `runtime_hash` only detects accidental drift (a partial push, corruption, a hand edit) — see [`threat-model.md`](threat-model.md) for why it is not a tamper-evidence control.
+- `agent_audit.config.*` carries what was actually deployed to the host, not the AI agent's identity (see [Config provenance](#config-provenance)).
 - Standardized audit event names belong in `event.action`; user prompt submissions use `event.action: user-prompt`.
 - Hook senders should construct near-final JSON documents before indexing. Ingest pipelines for audit streams should stay minimal: defaulting, validation, and routing are acceptable, but prompt redaction/encryption belongs in the sender.
 - `logs-agent_audit.*` is access-controlled separately from OTel/APM telemetry indices. The intended production posture is that only audit-authorized users can read the audit data stream.
@@ -129,12 +129,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
     "conversation_id": "...",
     "turn_id": "...",
     "seal": { "key_id": null },
-    "config": {
-      "version": "...",
-      "hash": "...",
-      "runtime_hash": "...",
-      "integrity": "match"
-    },
+    "config": { "version": "...", "hash": "...", "runtime_hash": "...", "integrity": "match" },
     "tool_call": {
       "tool":   { "name": "...", "call_id": "..." },
       "input":  { "text": "...", "encrypted_text": null, "length": 123 },
@@ -144,7 +139,7 @@ Tool call audit documents in `logs-agent_audit.tool_call-default` record one too
 }
 ```
 
-`event.*`, `user.*`, `host.*`, `agent_audit.agent.*`, `agent_audit.config.*`, `conversation_id`, and `turn_id` carry the same meaning and derivation as user prompt documents. Tool-call-specific ownership:
+`event.*`, `user.*`, `host.*`, `agent_audit.agent.*`, `conversation_id`, `turn_id`, and `agent_audit.config.*` carry the same meaning and derivation as user prompt documents (see [Config provenance](#config-provenance)). Tool-call-specific ownership:
 
 - `event.action: tool-call`, `event.dataset: agent_audit.tool_call`.
 - `agent_audit.tool_call.tool.name` ← the hook's `tool_name`; `tool.call_id` ← `tool_use_id` (the per-call id; also the join key to the OTLP tool-result span's `call_id` — `codex.tool_result` for Codex CLI).
@@ -165,6 +160,54 @@ Identity fields are populated best-effort by the hook sender, **locally and with
   - The `id_token` is a JWT whose payload (second `.`-separated segment) is base64url-decoded and read as JSON claims; it is **not** signature-verified (a local, trusted file). In API-key auth mode (no `id_token` / `tokens`) these fields stay `null`.
 
   For **Claude Code** the store is `~/.claude.json` — its `oauthAccount` object, **plain JSON (no JWT to decode)**: `account.id` ← `accountUuid`, `account.name` ← `displayName`, `account.email` ← `emailAddress`, `organization.id` ← `organizationUuid`, `organization.name` ← `organizationName`. Any missing key leaves the field `null` (API-key / unauthenticated sessions have no `oauthAccount`). Claude's `UserPromptSubmit` hook payload carries **no turn id**, so the user-prompt document's `agent_audit.turn_id` is `null` (`conversation_id` ← `session_id` still links to the OTLP session); the payload also has no model (model reaches only `SessionStart` hooks), consistent with `agent_audit.agent.model` having been dropped from the schema. This turn-less property is specific to `UserPromptSubmit`: Claude Code's `PostToolUse` payload **does** carry `turn_id` (and `tool_use_id`), so the tool-call document populates `agent_audit.turn_id` and `tool_call.tool.call_id` (see [Tool call documents](#tool-call-documents)).
+
+## Config provenance
+
+`agent_audit.config.*` records what was actually deployed to the host — a
+sibling of `agent_audit.seal`, not of `agent_audit.agent.*` (which describes
+the AI agent's identity, not the deployed config). It is populated by the
+shared hook core (`agents/shared/agent-audit/lib/agent-audit-core.{sh,ps1}`,
+`resolve_config_provenance` / `Resolve-ConfigProvenance`), the same
+fail-open, no-network, best-effort contract as [Identity
+derivation](#identity-derivation): any missing sidecar, unreadable file, or
+hashing failure leaves a field `null` (or `integrity: unknown`) and never
+blocks the write.
+
+- `agent_audit.config.version` / `.hash` — read verbatim at hook time from
+  the `<executor>.version` / `<executor>.sha256` sidecars that `place` /
+  `render --zip` write beside the deployed cell (see [config
+  deployment](config-deployment.md) §Bundles). `.hash` is the sha256 of the
+  `.sha256` sidecar's own bytes (that sidecar already holds the cell's
+  per-file manifest — `hash` is one further sha256 over that manifest, the
+  same aggregate the ledger calls the *cell hash*), **not** the sidecar's
+  raw manifest text.
+- `agent_audit.config.runtime_hash` — recomputed at hook time by re-hashing
+  the files actually found on disk (a fixed, agent-specific candidate list —
+  the render-time entries for this scope, existence-checked, since a file
+  the deployment didn't include for this cell simply doesn't exist on disk)
+  into a manifest of the same shape (`sha256(bytes)  relpath` lines, sorted
+  **ordinally** by `relpath` to match Rust's `String` ordering, then one
+  sha256 over the joined manifest), so it is byte-comparable to `.hash`
+  reconstructed the same way. Locating the deployed files and their
+  manifest-relative names is scope-dependent (the sidecar sits one level
+  above the hook's own directory for local/project, two levels above —
+  keyed by the hook directory's own name, which is the executor — for
+  managed) and is the one piece of agent-specific knowledge the per-agent
+  adapter (`agents/{claude,codex}/hooks/lib/adapter.{sh,ps1}`) carries
+  beyond identity derivation.
+- `agent_audit.config.integrity` — `match` / `mismatch` from comparing
+  `.hash` and `.runtime_hash`, or `unknown` whenever either side could not
+  be computed (missing sidecar, unreadable file, no `sha256sum`/`shasum`/
+  .NET hashing available). `unknown` is distinct from `mismatch` on purpose:
+  "could not verify" is not the same claim as "verified and it differs."
+- **Detects drift, not tampering.** `runtime_hash` catches accidental drift
+  — a partial MDM push, disk corruption, a hand edit — because it is a
+  second, independent read of the same files. It is **not** an integrity
+  control: the hook computing the hash lives inside the very directory it
+  hashes, so a user with local privileges who can edit the config can
+  equally edit the hasher (or the sidecars) to keep `match` reporting. See
+  [`threat-model.md`](threat-model.md) "The direct hook → Elasticsearch
+  audit path".
 
 ## Mapping and lifecycle
 
@@ -191,7 +234,9 @@ POST logs-agent_audit.user_prompt-default/_rollover
 POST logs-agent_audit.tool_call-default/_rollover
 ```
 
-Until that rollover runs, writes against the old backing index still succeed under the old (pre-`config`) strict mapping — the new fields are simply absent from any document indexed before the rollover, not rejected.
+That rollover is **mandatory, not an optimization**: `dynamic: strict` rejects the *whole document*, not just the unknown field, so once the hooks emit `agent_audit.config.*` every audit write against a pre-`config` backing index fails with `strict_dynamic_mapping_exception`. The hook is fail-open, so the agent keeps working and the loss is silent — the rollover is what stands between a template bump and a total audit gap. Only documents that carry no `config` block still index against the old mapping.
+
+Note that re-provisioning alone does **not** re-sync the resolved mapping onto the live stream, contrary to [`SPEC.md`](SPEC.md) "Lifecycle (ILM)": `_simulate_index` resolves a composed mapping but applies nothing, and no step in the provisioning path pushes the result onto the current backing index. Verified against a live backend — a `config`-bearing document was rejected before the rollover and accepted after.
 
 Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
 
