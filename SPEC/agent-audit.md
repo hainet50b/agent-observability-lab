@@ -236,7 +236,7 @@ POST logs-agent_audit.tool_call-default/_rollover
 
 That rollover is **mandatory, not an optimization**: `dynamic: strict` rejects the *whole document*, not just the unknown field, so once the hooks emit `agent_audit.config.*` every audit write against a pre-`config` backing index fails with `strict_dynamic_mapping_exception`. The hook is fail-open, so the agent keeps working and the loss is silent — the rollover is what stands between a template bump and a total audit gap. Only documents that carry no `config` block still index against the old mapping.
 
-Note that re-provisioning alone does **not** re-sync the resolved mapping onto the live stream, contrary to [`SPEC.md`](SPEC.md) "Lifecycle (ILM)": `_simulate_index` resolves a composed mapping but applies nothing, and no step in the provisioning path pushes the result onto the current backing index. Verified against a live backend — a `config`-bearing document was rejected before the rollover and accepted after.
+Re-provisioning alone does **not** re-sync the resolved mapping onto the live stream: no step in the provisioning path pushes a composed mapping onto the current backing index. Verified against a live backend — a `config`-bearing document was rejected before the rollover and accepted after.
 
 Audit data streams are retained by **ILM**, not DSL: each template carries no `data_retention` and attaches its own lifecycle component template via `composed_of`, so production can add warm/cold/frozen + searchable-snapshot phases without re-plumbing. **`user_prompt` and `tool_call` get separate policies** (so the higher-volume tool-call stream can age differently); both default to **hot → delete at 3 days**. See `SPEC.md` "Lifecycle (ILM)".
 

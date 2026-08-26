@@ -44,8 +44,8 @@ template:
 - **Audit streams (owned).** Each `logs-agent_audit.*` index template is a
   thin `composed_of: [<stream>@mappings, <stream>@lifecycle]`, with no inline
   mappings and no `data_retention` block; ILM is the single retention
-  authority. (Because mappings are no longer inline, the importer re-syncs the
-  **resolved** composed mapping onto the live stream via `_simulate_index`.)
+  authority. A mapping change reaches an already-provisioned stream only on
+  rollover — see [`agent-audit.md`](agent-audit.md) "Mapping and lifecycle".
 - **Telemetry streams (APM-owned).** APM ships one shared index template per
   signal, so its `@custom` hook can only attach lifecycle to **every** service.
   Instead each agent gets **dedicated, higher-priority index templates**
